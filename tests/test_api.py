@@ -1,3 +1,5 @@
+from datetime import UTC, datetime, timedelta
+
 from app.validation import TELEMETRY_SCHEMA, PHOTO_SCHEMA
 
 
@@ -70,6 +72,29 @@ def test_telemetry_history_filters_by_pod(client):
     assert len(response.json()) == 1
 
 
+def test_telemetry_history_supports_since_hours_and_limit(client):
+    recent = (datetime.now(UTC) - timedelta(minutes=10)).isoformat().replace("+00:00", "Z")
+    older = (datetime.now(UTC) - timedelta(hours=3)).isoformat().replace("+00:00", "Z")
+    client.post("/api/v1/edge/telemetry", json=telemetry_payload(older))
+    client.post("/api/v1/edge/telemetry", json=telemetry_payload(recent))
+
+    response = client.get("/api/v1/devices/pi-001/telemetry?since_hours=1&limit=1")
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body) == 1
+    assert body[0]["timestamp_utc"] == recent
+
+
+def test_latest_telemetry_by_device(client):
+    client.post("/api/v1/edge/telemetry", json=telemetry_payload("2026-06-07T12:00:00Z"))
+
+    response = client.get("/api/v1/devices/latest")
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body) == 1
+    assert body[0]["device_id"] == "pi-001"
+
+
 def test_photo_upload_is_idempotent(client):
     data = {
         "photo_id": "photo-1",
@@ -95,6 +120,28 @@ def test_photo_upload_is_idempotent(client):
     assert download.status_code == 200
     assert download.headers["content-type"] == "image/jpeg"
     assert download.content == b"\xff\xd8fake-jpeg\xff\xd9"
+
+
+def test_recent_photos_and_photo_list_support_limits(client):
+    first = {
+        "photo_id": "photo-1",
+        "device_id": "pi-001",
+        "captured_at_utc": "2026-06-07T12:00:00Z",
+        "schema_version": PHOTO_SCHEMA,
+    }
+    second = {**first, "photo_id": "photo-2", "captured_at_utc": "2026-06-07T12:01:00Z"}
+    files = {"photo": ("photo.jpg", b"\xff\xd8fake-jpeg\xff\xd9", "image/jpeg")}
+
+    assert client.post("/api/v1/edge/photos", data=first, files=files).status_code == 202
+    assert client.post("/api/v1/edge/photos", data=second, files=files).status_code == 202
+
+    recent = client.get("/api/v1/photos/recent?limit=1")
+    assert recent.status_code == 200
+    assert [photo["photo_id"] for photo in recent.json()] == ["photo-2"]
+
+    device_photos = client.get("/api/v1/devices/pi-001/photos?limit=1")
+    assert device_photos.status_code == 200
+    assert len(device_photos.json()) == 1
 
 
 def test_photo_rejects_non_jpeg(client):
@@ -144,3 +191,9 @@ def test_photo_rejects_content_over_size_limit(client_factory):
         files={"photo": ("photo.jpg", b"\xff\xd8fake-jpeg\xff\xd9", "image/jpeg")},
     )
     assert response.status_code == 413
+
+
+def test_dashboard_is_served(client):
+    response = client.get("/dashboard")
+    assert response.status_code == 200
+    assert "Senior Pomidor Dashboard" in response.text

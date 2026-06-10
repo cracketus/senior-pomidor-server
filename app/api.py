@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -74,6 +74,22 @@ def photo_to_dict(photo: Photo) -> dict[str, Any]:
     }
 
 
+def apply_event_filters(
+    query: Any,
+    *,
+    from_: str | None,
+    to: str | None,
+    since_hours: float | None,
+) -> Any:
+    if from_:
+        query = query.where(TelemetryEvent.timestamp_utc >= parse_utc_z(from_))
+    if to:
+        query = query.where(TelemetryEvent.timestamp_utc <= parse_utc_z(to))
+    if since_hours is not None:
+        query = query.where(TelemetryEvent.timestamp_utc >= datetime.now(UTC) - timedelta(hours=since_hours))
+    return query
+
+
 @router.post("/edge/telemetry", status_code=status.HTTP_202_ACCEPTED)
 def ingest_telemetry(payload: dict[str, Any], db: Session = Depends(get_db)) -> dict[str, Any]:
     try:
@@ -139,6 +155,23 @@ def list_devices(db: Session = Depends(get_db)) -> list[dict[str, Any]]:
     ]
 
 
+@router.get("/devices/latest")
+def latest_telemetry_by_device(db: Session = Depends(get_db)) -> list[dict[str, Any]]:
+    devices = db.scalars(select(Device).order_by(Device.device_id)).all()
+    latest_events: list[dict[str, Any]] = []
+    for device in devices:
+        event = db.scalar(
+            select(TelemetryEvent)
+            .options(selectinload(TelemetryEvent.readings), selectinload(TelemetryEvent.errors))
+            .where(TelemetryEvent.device_id == device.device_id)
+            .order_by(desc(TelemetryEvent.timestamp_utc))
+            .limit(1)
+        )
+        if event is not None:
+            latest_events.append(event_to_dict(event))
+    return latest_events
+
+
 @router.get("/devices/{device_id}/latest")
 def latest_telemetry(device_id: str, db: Session = Depends(get_db)) -> dict[str, Any]:
     event = db.scalar(
@@ -158,7 +191,9 @@ def telemetry_history(
     device_id: str,
     from_: str | None = Query(default=None, alias="from"),
     to: str | None = None,
+    since_hours: float | None = Query(default=None, ge=0),
     pod: str | None = None,
+    limit: int = Query(default=100, ge=1, le=1000),
     db: Session = Depends(get_db),
 ) -> list[dict[str, Any]]:
     query = (
@@ -168,12 +203,10 @@ def telemetry_history(
         .order_by(TelemetryEvent.timestamp_utc)
     )
     try:
-        if from_:
-            query = query.where(TelemetryEvent.timestamp_utc >= parse_utc_z(from_))
-        if to:
-            query = query.where(TelemetryEvent.timestamp_utc <= parse_utc_z(to))
+        query = apply_event_filters(query, from_=from_, to=to, since_hours=since_hours)
     except ValidationError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    query = query.limit(limit)
     events = db.scalars(query).all()
     if pod:
         event_ids = db.scalars(
@@ -185,8 +218,41 @@ def telemetry_history(
 
 
 @router.get("/devices/{device_id}/photos")
-def list_photos(device_id: str, db: Session = Depends(get_db)) -> list[dict[str, Any]]:
-    photos = db.scalars(select(Photo).where(Photo.device_id == device_id).order_by(desc(Photo.captured_at_utc))).all()
+def list_photos(
+    device_id: str,
+    from_: str | None = Query(default=None, alias="from"),
+    to: str | None = None,
+    limit: int = Query(default=100, ge=1, le=1000),
+    db: Session = Depends(get_db),
+) -> list[dict[str, Any]]:
+    query = select(Photo).where(Photo.device_id == device_id).order_by(desc(Photo.captured_at_utc)).limit(limit)
+    try:
+        if from_:
+            query = query.where(Photo.captured_at_utc >= parse_utc_z(from_))
+        if to:
+            query = query.where(Photo.captured_at_utc <= parse_utc_z(to))
+    except ValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    photos = db.scalars(query).all()
+    return [photo_to_dict(photo) for photo in photos]
+
+
+@router.get("/photos/recent")
+def recent_photos(
+    limit: int = Query(default=25, ge=1, le=100),
+    from_: str | None = Query(default=None, alias="from"),
+    to: str | None = None,
+    db: Session = Depends(get_db),
+) -> list[dict[str, Any]]:
+    query = select(Photo).order_by(desc(Photo.captured_at_utc)).limit(limit)
+    try:
+        if from_:
+            query = query.where(Photo.captured_at_utc >= parse_utc_z(from_))
+        if to:
+            query = query.where(Photo.captured_at_utc <= parse_utc_z(to))
+    except ValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    photos = db.scalars(query).all()
     return [photo_to_dict(photo) for photo in photos]
 
 
