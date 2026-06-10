@@ -1,0 +1,1 @@
+"""Senior Pomidor core server."""
