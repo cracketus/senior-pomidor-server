@@ -8,4 +8,8 @@ venv/
 dist/
 build/
 *.egg-info/
+data/
+*.db
+.codex-known-hosts
+.codex-pi-key*
 

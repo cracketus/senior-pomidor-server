@@ -1,0 +1,84 @@
+from app.validation import TELEMETRY_SCHEMA, PHOTO_SCHEMA
+
+
+def telemetry_payload(timestamp: str = "2026-06-07T12:00:00Z") -> dict:
+    return {
+        "schema_version": TELEMETRY_SCHEMA,
+        "device_id": "pi-001",
+        "timestamp_utc": timestamp,
+        "pods": {
+            "pod-1": {
+                "enabled": True,
+                "soil_moisture_percent": 42.5,
+                "leaf_temp_c": 21.2,
+                "battery_mv": 5010,
+                "errors": [{"sensor": "soil", "message": "intermittent"}],
+            },
+            "pod-2": {"enabled": False},
+        },
+    }
+
+
+def test_http_telemetry_ingest_and_latest(client):
+    response = client.post("/api/v1/edge/telemetry", json=telemetry_payload())
+    assert response.status_code == 202
+
+    latest = client.get("/api/v1/devices/pi-001/latest")
+    assert latest.status_code == 200
+    body = latest.json()
+    assert body["device_id"] == "pi-001"
+    assert body["readings"][0]["metrics"]["soil_moisture_percent"] == 42.5
+    assert body["readings"][0]["metrics"]["battery_mv"] == 5010.0
+    assert body["errors"][0]["message"] == "intermittent"
+
+
+def test_rejects_bad_schema(client):
+    payload = telemetry_payload()
+    payload["schema_version"] = "wrong"
+    response = client.post("/api/v1/edge/telemetry", json=payload)
+    assert response.status_code == 400
+
+
+def test_telemetry_history_filters_by_pod(client):
+    client.post("/api/v1/edge/telemetry", json=telemetry_payload("2026-06-07T12:00:00Z"))
+    client.post("/api/v1/edge/telemetry", json=telemetry_payload("2026-06-07T12:01:00Z"))
+
+    response = client.get("/api/v1/devices/pi-001/telemetry?from=2026-06-07T12:00:30Z&pod=pod-2")
+    assert response.status_code == 200
+    assert len(response.json()) == 1
+
+
+def test_photo_upload_is_idempotent(client):
+    data = {
+        "photo_id": "photo-1",
+        "device_id": "pi-001",
+        "captured_at_utc": "2026-06-07T12:00:00Z",
+        "schema_version": PHOTO_SCHEMA,
+        "sharpness_score": "0.91",
+    }
+    files = {"photo": ("photo.jpg", b"\xff\xd8fake-jpeg\xff\xd9", "image/jpeg")}
+
+    first = client.post("/api/v1/edge/photos", data=data, files=files)
+    assert first.status_code == 202
+    assert first.json()["created"] is True
+
+    second = client.post("/api/v1/edge/photos", data=data, files=files)
+    assert second.status_code == 200
+    assert second.json()["created"] is False
+
+    photos = client.get("/api/v1/devices/pi-001/photos")
+    assert len(photos.json()) == 1
+
+
+def test_photo_rejects_non_jpeg(client):
+    response = client.post(
+        "/api/v1/edge/photos",
+        data={
+            "photo_id": "photo-1",
+            "device_id": "pi-001",
+            "captured_at_utc": "2026-06-07T12:00:00Z",
+            "schema_version": PHOTO_SCHEMA,
+        },
+        files={"photo": ("photo.txt", b"not-jpeg", "text/plain")},
+    )
+    assert response.status_code == 400
