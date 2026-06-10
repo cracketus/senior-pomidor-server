@@ -50,6 +50,8 @@ docker compose up -d api worker
 
 The API is available at `http://localhost:8000`, and the MQTT broker listens on `localhost:1883`.
 
+For deployment checks, backups, restore, and Raspberry Pi configuration examples, see [docs/OPERATIONS.md](docs/OPERATIONS.md).
+
 ## Edge Configuration
 
 Use the server LAN IP for the Raspberry Pi:
@@ -66,15 +68,20 @@ PHOTO_UPLOAD_URL=http://<server-lan-ip>:8000/api/v1/edge/photos
 
 If `PHOTO_UPLOAD_TOKEN` is set on the server, the edge photo uploader must send it as a bearer token.
 
+HTTP telemetry ingestion is intentionally unauthenticated in v1 for compatibility with the current edge sender. Run the server on a trusted LAN and do not expose ingestion ports directly to the public internet.
+
 ## HTTP API
 
 - `POST /api/v1/edge/telemetry`
 - `POST /api/v1/edge/photos`
 - `GET /api/v1/devices`
+- `GET /api/v1/devices/latest`
 - `GET /api/v1/devices/{device_id}/latest`
-- `GET /api/v1/devices/{device_id}/telemetry?from=&to=&pod=`
-- `GET /api/v1/devices/{device_id}/photos`
+- `GET /api/v1/devices/{device_id}/telemetry?from=&to=&since_hours=&pod=&limit=`
+- `GET /api/v1/devices/{device_id}/photos?from=&to=&limit=`
+- `GET /api/v1/photos/recent?from=&to=&limit=`
 - `GET /api/v1/photos/{photo_id}`
 - `GET /health`
+- `GET /dashboard`
 
 Telemetry must use schema `senior-pomidor.edge.telemetry.v1`. Photos must use schema `senior-pomidor.edge.photo.v1` and upload a JPEG multipart field named `photo`.
