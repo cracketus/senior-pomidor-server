@@ -1,5 +1,6 @@
 from collections.abc import Generator
 from pathlib import Path
+from typing import Any, Callable
 
 import pytest
 from fastapi.testclient import TestClient
@@ -14,32 +15,48 @@ from app.models import Base
 
 
 @pytest.fixture()
-def client(tmp_path: Path) -> Generator[TestClient, None, None]:
-    engine = create_engine(
-        "sqlite://",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(engine)
-    TestingSessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
+def client_factory(tmp_path: Path) -> Generator[Callable[..., TestClient], None, None]:
+    clients: list[TestClient] = []
 
-    def override_db() -> Generator[Session, None, None]:
-        db = TestingSessionLocal()
-        try:
-            yield db
-        finally:
-            db.close()
-
-    def override_settings() -> Settings:
-        return Settings(
-            database_url="sqlite:///:memory:",
-            photo_storage_dir=str(tmp_path / "photos"),
-            photo_upload_token=None,
+    def create_client(**settings_overrides: Any) -> TestClient:
+        engine = create_engine(
+            "sqlite://",
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
         )
+        Base.metadata.create_all(engine)
+        TestingSessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
 
-    app.dependency_overrides[get_db] = override_db
-    app.dependency_overrides[get_settings] = override_settings
+        def override_db() -> Generator[Session, None, None]:
+            db = TestingSessionLocal()
+            try:
+                yield db
+            finally:
+                db.close()
+
+        def override_settings() -> Settings:
+            values = {
+                "database_url": "sqlite:///:memory:",
+                "photo_storage_dir": str(tmp_path / "photos"),
+                "photo_upload_token": None,
+            }
+            values.update(settings_overrides)
+            return Settings(**values)
+
+        app.dependency_overrides[get_db] = override_db
+        app.dependency_overrides[get_settings] = override_settings
+        client = TestClient(app)
+        clients.append(client)
+        return client
+
     try:
-        yield TestClient(app)
+        yield create_client
     finally:
+        for client in clients:
+            client.close()
         app.dependency_overrides.clear()
+
+
+@pytest.fixture()
+def client(client_factory: Callable[..., TestClient]) -> TestClient:
+    return client_factory()
