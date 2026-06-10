@@ -18,6 +18,14 @@ python -m pip install -e ".[dev]"
 python -m pytest -q
 ```
 
+Docker Compose end-to-end coverage is opt-in because it requires Docker and uses local ports:
+
+```powershell
+$env:RUN_DOCKER_E2E='1'
+python -m pytest -q tests/test_docker_e2e.py
+Remove-Item Env:RUN_DOCKER_E2E
+```
+
 For an ad hoc SQLite-backed API run:
 
 ```powershell

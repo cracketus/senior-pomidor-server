@@ -1,7 +1,9 @@
 from datetime import datetime
+from pathlib import Path
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, Response, UploadFile, status
+from fastapi.responses import FileResponse
 from sqlalchemy import desc, select
 from sqlalchemy.orm import Session, selectinload
 
@@ -102,7 +104,7 @@ async def upload_photo(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="photo must be JPEG")
     content = await photo.read()
     if len(content) > settings.photo_max_bytes:
-        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="photo exceeds size limit")
+        raise HTTPException(status_code=status.HTTP_413_CONTENT_TOO_LARGE, detail="photo exceeds size limit")
     if not content.startswith(b"\xff\xd8"):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="photo must be JPEG")
     try:
@@ -189,8 +191,11 @@ def list_photos(device_id: str, db: Session = Depends(get_db)) -> list[dict[str,
 
 
 @router.get("/photos/{photo_id}")
-def get_photo(photo_id: str, db: Session = Depends(get_db)) -> dict[str, Any]:
+def get_photo(photo_id: str, db: Session = Depends(get_db)) -> FileResponse:
     photo = db.get(Photo, photo_id)
     if photo is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="photo not found")
-    return photo_to_dict(photo)
+    path = Path(photo.storage_path)
+    if not path.is_file():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="photo file not found")
+    return FileResponse(path, media_type=photo.content_type, filename=path.name)
