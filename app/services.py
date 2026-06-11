@@ -8,7 +8,15 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models import Device, Photo, PodError, PodReading, TelemetryEvent
-from app.telemetry import iter_pod_errors, iter_pods, normalize_system_health, pod_enabled, pod_key, pod_metrics
+from app.telemetry import (
+    iter_pod_errors,
+    iter_pods,
+    iter_unmatched_pod_errors,
+    normalize_system_health,
+    pod_enabled,
+    pod_key,
+    pod_metrics,
+)
 from app.validation import PHOTO_SCHEMA, ValidationError, parse_utc_z, validate_telemetry_payload
 
 
@@ -70,8 +78,10 @@ def persist_telemetry(db: Session, payload: dict[str, Any], source: str) -> Tele
             raise
         return existing
 
+    pod_keys: set[str] = set()
     for index, pod in enumerate(iter_pods(payload)):
         key = pod_key(pod, index)
+        pod_keys.add(key)
         known, unknown = pod_metrics(pod)
         db.add(
             PodReading(
@@ -93,6 +103,16 @@ def persist_telemetry(db: Session, payload: dict[str, Any], source: str) -> Tele
                     message=str(error["message"]),
                 )
             )
+    for error in iter_unmatched_pod_errors(payload, pod_keys):
+        db.add(
+            PodError(
+                telemetry_event_id=event.id,
+                device_id=device_id,
+                pod_key=str(error["pod_key"]),
+                sensor=error["sensor"],
+                message=str(error["message"]),
+            )
+        )
     db.commit()
     db.refresh(event)
     return event

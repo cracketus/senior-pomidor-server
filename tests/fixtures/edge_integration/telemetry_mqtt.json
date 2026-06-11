@@ -1,0 +1,68 @@
+{
+    "topic":  "senior-pomidor/balcony-edge-01/telemetry",
+    "payload":  {
+                    "pods":  {
+                                 "pod_1":  {
+                                               "errors":  [
+
+                                                          ],
+                                               "enabled":  true,
+                                               "metrics":  {
+                                                               "adc_raw":  17058.0,
+                                                               "light_lux":  22.08,
+                                                               "leaf_temp_c":  24.33,
+                                                               "air_pressure_hpa":  1000.73,
+                                                               "air_temperature_c":  24.26,
+                                                               "ir_ambient_temp_c":  24.75,
+                                                               "soil_temperature_c":  23.5,
+                                                               "air_humidity_percent":  37.46,
+                                                               "soil_moisture_percent":  6.4
+                                                           }
+                                           },
+                                 "pod_2":  {
+                                               "errors":  [
+                                                              {
+                                                                  "sensor":  "bme280",
+                                                                  "message":  "No I2C device at address: 0x77"
+                                                              },
+                                                              {
+                                                                  "sensor":  "ds18b20",
+                                                                  "message":  "\nCould not find sensor of type DS18B20 with id 000000000002\nPlease check cabling and check your /boot/config.txt for\ndtoverlay=w1-gpio"
+                                                              }
+                                                          ],
+                                               "enabled":  true,
+                                               "metrics":  {
+                                                               "adc_raw":  16978.0,
+                                                               "light_lux":  22.08,
+                                                               "leaf_temp_c":  24.33,
+                                                               "ir_ambient_temp_c":  24.75,
+                                                               "soil_moisture_percent":  7.6
+                                                           }
+                                           }
+                             },
+                    "device_id":  "balcony-edge-01",
+                    "system_health":  {
+                                          "errors":  [
+                                                         {
+                                                             "sensor":  "ina219",
+                                                             "message":  "INA219.__init__() got an unexpected keyword argument \u0027address\u0027"
+                                                         },
+                                                         {
+                                                             "sensor":  "dht11",
+                                                             "message":  "\u0027GPIO busy\u0027"
+                                                         }
+                                                     ],
+                                          "rpi_core":  {
+                                                           "cpu_temp_c":  39.7,
+                                                           "wifi_rssi_dbm":  -42.0,
+                                                           "io_wait_percent":  0.0,
+                                                           "disk_usage_percent":  8.2
+                                                       },
+                                          "pod_1_hardware":  {
+
+                                                             }
+                                      },
+                    "timestamp_utc":  "2026-06-11T17:40:59Z",
+                    "schema_version":  "senior-pomidor.edge.telemetry.v2"
+                }
+}
