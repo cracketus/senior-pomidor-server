@@ -32,6 +32,7 @@ class TelemetryEvent(Base):
     schema_version: Mapped[str] = mapped_column(String(128), nullable=False)
     source: Mapped[str] = mapped_column(String(16), nullable=False)
     raw_payload_jsonb: Mapped[dict] = mapped_column(JSON_TYPE, nullable=False)
+    system_health_jsonb: Mapped[dict | None] = mapped_column(JSON_TYPE)
     received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     readings: Mapped[list["PodReading"]] = relationship(cascade="all, delete-orphan")

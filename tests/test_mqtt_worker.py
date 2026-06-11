@@ -7,7 +7,7 @@ from sqlalchemy.pool import StaticPool
 
 from app import mqtt_worker
 from app.models import Base, TelemetryEvent
-from app.validation import TELEMETRY_SCHEMA
+from app.validation import TELEMETRY_SCHEMA, TELEMETRY_SCHEMA_V2
 
 
 def telemetry_payload() -> dict:
@@ -17,6 +17,16 @@ def telemetry_payload() -> dict:
         "timestamp_utc": "2026-06-07T12:00:00Z",
         "pods": [{"pod_key": "pod-1", "soil_moisture_percent": 42.5}],
     }
+
+
+def telemetry_v2_payload() -> dict:
+    payload = telemetry_payload()
+    payload["schema_version"] = TELEMETRY_SCHEMA_V2
+    payload["system_health"] = {
+        "rpi_core": {"wifi_rssi_dbm": -82.0},
+        "errors": [{"sensor": "rpi_wifi_rssi", "message": "weak signal"}],
+    }
+    return payload
 
 
 def session_factory():
@@ -44,6 +54,19 @@ def test_mqtt_worker_accepts_valid_payload(monkeypatch):
         assert event is not None
         assert event.device_id == "pi-001"
         assert event.source == "mqtt"
+
+
+def test_mqtt_worker_accepts_v2_system_health(monkeypatch):
+    TestingSessionLocal = session_factory()
+    monkeypatch.setattr(mqtt_worker, "SessionLocal", TestingSessionLocal)
+
+    mqtt_worker.on_message(None, None, mqtt_message("senior-pomidor/pi-001/telemetry", telemetry_v2_payload()))
+
+    with TestingSessionLocal() as db:
+        event = db.scalar(select(TelemetryEvent))
+        assert event is not None
+        assert event.schema_version == TELEMETRY_SCHEMA_V2
+        assert event.system_health_jsonb["rpi_core"]["wifi_rssi_dbm"] == -82.0
 
 
 def test_mqtt_worker_rejects_topic_device_mismatch(monkeypatch):

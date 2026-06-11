@@ -8,7 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models import Device, Photo, PodError, PodReading, TelemetryEvent
-from app.telemetry import iter_pod_errors, iter_pods, pod_enabled, pod_key, pod_metrics
+from app.telemetry import iter_pod_errors, iter_pods, normalize_system_health, pod_enabled, pod_key, pod_metrics
 from app.validation import PHOTO_SCHEMA, ValidationError, parse_utc_z, validate_telemetry_payload
 
 
@@ -51,6 +51,7 @@ def persist_telemetry(db: Session, payload: dict[str, Any], source: str) -> Tele
         schema_version=schema_version,
         source=source,
         raw_payload_jsonb=payload,
+        system_health_jsonb=normalize_system_health(payload),
         received_at=received_at,
     )
     db.add(event)

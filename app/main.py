@@ -83,6 +83,25 @@ def dashboard() -> str:
         return `<strong>${esc(reading.pod_key)}</strong> (${reading.enabled ? "enabled" : "disabled"})<br>${metrics || "<span class='muted'>no metrics</span>"}`;
       }).join("<hr>");
     }
+    function healthSummary(event) {
+      const health = event.system_health || {};
+      const core = health.rpi_core || {};
+      const hardware = health.pod_1_hardware || {};
+      const climate = hardware.box_climate || {};
+      const metrics = [
+        ["cpu_temp_c", core.cpu_temp_c],
+        ["wifi_rssi_dbm", core.wifi_rssi_dbm],
+        ["disk_usage_percent", core.disk_usage_percent],
+        ["io_wait_percent", core.io_wait_percent],
+        ["bus_voltage_v", hardware.bus_voltage_v],
+        ["bus_current_ma", hardware.bus_current_ma],
+        ["box_air_temp_c", climate.air_temp_c],
+        ["box_air_humidity_percent", climate.air_humidity_percent],
+      ].filter(([, value]) => value !== undefined && value !== null);
+      const alerts = (event.health_alerts || []).map(alert => `<span class='error'>${esc(alert.message)}</span>`).join("<br>");
+      const metricText = metrics.slice(0, 6).map(([key, value]) => `${esc(key)}: ${esc(value)}`).join("<br>");
+      return [metricText, alerts].filter(Boolean).join("<hr>") || "<span class='muted'>unknown</span>";
+    }
     async function loadDashboard() {
       try {
         const [devices, latest, photos] = await Promise.all([
@@ -95,8 +114,8 @@ def dashboard() -> str:
           devices.map(d => [esc(d.device_id), esc(d.first_seen_at), esc(d.last_seen_at), esc(d.last_payload_at)])
         );
         document.getElementById("telemetry").innerHTML = table(
-          ["Device", "Timestamp", "Source", "Readings"],
-          latest.map(e => [esc(e.device_id), esc(e.timestamp_utc), esc(e.source), metricSummary(e.readings || [])])
+          ["Device", "Timestamp", "Source", "Plant", "System health"],
+          latest.map(e => [esc(e.device_id), esc(e.timestamp_utc), esc(e.source), metricSummary(e.readings || []), healthSummary(e)])
         );
         document.getElementById("photos").innerHTML = photos.length
           ? `<div class="grid">${photos.map(p => `<article class="photo"><img src="/api/v1/photos/${encodeURIComponent(p.photo_id)}" alt=""><div>${esc(p.device_id)}<br>${esc(p.captured_at_utc)}<br>${esc(p.photo_id)}</div></article>`).join("")}</div>`

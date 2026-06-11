@@ -1,6 +1,6 @@
 from datetime import UTC, datetime, timedelta
 
-from app.validation import TELEMETRY_SCHEMA, PHOTO_SCHEMA
+from app.validation import TELEMETRY_SCHEMA, TELEMETRY_SCHEMA_V2, PHOTO_SCHEMA
 
 
 def telemetry_payload(timestamp: str = "2026-06-07T12:00:00Z") -> dict:
@@ -21,6 +21,29 @@ def telemetry_payload(timestamp: str = "2026-06-07T12:00:00Z") -> dict:
     }
 
 
+def telemetry_v2_payload(timestamp: str = "2026-06-07T12:00:00Z") -> dict:
+    payload = telemetry_payload(timestamp)
+    payload["schema_version"] = TELEMETRY_SCHEMA_V2
+    payload["system_health"] = {
+        "rpi_core": {
+            "cpu_temp_c": 56.4,
+            "wifi_rssi_dbm": -68.0,
+            "disk_usage_percent": 34.2,
+            "io_wait_percent": 1.7,
+        },
+        "pod_1_hardware": {
+            "bus_voltage_v": 3.25,
+            "bus_current_ma": 12.4,
+            "box_climate": {
+                "air_temp_c": 26.0,
+                "air_humidity_percent": 45.0,
+            },
+        },
+        "errors": [],
+    }
+    return payload
+
+
 def test_http_telemetry_ingest_and_latest(client):
     response = client.post("/api/v1/edge/telemetry", json=telemetry_payload())
     assert response.status_code == 202
@@ -32,6 +55,56 @@ def test_http_telemetry_ingest_and_latest(client):
     assert body["readings"][0]["metrics"]["soil_moisture_percent"] == 42.5
     assert body["readings"][0]["metrics"]["battery_mv"] == 5010.0
     assert body["errors"][0]["message"] == "intermittent"
+
+
+def test_http_telemetry_v2_persists_system_health(client):
+    response = client.post("/api/v1/edge/telemetry", json=telemetry_v2_payload())
+    assert response.status_code == 202
+
+    latest = client.get("/api/v1/devices/pi-001/latest")
+    assert latest.status_code == 200
+    body = latest.json()
+    assert body["schema_version"] == TELEMETRY_SCHEMA_V2
+    assert body["plant"]["readings"][0]["metrics"]["soil_moisture_percent"] == 42.5
+    assert body["system_health"]["rpi_core"]["cpu_temp_c"] == 56.4
+    assert body["system_health"]["pod_1_hardware"]["box_climate"]["air_humidity_percent"] == 45.0
+    assert body["health_alerts"] == []
+
+
+def test_http_telemetry_v2_accepts_partial_system_health_errors(client):
+    payload = telemetry_v2_payload()
+    payload["timestamp_utc"] = "2026-06-07T12:02:00Z"
+    payload["system_health"] = {
+        "rpi_core": {"cpu_temp_c": 81.0},
+        "errors": [{"sensor": "rpi_wifi_rssi", "message": "RSSI unavailable"}],
+    }
+
+    response = client.post("/api/v1/edge/telemetry", json=payload)
+    assert response.status_code == 202
+
+    latest = client.get("/api/v1/devices/pi-001/latest")
+    body = latest.json()
+    assert body["system_health"]["rpi_core"]["cpu_temp_c"] == 81.0
+    assert body["system_health"]["errors"][0]["message"] == "RSSI unavailable"
+    assert {alert["metric"] for alert in body["health_alerts"]} == {"cpu_temp_c", "health_probe_error"}
+
+
+def test_http_telemetry_v1_reports_unknown_system_health(client):
+    response = client.post("/api/v1/edge/telemetry", json=telemetry_payload())
+    assert response.status_code == 202
+
+    latest = client.get("/api/v1/devices/pi-001/latest")
+    body = latest.json()
+    assert body["system_health"] is None
+    assert body["health_alerts"] == []
+
+
+def test_http_telemetry_rejects_invalid_health_field_type(client):
+    payload = telemetry_v2_payload()
+    payload["system_health"]["rpi_core"]["cpu_temp_c"] = "hot"
+
+    response = client.post("/api/v1/edge/telemetry", json=payload)
+    assert response.status_code == 400
 
 
 def test_telemetry_persists_disabled_pod_and_unknown_metrics(client):
