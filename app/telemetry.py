@@ -12,8 +12,14 @@ HEALTH_ALERT_RULES = {
 }
 
 
+def _plant(payload: dict[str, Any]) -> dict[str, Any]:
+    plant = payload.get("plant")
+    return plant if isinstance(plant, dict) else {}
+
+
 def iter_pods(payload: dict[str, Any]) -> list[dict[str, Any]]:
-    pods = payload.get("pods") or payload.get("pod_readings") or []
+    plant = _plant(payload)
+    pods = payload.get("pods") or payload.get("pod_readings") or plant.get("readings") or plant.get("pods") or []
     if isinstance(pods, dict):
         return [dict(value, pod_key=key) if isinstance(value, dict) else {"pod_key": key} for key, value in pods.items()]
     if isinstance(pods, list):
@@ -47,40 +53,51 @@ def pod_metrics(pod: dict[str, Any]) -> tuple[dict[str, float | None], dict[str,
     return known, unknown
 
 
-def iter_pod_errors(payload: dict[str, Any], pod: dict[str, Any], pod_key_value: str) -> list[dict[str, str | None]]:
-    errors = pod.get("errors") if isinstance(pod.get("errors"), list) else []
-    result: list[dict[str, str | None]] = []
-    for error in errors:
-        if isinstance(error, str):
-            result.append({"pod_key": pod_key_value, "sensor": None, "message": error})
-        elif isinstance(error, dict):
-            message = error.get("message") or error.get("error")
-            if message:
-                result.append(
-                    {
-                        "pod_key": str(error.get("pod_key") or pod_key_value),
-                        "sensor": str(error["sensor"]) if error.get("sensor") is not None else None,
-                        "message": str(message),
-                    }
-                )
+def _normalize_pod_error(error: Any, default_pod_key: str | None = None) -> dict[str, str | None] | None:
+    if isinstance(error, str):
+        if default_pod_key is None:
+            return None
+        return {"pod_key": default_pod_key, "sensor": None, "message": error}
+    if not isinstance(error, dict):
+        return None
+    pod_key_value = error.get("pod_key") or error.get("pod") or default_pod_key
+    message = error.get("message") or error.get("error")
+    if not pod_key_value or not message:
+        return None
+    return {
+        "pod_key": str(pod_key_value),
+        "sensor": str(error["sensor"]) if error.get("sensor") is not None else None,
+        "message": str(message),
+    }
 
-    root_errors = payload.get("errors") if isinstance(payload.get("errors"), list) else []
-    for error in root_errors:
-        if not isinstance(error, dict):
-            continue
-        error_pod_key = str(error.get("pod_key") or error.get("pod") or "")
-        if error_pod_key != pod_key_value:
-            continue
-        message = error.get("message") or error.get("error")
-        if message:
-            result.append(
-                {
-                    "pod_key": pod_key_value,
-                    "sensor": str(error["sensor"]) if error.get("sensor") is not None else None,
-                    "message": str(message),
-                }
-            )
+
+def iter_payload_pod_errors(payload: dict[str, Any]) -> list[dict[str, str | None]]:
+    errors: list[Any] = []
+    root_errors = payload.get("errors")
+    if isinstance(root_errors, list):
+        errors.extend(root_errors)
+    plant_errors = _plant(payload).get("errors")
+    if isinstance(plant_errors, list):
+        errors.extend(plant_errors)
+    return [normalized for error in errors if (normalized := _normalize_pod_error(error)) is not None]
+
+
+def iter_pod_errors(payload: dict[str, Any], pod: dict[str, Any], pod_key_value: str) -> list[dict[str, str | None]]:
+    pod_errors = pod.get("errors") if isinstance(pod.get("errors"), list) else []
+    result: list[dict[str, str | None]] = []
+    for error in pod_errors:
+        normalized = _normalize_pod_error(error, default_pod_key=pod_key_value)
+        if normalized is not None:
+            result.append(normalized)
+
+    for error in iter_payload_pod_errors(payload):
+        if error["pod_key"] == pod_key_value:
+            result.append(error)
     return result
+
+
+def iter_unmatched_pod_errors(payload: dict[str, Any], known_pod_keys: set[str]) -> list[dict[str, str | None]]:
+    return [error for error in iter_payload_pod_errors(payload) if error["pod_key"] not in known_pod_keys]
 
 
 def optional_float(value: Any) -> float | None:
