@@ -2,6 +2,15 @@ from typing import Any
 
 from app.validation import KNOWN_METRICS
 
+HEALTH_ALERT_RULES = {
+    "cpu_temp_c": {"level": "warning", "op": ">=", "threshold": 75.0, "message": "CPU temperature is high"},
+    "wifi_rssi_dbm": {"level": "warning", "op": "<=", "threshold": -75.0, "message": "Wi-Fi signal is weak"},
+    "disk_usage_percent": {"level": "warning", "op": ">=", "threshold": 85.0, "message": "Disk usage is high"},
+    "io_wait_percent": {"level": "warning", "op": ">=", "threshold": 20.0, "message": "I/O wait is high"},
+    "bus_voltage_v": {"level": "warning", "op": "<=", "threshold": 3.1, "message": "Pod bus voltage is low"},
+    "bus_current_ma": {"level": "warning", "op": ">=", "threshold": 500.0, "message": "Pod bus current is high"},
+}
+
 
 def iter_pods(payload: dict[str, Any]) -> list[dict[str, Any]]:
     pods = payload.get("pods") or payload.get("pod_readings") or []
@@ -72,3 +81,103 @@ def iter_pod_errors(payload: dict[str, Any], pod: dict[str, Any], pod_key_value:
                 }
             )
     return result
+
+
+def optional_float(value: Any) -> float | None:
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        return None
+    return float(value)
+
+
+def normalize_system_health(payload: dict[str, Any]) -> dict[str, Any] | None:
+    source = payload.get("system_health")
+    if not isinstance(source, dict):
+        return None
+
+    normalized: dict[str, Any] = {}
+    rpi_core = source.get("rpi_core")
+    if isinstance(rpi_core, dict):
+        values = {
+            field: optional_float(rpi_core.get(field))
+            for field in ("cpu_temp_c", "wifi_rssi_dbm", "disk_usage_percent", "io_wait_percent")
+        }
+        normalized["rpi_core"] = {field: value for field, value in values.items() if value is not None}
+
+    pod_1_hardware = source.get("pod_1_hardware")
+    if isinstance(pod_1_hardware, dict):
+        values = {
+            field: optional_float(pod_1_hardware.get(field))
+            for field in ("bus_voltage_v", "bus_current_ma")
+        }
+        hardware = {field: value for field, value in values.items() if value is not None}
+        box_climate = pod_1_hardware.get("box_climate")
+        if isinstance(box_climate, dict):
+            climate_values = {
+                field: optional_float(box_climate.get(field))
+                for field in ("air_temp_c", "air_humidity_percent")
+            }
+            climate = {field: value for field, value in climate_values.items() if value is not None}
+            if climate:
+                hardware["box_climate"] = climate
+        normalized["pod_1_hardware"] = hardware
+
+    errors = source.get("errors")
+    if isinstance(errors, list):
+        normalized["errors"] = [
+            {
+                "sensor": str(error["sensor"]) if error.get("sensor") is not None else None,
+                "message": str(error["message"]),
+            }
+            for error in errors
+            if isinstance(error, dict) and error.get("message")
+        ]
+
+    return normalized
+
+
+def health_alerts(system_health: dict[str, Any] | None) -> list[dict[str, Any]]:
+    if not system_health:
+        return []
+
+    alerts: list[dict[str, Any]] = []
+    rpi_core = system_health.get("rpi_core") if isinstance(system_health.get("rpi_core"), dict) else {}
+    pod_1_hardware = (
+        system_health.get("pod_1_hardware") if isinstance(system_health.get("pod_1_hardware"), dict) else {}
+    )
+    values = {
+        "cpu_temp_c": rpi_core.get("cpu_temp_c"),
+        "wifi_rssi_dbm": rpi_core.get("wifi_rssi_dbm"),
+        "disk_usage_percent": rpi_core.get("disk_usage_percent"),
+        "io_wait_percent": rpi_core.get("io_wait_percent"),
+        "bus_voltage_v": pod_1_hardware.get("bus_voltage_v"),
+        "bus_current_ma": pod_1_hardware.get("bus_current_ma"),
+    }
+    for metric, value in values.items():
+        if isinstance(value, bool) or not isinstance(value, int | float):
+            continue
+        rule = HEALTH_ALERT_RULES[metric]
+        threshold = float(rule["threshold"])
+        triggered = value >= threshold if rule["op"] == ">=" else value <= threshold
+        if triggered:
+            alerts.append(
+                {
+                    "metric": metric,
+                    "level": rule["level"],
+                    "message": rule["message"],
+                    "value": float(value),
+                    "threshold": threshold,
+                }
+            )
+
+    for error in system_health.get("errors") or []:
+        if not isinstance(error, dict):
+            continue
+        alerts.append(
+            {
+                "metric": "health_probe_error",
+                "level": "warning",
+                "sensor": error.get("sensor"),
+                "message": error.get("message") or "Health probe error",
+            }
+        )
+    return alerts

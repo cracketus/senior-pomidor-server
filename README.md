@@ -84,4 +84,4 @@ HTTP telemetry ingestion is intentionally unauthenticated in v1 for compatibilit
 - `GET /health`
 - `GET /dashboard`
 
-Telemetry must use schema `senior-pomidor.edge.telemetry.v1`. Photos must use schema `senior-pomidor.edge.photo.v1` and upload a JPEG multipart field named `photo`.
+Telemetry may use schema `senior-pomidor.edge.telemetry.v1` or `senior-pomidor.edge.telemetry.v2`. Photos must use schema `senior-pomidor.edge.photo.v1` and upload a JPEG multipart field named `photo`.

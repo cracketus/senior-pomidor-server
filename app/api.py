@@ -11,6 +11,7 @@ from app.config import Settings, get_settings
 from app.db import get_db
 from app.models import Device, Photo, PodReading, TelemetryEvent
 from app.services import persist_photo, persist_telemetry
+from app.telemetry import health_alerts
 from app.validation import ValidationError, parse_utc_z
 
 router = APIRouter(prefix="/api/v1")
@@ -23,6 +24,34 @@ def format_utc(value: datetime) -> str:
 
 
 def event_to_dict(event: TelemetryEvent) -> dict[str, Any]:
+    readings = [
+        {
+            "pod_key": reading.pod_key,
+            "enabled": reading.enabled,
+            "metrics": {
+                key: value
+                for key, value in {
+                    "adc_raw": reading.adc_raw,
+                    "soil_moisture_percent": reading.soil_moisture_percent,
+                    "soil_temperature_c": reading.soil_temperature_c,
+                    "air_temperature_c": reading.air_temperature_c,
+                    "air_humidity_percent": reading.air_humidity_percent,
+                    "air_pressure_hpa": reading.air_pressure_hpa,
+                    "light_lux": reading.light_lux,
+                    "ir_ambient_temp_c": reading.ir_ambient_temp_c,
+                    "leaf_temp_c": reading.leaf_temp_c,
+                    **reading.metrics_jsonb,
+                }.items()
+                if value is not None
+            },
+        }
+        for reading in event.readings
+    ]
+    errors = [
+        {"pod_key": error.pod_key, "sensor": error.sensor, "message": error.message}
+        for error in event.errors
+    ]
+    system_health = event.system_health_jsonb
     return {
         "id": event.id,
         "device_id": event.device_id,
@@ -30,33 +59,11 @@ def event_to_dict(event: TelemetryEvent) -> dict[str, Any]:
         "schema_version": event.schema_version,
         "source": event.source,
         "received_at": format_utc(event.received_at),
-        "readings": [
-            {
-                "pod_key": reading.pod_key,
-                "enabled": reading.enabled,
-                "metrics": {
-                    key: value
-                    for key, value in {
-                        "adc_raw": reading.adc_raw,
-                        "soil_moisture_percent": reading.soil_moisture_percent,
-                        "soil_temperature_c": reading.soil_temperature_c,
-                        "air_temperature_c": reading.air_temperature_c,
-                        "air_humidity_percent": reading.air_humidity_percent,
-                        "air_pressure_hpa": reading.air_pressure_hpa,
-                        "light_lux": reading.light_lux,
-                        "ir_ambient_temp_c": reading.ir_ambient_temp_c,
-                        "leaf_temp_c": reading.leaf_temp_c,
-                        **reading.metrics_jsonb,
-                    }.items()
-                    if value is not None
-                },
-            }
-            for reading in event.readings
-        ],
-        "errors": [
-            {"pod_key": error.pod_key, "sensor": error.sensor, "message": error.message}
-            for error in event.errors
-        ],
+        "plant": {"readings": readings, "errors": errors},
+        "system_health": system_health,
+        "health_alerts": health_alerts(system_health),
+        "readings": readings,
+        "errors": errors,
     }
 
 
