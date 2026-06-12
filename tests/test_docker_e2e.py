@@ -16,7 +16,14 @@ pytestmark = pytest.mark.skipif(
 ROOT = Path(__file__).resolve().parents[1]
 PROJECT_NAME = "senior-pomidor-server-e2e"
 BASE_URL = "http://127.0.0.1:18080"
-READONLY_TABLES = ("devices", "telemetry_events", "pod_readings", "pod_errors", "photos")
+READONLY_TABLES = (
+    "devices",
+    "telemetry_events",
+    "pod_readings",
+    "pod_errors",
+    "photos",
+    "telemetry_pod_readings_flat",
+)
 COMPOSE_ENV = {
     "API_PUBLISHED_PORT": "18080",
     "POSTGRES_PUBLISHED_PORT": "15432",
