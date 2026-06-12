@@ -56,6 +56,7 @@
 
    Grafana is available at `http://localhost:3000`. Default local admin credentials are defined by `GRAFANA_ADMIN_USER` and `GRAFANA_ADMIN_PASSWORD` in `.env.example`.
    Its PostgreSQL datasource uses `GRAFANA_DB_USER` and `GRAFANA_DB_PASSWORD`, which default to the readonly `grafana_reader` role.
+   The `Senior Pomidor Alerts` rule group is provisioned in Grafana Alerting. This first version is Grafana-only and does not configure external email or webhook notifications.
 
 9. If the PostgreSQL volume already existed before Grafana DB access was configured, re-apply the readonly role and grants after migrations:
 
@@ -152,6 +153,23 @@ Remove-Item Env:RUN_DOCKER_E2E
 ```
 
 If Docker Desktop is installed on Windows, start Docker Desktop and wait for the Linux engine before running the E2E test. A missing `dockerDesktopLinuxEngine` pipe means Docker is not running.
+
+## Grafana Alerts
+
+Open provisioned alert rules:
+
+```text
+http://localhost:3000/alerting/list
+```
+
+The default alert set covers:
+
+- device telemetry stale when `devices.last_payload_at` is older than 10 minutes for 5 minutes
+- pod telemetry stale when the latest pod reading is older than 10 minutes for 5 minutes
+- pod sensor errors when any pod reports errors in the last 15 minutes
+- system health threshold crossings for CPU temperature, Wi-Fi RSSI, disk usage, I/O wait, pod bus voltage, and pod bus current
+- system health probe errors when `system_health_jsonb.errors` appears in the last 15 minutes
+- critical dry soil when an enabled pod's latest soil moisture stays below 10% for 30 minutes
 
 ## Useful Read API Calls
 

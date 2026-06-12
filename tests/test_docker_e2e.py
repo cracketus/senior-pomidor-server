@@ -145,6 +145,18 @@ def assert_grafana_provisioning() -> None:
         assert dashboard.status_code == 200
         assert dashboard.json()["dashboard"]["title"] == "Senior Pomidor Telemetry"
 
+        alert_rules = client.get("/api/v1/provisioning/alert-rules")
+        assert alert_rules.status_code == 200
+        alert_titles = {rule["title"] for rule in alert_rules.json()}
+        assert {
+            "Device telemetry stale",
+            "Pod telemetry stale",
+            "Pod sensor errors",
+            "System health threshold crossed",
+            "System health probe errors",
+            "Critical dry soil",
+        }.issubset(alert_titles)
+
 
 def telemetry_payload() -> dict:
     return {

@@ -1,0 +1,443 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: Senior Pomidor Alerts
+    folder: Senior Pomidor Alerts
+    interval: 60s
+    rules:
+      - uid: sp_device_telemetry_stale
+        title: Device telemetry stale
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: senior-pomidor-postgres
+            relativeTimeRange:
+              from: 600
+              to: 0
+            model:
+              datasource:
+                type: postgres
+                uid: senior-pomidor-postgres
+              editorMode: code
+              format: table
+              intervalMs: 1000
+              maxDataPoints: 43200
+              rawQuery: true
+              refId: A
+              rawSql: |
+                SELECT
+                  device_id,
+                  'last payload older than 10 minutes' AS reason,
+                  1::double precision AS value
+                FROM devices
+                WHERE last_payload_at < now() - interval '10 minutes'
+          - refId: B
+            datasourceUid: __expr__
+            relativeTimeRange:
+              from: 0
+              to: 0
+            model:
+              conditions:
+                - evaluator:
+                    params: [0]
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: B
+              type: threshold
+        dashboardUid: senior-pomidor-telemetry
+        noDataState: OK
+        execErrState: Alerting
+        for: 5m
+        annotations:
+          summary: No telemetry has been received from this device for more than 10 minutes.
+        labels:
+          severity: warning
+          category: collection
+
+      - uid: sp_pod_telemetry_stale
+        title: Pod telemetry stale
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: senior-pomidor-postgres
+            relativeTimeRange:
+              from: 600
+              to: 0
+            model:
+              datasource:
+                type: postgres
+                uid: senior-pomidor-postgres
+              editorMode: code
+              format: table
+              intervalMs: 1000
+              maxDataPoints: 43200
+              rawQuery: true
+              refId: A
+              rawSql: |
+                SELECT
+                  device_id,
+                  pod_key,
+                  'pod reading older than 10 minutes' AS reason,
+                  1::double precision AS value
+                FROM (
+                  SELECT
+                    device_id,
+                    pod_key,
+                    max(timestamp_utc) AS latest_timestamp_utc
+                  FROM telemetry_pod_readings_flat
+                  GROUP BY device_id, pod_key
+                ) latest
+                WHERE latest_timestamp_utc < now() - interval '10 minutes'
+          - refId: B
+            datasourceUid: __expr__
+            relativeTimeRange:
+              from: 0
+              to: 0
+            model:
+              conditions:
+                - evaluator:
+                    params: [0]
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: B
+              type: threshold
+        dashboardUid: senior-pomidor-telemetry
+        noDataState: OK
+        execErrState: Alerting
+        for: 5m
+        annotations:
+          summary: A pod has not produced telemetry for more than 10 minutes.
+        labels:
+          severity: warning
+          category: collection
+
+      - uid: sp_pod_sensor_errors
+        title: Pod sensor errors
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: senior-pomidor-postgres
+            relativeTimeRange:
+              from: 900
+              to: 0
+            model:
+              datasource:
+                type: postgres
+                uid: senior-pomidor-postgres
+              editorMode: code
+              format: table
+              intervalMs: 1000
+              maxDataPoints: 43200
+              rawQuery: true
+              refId: A
+              rawSql: |
+                SELECT
+                  pod_errors.device_id,
+                  pod_errors.pod_key,
+                  coalesce(pod_errors.sensor, 'unknown') AS sensor,
+                  pod_errors.message,
+                  count(*)::double precision AS value
+                FROM pod_errors
+                JOIN telemetry_events ON telemetry_events.id = pod_errors.telemetry_event_id
+                WHERE telemetry_events.timestamp_utc >= now() - interval '15 minutes'
+                GROUP BY pod_errors.device_id, pod_errors.pod_key, pod_errors.sensor, pod_errors.message
+          - refId: B
+            datasourceUid: __expr__
+            relativeTimeRange:
+              from: 0
+              to: 0
+            model:
+              conditions:
+                - evaluator:
+                    params: [0]
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: B
+              type: threshold
+        dashboardUid: senior-pomidor-telemetry
+        noDataState: OK
+        execErrState: Alerting
+        for: 0s
+        annotations:
+          summary: A pod reported one or more sensor errors in the last 15 minutes.
+        labels:
+          severity: warning
+          category: sensors
+
+      - uid: sp_system_health_threshold
+        title: System health threshold crossed
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: senior-pomidor-postgres
+            relativeTimeRange:
+              from: 600
+              to: 0
+            model:
+              datasource:
+                type: postgres
+                uid: senior-pomidor-postgres
+              editorMode: code
+              format: table
+              intervalMs: 1000
+              maxDataPoints: 43200
+              rawQuery: true
+              refId: A
+              rawSql: |
+                WITH latest AS (
+                  SELECT DISTINCT ON (device_id)
+                    device_id,
+                    timestamp_utc,
+                    system_health_jsonb
+                  FROM telemetry_events
+                  WHERE timestamp_utc >= now() - interval '10 minutes'
+                    AND system_health_jsonb IS NOT NULL
+                  ORDER BY device_id, timestamp_utc DESC
+                ),
+                metrics AS (
+                  SELECT
+                    latest.device_id,
+                    metric,
+                    observed_value,
+                    threshold_value,
+                    operator
+                  FROM latest
+                  CROSS JOIN LATERAL (
+                    VALUES
+                      ('cpu_temp_c', nullif(system_health_jsonb #>> '{rpi_core,cpu_temp_c}', '')::double precision, 75.0::double precision, '>='),
+                      ('wifi_rssi_dbm', nullif(system_health_jsonb #>> '{rpi_core,wifi_rssi_dbm}', '')::double precision, -75.0::double precision, '<='),
+                      ('disk_usage_percent', nullif(system_health_jsonb #>> '{rpi_core,disk_usage_percent}', '')::double precision, 85.0::double precision, '>='),
+                      ('io_wait_percent', nullif(system_health_jsonb #>> '{rpi_core,io_wait_percent}', '')::double precision, 20.0::double precision, '>='),
+                      ('bus_voltage_v', nullif(system_health_jsonb #>> '{pod_1_hardware,bus_voltage_v}', '')::double precision, 3.1::double precision, '<='),
+                      ('bus_current_ma', nullif(system_health_jsonb #>> '{pod_1_hardware,bus_current_ma}', '')::double precision, 500.0::double precision, '>=')
+                  ) AS metric_values(metric, observed_value, threshold_value, operator)
+                )
+                SELECT
+                  device_id,
+                  metric,
+                  observed_value::text AS observed,
+                  threshold_value::text AS threshold,
+                  operator,
+                  1::double precision AS value
+                FROM metrics
+                WHERE observed_value IS NOT NULL
+                  AND (
+                    (operator = '>=' AND observed_value >= threshold_value)
+                    OR (operator = '<=' AND observed_value <= threshold_value)
+                  )
+          - refId: B
+            datasourceUid: __expr__
+            relativeTimeRange:
+              from: 0
+              to: 0
+            model:
+              conditions:
+                - evaluator:
+                    params: [0]
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: B
+              type: threshold
+        dashboardUid: senior-pomidor-telemetry
+        noDataState: OK
+        execErrState: Alerting
+        for: 0s
+        annotations:
+          summary: A device system health metric crossed a conservative operating threshold.
+        labels:
+          severity: warning
+          category: hardware
+
+      - uid: sp_system_probe_errors
+        title: System health probe errors
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: senior-pomidor-postgres
+            relativeTimeRange:
+              from: 900
+              to: 0
+            model:
+              datasource:
+                type: postgres
+                uid: senior-pomidor-postgres
+              editorMode: code
+              format: table
+              intervalMs: 1000
+              maxDataPoints: 43200
+              rawQuery: true
+              refId: A
+              rawSql: |
+                SELECT
+                  telemetry_events.device_id,
+                  coalesce(error_item ->> 'sensor', 'unknown') AS sensor,
+                  error_item ->> 'message' AS message,
+                  1::double precision AS value
+                FROM telemetry_events
+                CROSS JOIN LATERAL jsonb_array_elements(coalesce(system_health_jsonb -> 'errors', '[]'::jsonb)) AS error_item
+                WHERE telemetry_events.timestamp_utc >= now() - interval '15 minutes'
+                  AND system_health_jsonb IS NOT NULL
+                  AND error_item ? 'message'
+          - refId: B
+            datasourceUid: __expr__
+            relativeTimeRange:
+              from: 0
+              to: 0
+            model:
+              conditions:
+                - evaluator:
+                    params: [0]
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: B
+              type: threshold
+        dashboardUid: senior-pomidor-telemetry
+        noDataState: OK
+        execErrState: Alerting
+        for: 0s
+        annotations:
+          summary: A device system health probe reported an error.
+        labels:
+          severity: warning
+          category: hardware
+
+      - uid: sp_critical_dry_soil
+        title: Critical dry soil
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: senior-pomidor-postgres
+            relativeTimeRange:
+              from: 900
+              to: 0
+            model:
+              datasource:
+                type: postgres
+                uid: senior-pomidor-postgres
+              editorMode: code
+              format: table
+              intervalMs: 1000
+              maxDataPoints: 43200
+              rawQuery: true
+              refId: A
+              rawSql: |
+                SELECT
+                  device_id,
+                  pod_key,
+                  soil_moisture_percent::text AS observed,
+                  '10' AS threshold,
+                  1::double precision AS value
+                FROM (
+                  SELECT DISTINCT ON (device_id, pod_key)
+                    device_id,
+                    pod_key,
+                    timestamp_utc,
+                    soil_moisture_percent
+                  FROM telemetry_pod_readings_flat
+                  WHERE enabled = true
+                    AND soil_moisture_percent IS NOT NULL
+                    AND timestamp_utc >= now() - interval '15 minutes'
+                  ORDER BY device_id, pod_key, timestamp_utc DESC
+                ) latest
+                WHERE soil_moisture_percent < 10
+          - refId: B
+            datasourceUid: __expr__
+            relativeTimeRange:
+              from: 0
+              to: 0
+            model:
+              conditions:
+                - evaluator:
+                    params: [0]
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: B
+              type: threshold
+        dashboardUid: senior-pomidor-telemetry
+        noDataState: OK
+        execErrState: Alerting
+        for: 30m
+        annotations:
+          summary: Soil moisture has remained below the critical dry threshold.
+        labels:
+          severity: warning
+          category: plant
