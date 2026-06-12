@@ -60,6 +60,7 @@ docker compose --profile observability up -d grafana
 
 Grafana is available at `http://localhost:3000`. The default local admin credentials are documented in `.env.example` and can be changed in `.env`.
 Grafana uses the dedicated readonly PostgreSQL role from `GRAFANA_DB_USER` and `GRAFANA_DB_PASSWORD`, not the app database credentials.
+The `Senior Pomidor Telemetry` dashboard is provisioned automatically and includes device/pod filters, telemetry panels, latest status, and recent photo metadata links.
 On a fresh `postgres_data` volume this role is initialized automatically. On an existing volume, re-apply the readonly grants after migrations:
 
 ```powershell

@@ -16,6 +16,7 @@ pytestmark = pytest.mark.skipif(
 ROOT = Path(__file__).resolve().parents[1]
 PROJECT_NAME = "senior-pomidor-server-e2e"
 BASE_URL = "http://127.0.0.1:18080"
+GRAFANA_BASE_URL = "http://127.0.0.1:13000"
 READONLY_TABLES = (
     "devices",
     "telemetry_events",
@@ -26,6 +27,7 @@ READONLY_TABLES = (
 )
 COMPOSE_ENV = {
     "API_PUBLISHED_PORT": "18080",
+    "GRAFANA_PUBLISHED_PORT": "13000",
     "POSTGRES_PUBLISHED_PORT": "15432",
     "MQTT_PUBLISHED_PORT": "11883",
 }
@@ -79,6 +81,19 @@ def wait_for_api() -> None:
     raise AssertionError("api did not become ready")
 
 
+def wait_for_grafana() -> None:
+    deadline = time.monotonic() + 60
+    while time.monotonic() < deadline:
+        try:
+            response = httpx.get(f"{GRAFANA_BASE_URL}/api/health", timeout=2)
+            if response.status_code == 200:
+                return
+        except httpx.HTTPError:
+            pass
+        time.sleep(1)
+    raise AssertionError("grafana did not become ready")
+
+
 def apply_grafana_reader_grants() -> None:
     compose("exec", "-T", "postgres", "sh", "/docker-entrypoint-initdb.d/20-grafana-reader.sh")
 
@@ -117,6 +132,20 @@ def assert_grafana_reader_permissions() -> None:
         assert "permission denied" in result.stderr.lower()
 
 
+def assert_grafana_provisioning() -> None:
+    compose("--profile", "observability", "up", "-d", "grafana")
+    wait_for_grafana()
+
+    with httpx.Client(base_url=GRAFANA_BASE_URL, auth=("admin", "admin"), timeout=10) as client:
+        datasource = client.get("/api/datasources/uid/senior-pomidor-postgres")
+        assert datasource.status_code == 200
+        assert datasource.json()["name"] == "Senior Pomidor PostgreSQL"
+
+        dashboard = client.get("/api/dashboards/uid/senior-pomidor-telemetry")
+        assert dashboard.status_code == 200
+        assert dashboard.json()["dashboard"]["title"] == "Senior Pomidor Telemetry"
+
+
 def telemetry_payload() -> dict:
     return {
         "schema_version": TELEMETRY_SCHEMA,
@@ -144,6 +173,7 @@ def test_docker_compose_stack_ingests_and_serves_data():
     try:
         compose("up", "-d", "--build", "postgres", "mosquitto")
         wait_for_postgres()
+        compose("build", "api")
         compose("run", "--rm", "api", "alembic", "upgrade", "head")
         apply_grafana_reader_grants()
         compose("up", "-d", "--build", "api", "worker")
@@ -169,5 +199,6 @@ def test_docker_compose_stack_ingests_and_serves_data():
             assert download.content == b"\xff\xd8docker-jpeg\xff\xd9"
 
         assert_grafana_reader_permissions()
+        assert_grafana_provisioning()
     finally:
         compose("down", "-v", "--remove-orphans", check=False)

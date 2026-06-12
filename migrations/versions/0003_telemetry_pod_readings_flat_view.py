@@ -1,6 +1,6 @@
 """add flattened telemetry pod readings view
 
-Revision ID: 0003_telemetry_pod_readings_flat_view
+Revision ID: 0003_flat_pod_readings_view
 Revises: 0002_system_health
 Create Date: 2026-06-12
 """
@@ -9,7 +9,7 @@ from collections.abc import Sequence
 
 from alembic import op
 
-revision: str = "0003_telemetry_pod_readings_flat_view"
+revision: str = "0003_flat_pod_readings_view"
 down_revision: str | None = "0002_system_health"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
