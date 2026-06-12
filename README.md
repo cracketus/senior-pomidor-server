@@ -8,6 +8,7 @@ Server implementation for the Senior Pomidor project.
 - `worker`: MQTT subscriber for `senior-pomidor/+/telemetry`.
 - `postgres`: persistent telemetry/photo metadata storage.
 - `mosquitto`: local MQTT broker exposed on port `1883`.
+- `grafana`: optional local observability UI exposed on port `3000`.
 
 The server accepts the current edge-node telemetry contract without requiring edge code changes.
 
@@ -49,6 +50,14 @@ docker compose up -d api worker
 ```
 
 The API is available at `http://localhost:8000`, and the MQTT broker listens on `localhost:1883`.
+
+Start optional Grafana for local observability:
+
+```powershell
+docker compose --profile observability up -d grafana
+```
+
+Grafana is available at `http://localhost:3000`. The default local admin credentials are documented in `.env.example` and can be changed in `.env`.
 
 For deployment checks, backups, restore, and Raspberry Pi configuration examples, see [docs/OPERATIONS.md](docs/OPERATIONS.md).
 
