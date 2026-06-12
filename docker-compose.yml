@@ -14,7 +14,7 @@ services:
       - postgres
       - mosquitto
     ports:
-      - "8000:8000"
+      - "${API_PUBLISHED_PORT:-8000}:8000"
     volumes:
       - photo_data:/app/data/photos
 
@@ -41,15 +41,18 @@ services:
       POSTGRES_DB: senior_pomidor
       POSTGRES_USER: senior_pomidor
       POSTGRES_PASSWORD: senior_pomidor
+      GRAFANA_DB_USER: ${GRAFANA_DB_USER:-grafana_reader}
+      GRAFANA_DB_PASSWORD: ${GRAFANA_DB_PASSWORD:-grafana_reader}
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PUBLISHED_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init-grafana-reader.sh:/docker-entrypoint-initdb.d/20-grafana-reader.sh:ro
 
   mosquitto:
     image: eclipse-mosquitto:2
     ports:
-      - "1883:1883"
+      - "${MQTT_PUBLISHED_PORT:-1883}:1883"
     volumes:
       - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
 
@@ -60,10 +63,13 @@ services:
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GRAFANA_DB_USER: ${GRAFANA_DB_USER:-grafana_reader}
+      GRAFANA_DB_PASSWORD: ${GRAFANA_DB_PASSWORD:-grafana_reader}
     ports:
-      - "3000:3000"
+      - "${GRAFANA_PUBLISHED_PORT:-3000}:3000"
     volumes:
       - grafana_data:/var/lib/grafana
+      - ./docker/grafana/provisioning:/etc/grafana/provisioning:ro
 
 volumes:
   postgres_data:

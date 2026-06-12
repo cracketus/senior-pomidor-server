@@ -50,6 +50,7 @@ docker compose up -d api worker
 ```
 
 The API is available at `http://localhost:8000`, and the MQTT broker listens on `localhost:1883`.
+Host port mappings can be changed with `API_PUBLISHED_PORT`, `POSTGRES_PUBLISHED_PORT`, `MQTT_PUBLISHED_PORT`, and `GRAFANA_PUBLISHED_PORT` in `.env`.
 
 Start optional Grafana for local observability:
 
@@ -58,6 +59,12 @@ docker compose --profile observability up -d grafana
 ```
 
 Grafana is available at `http://localhost:3000`. The default local admin credentials are documented in `.env.example` and can be changed in `.env`.
+Grafana uses the dedicated readonly PostgreSQL role from `GRAFANA_DB_USER` and `GRAFANA_DB_PASSWORD`, not the app database credentials.
+On a fresh `postgres_data` volume this role is initialized automatically. On an existing volume, re-apply the readonly grants after migrations:
+
+```powershell
+docker compose exec -T postgres sh /docker-entrypoint-initdb.d/20-grafana-reader.sh
+```
 
 For deployment checks, backups, restore, and Raspberry Pi configuration examples, see [docs/OPERATIONS.md](docs/OPERATIONS.md).
 

@@ -15,14 +15,25 @@ pytestmark = pytest.mark.skipif(
 
 ROOT = Path(__file__).resolve().parents[1]
 PROJECT_NAME = "senior-pomidor-server-e2e"
-BASE_URL = "http://127.0.0.1:8000"
+BASE_URL = "http://127.0.0.1:18080"
+READONLY_TABLES = ("devices", "telemetry_events", "pod_readings", "pod_errors", "photos")
+COMPOSE_ENV = {
+    "API_PUBLISHED_PORT": "18080",
+    "POSTGRES_PUBLISHED_PORT": "15432",
+    "MQTT_PUBLISHED_PORT": "11883",
+}
 
 
 def compose(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
+    env = os.environ.copy()
+    env.update(COMPOSE_ENV)
     return subprocess.run(
         ["docker", "compose", "-p", PROJECT_NAME, *args],
         cwd=ROOT,
+        env=env,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         capture_output=True,
         check=check,
     )
@@ -61,6 +72,44 @@ def wait_for_api() -> None:
     raise AssertionError("api did not become ready")
 
 
+def apply_grafana_reader_grants() -> None:
+    compose("exec", "-T", "postgres", "sh", "/docker-entrypoint-initdb.d/20-grafana-reader.sh")
+
+
+def grafana_reader_psql(sql: str, check: bool = True) -> subprocess.CompletedProcess[str]:
+    return compose(
+        "exec",
+        "-T",
+        "postgres",
+        "psql",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "postgresql://grafana_reader:grafana_reader@localhost:5432/senior_pomidor",
+        "-c",
+        sql,
+        check=check,
+    )
+
+
+def assert_grafana_reader_permissions() -> None:
+    for table in READONLY_TABLES:
+        result = grafana_reader_psql(f"SELECT count(*) FROM public.{table};")
+        assert result.returncode == 0, result.stderr
+
+    denied_statements = (
+        """
+        INSERT INTO public.devices (device_id, first_seen_at, last_seen_at, last_payload_at)
+        VALUES ('readonly-denied', now(), now(), now());
+        """,
+        "UPDATE public.devices SET last_payload_at = now() WHERE device_id = 'pi-001';",
+        "DELETE FROM public.devices WHERE device_id = 'pi-001';",
+    )
+    for statement in denied_statements:
+        result = grafana_reader_psql(statement, check=False)
+        assert result.returncode != 0
+        assert "permission denied" in result.stderr.lower()
+
+
 def telemetry_payload() -> dict:
     return {
         "schema_version": TELEMETRY_SCHEMA,
@@ -89,6 +138,7 @@ def test_docker_compose_stack_ingests_and_serves_data():
         compose("up", "-d", "--build", "postgres", "mosquitto")
         wait_for_postgres()
         compose("run", "--rm", "api", "alembic", "upgrade", "head")
+        apply_grafana_reader_grants()
         compose("up", "-d", "--build", "api", "worker")
         wait_for_api()
 
@@ -110,5 +160,7 @@ def test_docker_compose_stack_ingests_and_serves_data():
             assert download.status_code == 200
             assert download.headers["content-type"] == "image/jpeg"
             assert download.content == b"\xff\xd8docker-jpeg\xff\xd9"
+
+        assert_grafana_reader_permissions()
     finally:
         compose("down", "-v", "--remove-orphans", check=False)

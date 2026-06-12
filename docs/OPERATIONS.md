@@ -22,6 +22,8 @@
    - PostgreSQL: `5432/tcp`, only needed for local administration
    - Grafana: `3000/tcp`, only needed when the observability profile is enabled
 
+   Override the published host ports with `API_PUBLISHED_PORT`, `MQTT_PUBLISHED_PORT`, `POSTGRES_PUBLISHED_PORT`, and `GRAFANA_PUBLISHED_PORT` in `.env` if any defaults are already in use.
+
 5. Start infrastructure and apply migrations:
 
    ```powershell
@@ -53,6 +55,33 @@
    ```
 
    Grafana is available at `http://localhost:3000`. Default local admin credentials are defined by `GRAFANA_ADMIN_USER` and `GRAFANA_ADMIN_PASSWORD` in `.env.example`.
+   Its PostgreSQL datasource uses `GRAFANA_DB_USER` and `GRAFANA_DB_PASSWORD`, which default to the readonly `grafana_reader` role.
+
+9. If the PostgreSQL volume already existed before Grafana DB access was configured, re-apply the readonly role and grants after migrations:
+
+   ```powershell
+   docker compose exec -T postgres sh /docker-entrypoint-initdb.d/20-grafana-reader.sh
+   ```
+
+   Verify the Grafana user can read telemetry tables:
+
+   ```powershell
+   docker compose exec -T postgres psql "postgresql://grafana_reader:grafana_reader@localhost:5432/senior_pomidor" -c "SELECT count(*) FROM devices;"
+   docker compose exec -T postgres psql "postgresql://grafana_reader:grafana_reader@localhost:5432/senior_pomidor" -c "SELECT count(*) FROM telemetry_events;"
+   docker compose exec -T postgres psql "postgresql://grafana_reader:grafana_reader@localhost:5432/senior_pomidor" -c "SELECT count(*) FROM pod_readings;"
+   docker compose exec -T postgres psql "postgresql://grafana_reader:grafana_reader@localhost:5432/senior_pomidor" -c "SELECT count(*) FROM pod_errors;"
+   docker compose exec -T postgres psql "postgresql://grafana_reader:grafana_reader@localhost:5432/senior_pomidor" -c "SELECT count(*) FROM photos;"
+   ```
+
+   Verify the Grafana user cannot mutate tables:
+
+   ```powershell
+   docker compose exec -T postgres psql "postgresql://grafana_reader:grafana_reader@localhost:5432/senior_pomidor" -c "INSERT INTO devices (device_id, first_seen_at, last_seen_at, last_payload_at) VALUES ('readonly-check', now(), now(), now());"
+   docker compose exec -T postgres psql "postgresql://grafana_reader:grafana_reader@localhost:5432/senior_pomidor" -c "UPDATE devices SET last_payload_at = now() WHERE device_id = 'readonly-check';"
+   docker compose exec -T postgres psql "postgresql://grafana_reader:grafana_reader@localhost:5432/senior_pomidor" -c "DELETE FROM devices WHERE device_id = 'readonly-check';"
+   ```
+
+   Each mutation command should fail with a permission error.
 
 ## Raspberry Pi Edge Configuration
 
