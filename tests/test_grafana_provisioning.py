@@ -5,6 +5,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DASHBOARD_PATH = ROOT / "docker/grafana/provisioning/dashboards/json/senior-pomidor-telemetry.json"
 DATASOURCE_PATH = ROOT / "docker/grafana/provisioning/datasources/postgres.yml"
 PROVIDER_PATH = ROOT / "docker/grafana/provisioning/dashboards/senior-pomidor.yml"
+ALERTS_PATH = ROOT / "docker/grafana/provisioning/alerting/senior-pomidor-alerts.yml"
 
 
 def load_dashboard() -> dict:
@@ -27,6 +28,7 @@ def test_grafana_dashboard_provisioning_files_reference_checked_in_dashboard():
     assert "name: Senior Pomidor PostgreSQL" in datasource
     assert "path: /etc/grafana/provisioning/dashboards/json" in provider
     assert DASHBOARD_PATH.is_file()
+    assert ALERTS_PATH.is_file()
 
 
 def test_grafana_dashboard_json_covers_issue_15_acceptance_criteria():
@@ -68,3 +70,55 @@ def test_grafana_dashboard_json_covers_issue_15_acceptance_criteria():
         "leaf_temp_c",
     ):
         assert metric in queries
+
+
+def test_grafana_alerting_provisioning_covers_collection_and_health_alerts():
+    alerts = ALERTS_PATH.read_text(encoding="utf-8")
+
+    assert "apiVersion: 1" in alerts
+    assert "folder: Senior Pomidor Alerts" in alerts
+    assert "interval: 60s" in alerts
+    assert "datasourceUid: senior-pomidor-postgres" in alerts
+    assert "datasourceUid: __expr__" in alerts
+    assert "dashboardUid: senior-pomidor-telemetry" in alerts
+    assert "noDataState: OK" in alerts
+    assert "execErrState: Alerting" in alerts
+
+    for title in (
+        "Device telemetry stale",
+        "Pod telemetry stale",
+        "Pod sensor errors",
+        "System health threshold crossed",
+        "System health probe errors",
+        "Critical dry soil",
+    ):
+        assert f"title: {title}" in alerts
+
+    for table_or_view in (
+        "devices",
+        "telemetry_pod_readings_flat",
+        "pod_errors",
+        "telemetry_events",
+    ):
+        assert table_or_view in alerts
+
+    for threshold in (
+        "interval '10 minutes'",
+        "interval '15 minutes'",
+        "for: 5m",
+        "for: 30m",
+        "cpu_temp_c",
+        "75.0::double precision",
+        "wifi_rssi_dbm",
+        "-75.0::double precision",
+        "disk_usage_percent",
+        "85.0::double precision",
+        "io_wait_percent",
+        "20.0::double precision",
+        "bus_voltage_v",
+        "3.1::double precision",
+        "bus_current_ma",
+        "500.0::double precision",
+        "soil_moisture_percent < 10",
+    ):
+        assert threshold in alerts
