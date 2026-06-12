@@ -52,6 +52,10 @@ The API is available at `http://localhost:8000`, and the MQTT broker listens on 
 
 For deployment checks, backups, restore, and Raspberry Pi configuration examples, see [docs/OPERATIONS.md](docs/OPERATIONS.md).
 
+The offline AI analysis prototype for stored photos and telemetry is documented in
+[docs/OPERATIONS.md](docs/OPERATIONS.md#offline-ai-analysis-prototype). It runs as a separate
+CLI consumer and does not participate in API or MQTT ingestion.
+
 ## Edge Configuration
 
 Use the server LAN IP for the Raspberry Pi:
