@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from argparse import ArgumentParser
-from datetime import timedelta
-from pathlib import Path
-from typing import Sequence
 import json
 import os
 import sys
+from argparse import ArgumentParser
+from collections.abc import Sequence
+from datetime import timedelta
+from pathlib import Path
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -100,34 +100,37 @@ def main(argv: Sequence[str] | None = None) -> int:
     engine = create_engine(database_url, pool_pre_ping=True)
     SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
 
-    with SessionLocal() as db:
-        contexts = select_photo_contexts(
-            db,
-            limit=args.limit,
-            device_id=args.device_id,
-            since_hours=args.since_hours,
-            telemetry_window=timedelta(minutes=args.telemetry_window_minutes),
-        )
-        if args.dry_run:
-            print(json.dumps(dry_run_payload(contexts), indent=2, sort_keys=True))
-            return 0
-        if not contexts:
-            print("No photos matched the selection.")
-            return 0
+    try:
+        with SessionLocal() as db:
+            contexts = select_photo_contexts(
+                db,
+                limit=args.limit,
+                device_id=args.device_id,
+                since_hours=args.since_hours,
+                telemetry_window=timedelta(minutes=args.telemetry_window_minutes),
+            )
+            if args.dry_run:
+                print(json.dumps(dry_run_payload(contexts), indent=2, sort_keys=True))
+                return 0
+            if not contexts:
+                print("No photos matched the selection.")
+                return 0
 
-        analyzer = OllamaVisionAnalyzer(
-            model=args.model,
-            host=args.ollama_host,
-            timeout_seconds=args.timeout_seconds,
-        )
-        output_path = Path(args.output)
-        records = analyze_contexts(
-            contexts,
-            analyzer,
-            output_path=output_path,
-            model=args.model,
-            ollama_host=args.ollama_host,
-        )
+            analyzer = OllamaVisionAnalyzer(
+                model=args.model,
+                host=args.ollama_host,
+                timeout_seconds=args.timeout_seconds,
+            )
+            output_path = Path(args.output)
+            records = analyze_contexts(
+                contexts,
+                analyzer,
+                output_path=output_path,
+                model=args.model,
+                ollama_host=args.ollama_host,
+            )
+    finally:
+        engine.dispose()
 
     failures = sum(1 for record in records if record["error"])
     successes = len(records) - failures

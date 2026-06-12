@@ -19,6 +19,22 @@ python -m pip install -e ".[dev]"
 python -m pytest -q
 ```
 
+Run the full local quality harness:
+
+```powershell
+nox -s tests lint format_check types security deps_audit
+```
+
+Install pre-commit hooks for fast local feedback:
+
+```powershell
+pre-commit install
+pre-commit run --all-files
+```
+
+CI treats tests, linting, format checks, type checks, security checks, dependency
+audits, and Docker vulnerability scans as blocking gates.
+
 Docker Compose end-to-end coverage is opt-in because it requires Docker and uses local ports:
 
 ```powershell

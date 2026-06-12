@@ -2,7 +2,7 @@ from typing import Any
 
 from app.validation import KNOWN_METRICS
 
-HEALTH_ALERT_RULES = {
+HEALTH_ALERT_RULES: dict[str, dict[str, float | str]] = {
     "cpu_temp_c": {"level": "warning", "op": ">=", "threshold": 75.0, "message": "CPU temperature is high"},
     "wifi_rssi_dbm": {"level": "warning", "op": "<=", "threshold": -75.0, "message": "Wi-Fi signal is weak"},
     "disk_usage_percent": {"level": "warning", "op": ">=", "threshold": 85.0, "message": "Disk usage is high"},
@@ -21,7 +21,9 @@ def iter_pods(payload: dict[str, Any]) -> list[dict[str, Any]]:
     plant = _plant(payload)
     pods = payload.get("pods") or payload.get("pod_readings") or plant.get("readings") or plant.get("pods") or []
     if isinstance(pods, dict):
-        return [dict(value, pod_key=key) if isinstance(value, dict) else {"pod_key": key} for key, value in pods.items()]
+        return [
+            dict(value, pod_key=key) if isinstance(value, dict) else {"pod_key": key} for key, value in pods.items()
+        ]
     if isinstance(pods, list):
         return [pod for pod in pods if isinstance(pod, dict)]
     return []
@@ -38,8 +40,9 @@ def pod_enabled(pod: dict[str, Any]) -> bool:
 
 
 def pod_metrics(pod: dict[str, Any]) -> tuple[dict[str, float | None], dict[str, float]]:
-    metrics = pod.get("metrics") if isinstance(pod.get("metrics"), dict) else pod
-    known: dict[str, float | None] = {metric: None for metric in KNOWN_METRICS}
+    metrics_value = pod.get("metrics")
+    metrics: dict[str, Any] = metrics_value if isinstance(metrics_value, dict) else pod
+    known: dict[str, float | None] = dict.fromkeys(KNOWN_METRICS)
     unknown: dict[str, float] = {}
     for key, value in metrics.items():
         if key in {"pod_key", "pod", "key", "id", "enabled", "metrics", "errors"}:
@@ -83,7 +86,8 @@ def iter_payload_pod_errors(payload: dict[str, Any]) -> list[dict[str, str | Non
 
 
 def iter_pod_errors(payload: dict[str, Any], pod: dict[str, Any], pod_key_value: str) -> list[dict[str, str | None]]:
-    pod_errors = pod.get("errors") if isinstance(pod.get("errors"), list) else []
+    pod_errors_value = pod.get("errors")
+    pod_errors: list[Any] = pod_errors_value if isinstance(pod_errors_value, list) else []
     result: list[dict[str, str | None]] = []
     for error in pod_errors:
         normalized = _normalize_pod_error(error, default_pod_key=pod_key_value)
@@ -122,16 +126,12 @@ def normalize_system_health(payload: dict[str, Any]) -> dict[str, Any] | None:
 
     pod_1_hardware = source.get("pod_1_hardware")
     if isinstance(pod_1_hardware, dict):
-        values = {
-            field: optional_float(pod_1_hardware.get(field))
-            for field in ("bus_voltage_v", "bus_current_ma")
-        }
-        hardware = {field: value for field, value in values.items() if value is not None}
+        values = {field: optional_float(pod_1_hardware.get(field)) for field in ("bus_voltage_v", "bus_current_ma")}
+        hardware: dict[str, Any] = {field: value for field, value in values.items() if value is not None}
         box_climate = pod_1_hardware.get("box_climate")
         if isinstance(box_climate, dict):
             climate_values = {
-                field: optional_float(box_climate.get(field))
-                for field in ("air_temp_c", "air_humidity_percent")
+                field: optional_float(box_climate.get(field)) for field in ("air_temp_c", "air_humidity_percent")
             }
             climate = {field: value for field, value in climate_values.items() if value is not None}
             if climate:
@@ -157,10 +157,10 @@ def health_alerts(system_health: dict[str, Any] | None) -> list[dict[str, Any]]:
         return []
 
     alerts: list[dict[str, Any]] = []
-    rpi_core = system_health.get("rpi_core") if isinstance(system_health.get("rpi_core"), dict) else {}
-    pod_1_hardware = (
-        system_health.get("pod_1_hardware") if isinstance(system_health.get("pod_1_hardware"), dict) else {}
-    )
+    rpi_core_value = system_health.get("rpi_core")
+    rpi_core: dict[str, Any] = rpi_core_value if isinstance(rpi_core_value, dict) else {}
+    pod_1_hardware_value = system_health.get("pod_1_hardware")
+    pod_1_hardware: dict[str, Any] = pod_1_hardware_value if isinstance(pod_1_hardware_value, dict) else {}
     values = {
         "cpu_temp_c": rpi_core.get("cpu_temp_c"),
         "wifi_rssi_dbm": rpi_core.get("wifi_rssi_dbm"),

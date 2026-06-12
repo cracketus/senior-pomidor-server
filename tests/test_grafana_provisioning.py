@@ -1,7 +1,6 @@
 import json
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 DASHBOARD_PATH = ROOT / "docker/grafana/provisioning/dashboards/json/senior-pomidor-telemetry.json"
 DATASOURCE_PATH = ROOT / "docker/grafana/provisioning/datasources/postgres.yml"

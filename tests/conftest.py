@@ -1,6 +1,6 @@
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
@@ -14,9 +14,10 @@ from app.main import app
 from app.models import Base
 
 
-@pytest.fixture()
+@pytest.fixture
 def client_factory(tmp_path: Path) -> Generator[Callable[..., TestClient], None, None]:
     clients: list[TestClient] = []
+    engines: list[Any] = []
 
     def create_client(**settings_overrides: Any) -> TestClient:
         engine = create_engine(
@@ -24,6 +25,7 @@ def client_factory(tmp_path: Path) -> Generator[Callable[..., TestClient], None,
             connect_args={"check_same_thread": False},
             poolclass=StaticPool,
         )
+        engines.append(engine)
         Base.metadata.create_all(engine)
         TestingSessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
 
@@ -35,7 +37,7 @@ def client_factory(tmp_path: Path) -> Generator[Callable[..., TestClient], None,
                 db.close()
 
         def override_settings() -> Settings:
-            values = {
+            values: dict[str, Any] = {
                 "database_url": "sqlite:///:memory:",
                 "photo_storage_dir": str(tmp_path / "photos"),
                 "photo_upload_token": None,
@@ -55,8 +57,10 @@ def client_factory(tmp_path: Path) -> Generator[Callable[..., TestClient], None,
         for client in clients:
             client.close()
         app.dependency_overrides.clear()
+        for engine in engines:
+            engine.dispose()
 
 
-@pytest.fixture()
+@pytest.fixture
 def client(client_factory: Callable[..., TestClient]) -> TestClient:
     return client_factory()

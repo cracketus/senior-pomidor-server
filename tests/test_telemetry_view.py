@@ -50,9 +50,10 @@ def test_telemetry_pod_readings_flat_view_returns_sample_ingestion_rows():
             source="mqtt",
         )
 
-        rows = db.execute(
-            text(
-                """
+        rows = (
+            db.execute(
+                text(
+                    """
                 SELECT
                     timestamp_utc,
                     device_id,
@@ -69,10 +70,14 @@ def test_telemetry_pod_readings_flat_view_returns_sample_ingestion_rows():
                 FROM telemetry_pod_readings_flat
                 ORDER BY pod_key
                 """
+                )
             )
-        ).mappings().all()
+            .mappings()
+            .all()
+        )
     finally:
         db.close()
+        engine.dispose()
 
     assert len(rows) == 2
     assert rows[0]["device_id"] == "pi-001"

@@ -3,6 +3,7 @@
 .env
 .venv/
 venv/
+.nox/
 .pytest_cache/
 .coverage
 dist/
@@ -12,4 +13,3 @@ data/
 *.db
 .codex-known-hosts
 .codex-pi-key*
-

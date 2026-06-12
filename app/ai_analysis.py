@@ -1,21 +1,21 @@
 from __future__ import annotations
 
+import base64
+import json
+import urllib.error
+import urllib.parse
+import urllib.request
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from time import perf_counter
 from typing import Any, Protocol
-import base64
-import json
-import urllib.error
-import urllib.request
 
 from sqlalchemy import desc, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models import Photo, PodReading, TelemetryEvent
 from app.telemetry import health_alerts
-
 
 DEFAULT_AI_ANALYSIS_MODEL = "llama3.2-vision"
 DEFAULT_OLLAMA_HOST = "http://localhost:11434"
@@ -123,8 +123,7 @@ def telemetry_event_summary(event: TelemetryEvent) -> dict[str, Any]:
             for reading in event.readings
         ],
         "errors": [
-            {"pod_key": error.pod_key, "sensor": error.sensor, "message": error.message}
-            for error in event.errors
+            {"pod_key": error.pod_key, "sensor": error.sensor, "message": error.message} for error in event.errors
         ],
         "system_health": system_health,
         "health_alerts": health_alerts(system_health),
@@ -170,6 +169,9 @@ class OllamaVisionAnalyzer:
         self.model = model
         self.host = host.rstrip("/")
         self.timeout_seconds = timeout_seconds
+        parsed_host = urllib.parse.urlparse(self.host)
+        if parsed_host.scheme not in {"http", "https"} or not parsed_host.netloc:
+            raise AnalysisError("Ollama host must be an HTTP or HTTPS URL")
 
     def analyze(self, image_path: Path, prompt: str) -> str:
         if not self.host:
@@ -181,14 +183,14 @@ class OllamaVisionAnalyzer:
             "images": [base64.b64encode(image_bytes).decode("ascii")],
             "stream": False,
         }
-        request = urllib.request.Request(
+        request = urllib.request.Request(  # noqa: S310
             f"{self.host}/api/generate",
             data=json.dumps(payload).encode("utf-8"),
             headers={"Content-Type": "application/json"},
             method="POST",
         )
         try:
-            with urllib.request.urlopen(request, timeout=self.timeout_seconds) as response:
+            with urllib.request.urlopen(request, timeout=self.timeout_seconds) as response:  # noqa: S310  # nosec B310
                 response_payload = json.loads(response.read().decode("utf-8"))
         except urllib.error.HTTPError as exc:
             body = exc.read().decode("utf-8", errors="replace")[:500]
@@ -220,7 +222,7 @@ def analyze_context(
     error: str | None = None
     try:
         analysis = analyzer.analyze(image_path, prompt)
-    except Exception as exc:  # noqa: BLE001 - per-photo report output should capture prototype failures.
+    except Exception as exc:
         error = str(exc)
 
     return {

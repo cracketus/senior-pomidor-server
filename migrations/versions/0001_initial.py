@@ -7,8 +7,8 @@ Create Date: 2026-06-07
 
 from collections.abc import Sequence
 
-from alembic import op
 import sqlalchemy as sa
+from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision: str = "0001_initial"
@@ -42,7 +42,9 @@ def upgrade() -> None:
     op.create_table(
         "pod_readings",
         sa.Column("id", sa.Integer(), primary_key=True),
-        sa.Column("telemetry_event_id", sa.Integer(), sa.ForeignKey("telemetry_events.id", ondelete="CASCADE"), nullable=False),
+        sa.Column(
+            "telemetry_event_id", sa.Integer(), sa.ForeignKey("telemetry_events.id", ondelete="CASCADE"), nullable=False
+        ),
         sa.Column("device_id", sa.String(length=128), nullable=False),
         sa.Column("pod_key", sa.String(length=64), nullable=False),
         sa.Column("enabled", sa.Boolean(), nullable=False),
@@ -60,7 +62,9 @@ def upgrade() -> None:
     op.create_table(
         "pod_errors",
         sa.Column("id", sa.Integer(), primary_key=True),
-        sa.Column("telemetry_event_id", sa.Integer(), sa.ForeignKey("telemetry_events.id", ondelete="CASCADE"), nullable=False),
+        sa.Column(
+            "telemetry_event_id", sa.Integer(), sa.ForeignKey("telemetry_events.id", ondelete="CASCADE"), nullable=False
+        ),
         sa.Column("device_id", sa.String(length=128), nullable=False),
         sa.Column("pod_key", sa.String(length=64), nullable=False),
         sa.Column("sensor", sa.String(length=128), nullable=True),

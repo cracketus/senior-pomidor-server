@@ -2,24 +2,25 @@
 import argparse
 import os
 import signal
-import subprocess
+import subprocess  # nosec B404
 import sys
+import tempfile
 import time
 from pathlib import Path
 
 
-class StepTimeout(RuntimeError):
+class StepTimeoutError(RuntimeError):
     pass
 
 
 def timeout_handler(signum, frame):
-    raise StepTimeout("step timed out")
+    raise StepTimeoutError("step timed out")
 
 
 def run_command(args, timeout=8):
     print(f"\n$ {' '.join(args)}", flush=True)
     try:
-        result = subprocess.run(args, text=True, capture_output=True, timeout=timeout, check=False)
+        result = subprocess.run(args, text=True, capture_output=True, timeout=timeout, check=False)  # nosec B603
     except Exception as exc:
         print(f"command failed to run: {type(exc).__name__}: {exc}", flush=True)
         return
@@ -71,7 +72,7 @@ def test_picamera2(output_path: Path, timeout_seconds: int) -> bool:
             return True
         print(f"FAIL: output file missing or empty: {output_path}", flush=True)
         return False
-    except StepTimeout as exc:
+    except StepTimeoutError as exc:
         print(f"FAIL: {exc}", flush=True)
         return False
     except Exception as exc:
@@ -99,7 +100,7 @@ def test_opencv(timeout_seconds: int) -> bool:
             print(f"frame_shape={frame.shape}", flush=True)
             return True
         return False
-    except StepTimeout as exc:
+    except StepTimeoutError as exc:
         print(f"FAIL: {exc}", flush=True)
         return False
     except Exception as exc:
@@ -111,7 +112,7 @@ def test_opencv(timeout_seconds: int) -> bool:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--output", default="/tmp/picamera2-smoke-test.jpg")
+    parser.add_argument("--output", default=str(Path(tempfile.gettempdir()) / "picamera2-smoke-test.jpg"))
     parser.add_argument("--timeout", type=int, default=12)
     args = parser.parse_args()
 
