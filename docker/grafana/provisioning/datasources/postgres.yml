@@ -2,6 +2,7 @@ apiVersion: 1
 
 datasources:
   - name: Senior Pomidor PostgreSQL
+    uid: senior-pomidor-postgres
     type: postgres
     access: proxy
     url: postgres:5432
