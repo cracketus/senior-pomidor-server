@@ -33,7 +33,8 @@ WITH required_tables(table_name) AS (
         ('telemetry_events'),
         ('pod_readings'),
         ('pod_errors'),
-        ('photos')
+        ('photos'),
+        ('telemetry_pod_readings_flat')
 )
 SELECT format('GRANT SELECT ON TABLE public.%I TO %I', table_name, :'grafana_user')
 FROM required_tables
