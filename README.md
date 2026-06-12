@@ -68,6 +68,7 @@ docker compose exec -T postgres sh /docker-entrypoint-initdb.d/20-grafana-reader
 ```
 
 For deployment checks, backups, restore, and Raspberry Pi configuration examples, see [docs/OPERATIONS.md](docs/OPERATIONS.md).
+For 3/6/12 month hardware, storage, power, and 4/8/16 pod expansion estimates, see [docs/CAPACITY_PLANNING.md](docs/CAPACITY_PLANNING.md).
 
 The offline AI analysis prototype for stored photos and telemetry is documented in
 [docs/OPERATIONS.md](docs/OPERATIONS.md#offline-ai-analysis-prototype). It runs as a separate
