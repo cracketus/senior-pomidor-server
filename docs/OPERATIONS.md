@@ -121,3 +121,44 @@ Invoke-RestMethod "http://localhost:8000/api/v1/devices/pi-001/telemetry?since_h
 Invoke-RestMethod "http://localhost:8000/api/v1/devices/pi-001/photos?limit=25"
 Invoke-RestMethod "http://localhost:8000/api/v1/photos/recent?limit=12"
 ```
+
+## Offline AI Analysis Prototype
+
+Issue 8 is implemented as an offline consumer only. The analysis tool reads stored photos and matching telemetry from the database, calls a local Ollama vision model from a separate process, and appends JSONL report records under `data/`. It is not part of `/api/v1/edge/telemetry`, `/api/v1/edge/photos`, API startup, or the MQTT worker.
+
+Install Ollama separately and pull the default local vision model:
+
+```powershell
+ollama pull llama3.2-vision
+```
+
+Preview selected photos, matched telemetry events, and prompt inputs without calling the model:
+
+```powershell
+python tools/analyze_recent_photos.py --dry-run --limit 5 --telemetry-window-minutes 30
+```
+
+Run analysis and append JSONL output:
+
+```powershell
+python tools/analyze_recent_photos.py --limit 5 --output data/ai-analysis/results.jsonl
+```
+
+Useful overrides:
+
+```powershell
+$env:AI_ANALYSIS_MODEL='llama3.2-vision'
+$env:OLLAMA_HOST='http://localhost:11434'
+python tools/analyze_recent_photos.py --device-id pi-001 --since-hours 24 --timeout-seconds 180
+```
+
+Prompt inputs are intentionally limited to stored Core data:
+
+- photo metadata: `photo_id`, `device_id`, `captured_at_utc`, `sharpness_score`, content type, size, and SHA-256
+- nearby telemetry from the same device within the configured capture-time window
+- pod readings, pod errors, system health, and derived health alerts
+- the JPEG file referenced by the photo metadata row
+
+Each JSONL record includes the photo identity, model, analysis timestamp, matching telemetry event IDs, prompt inputs, model response text, runtime details, and a nullable `error` field. Per-photo failures are written as report records so a bad image or unavailable model does not hide which inputs were selected.
+
+Operational cost for the default path is zero external API spend because analysis runs against local Ollama. The real cost is local CPU/GPU time, memory pressure, and wall-clock runtime; keep `--limit` small until the model performance is known on the deployment machine.
