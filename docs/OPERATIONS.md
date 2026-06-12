@@ -20,6 +20,7 @@
    - API: `8000/tcp`
    - MQTT broker: `1883/tcp`
    - PostgreSQL: `5432/tcp`, only needed for local administration
+   - Grafana: `3000/tcp`, only needed when the observability profile is enabled
 
 5. Start infrastructure and apply migrations:
 
@@ -44,6 +45,14 @@
    ```text
    http://localhost:8000/dashboard
    ```
+
+8. Optionally start Grafana for local observability:
+
+   ```powershell
+   docker compose --profile observability up -d grafana
+   ```
+
+   Grafana is available at `http://localhost:3000`. Default local admin credentials are defined by `GRAFANA_ADMIN_USER` and `GRAFANA_ADMIN_PASSWORD` in `.env.example`.
 
 ## Raspberry Pi Edge Configuration
 
