@@ -1,5 +1,5 @@
-from datetime import UTC, datetime, timedelta
 import json
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from sqlalchemy import create_engine
@@ -18,7 +18,7 @@ from app.validation import PHOTO_SCHEMA, TELEMETRY_SCHEMA, TELEMETRY_SCHEMA_V2
 from tools.analyze_recent_photos import main as analyze_recent_photos_main
 
 
-@pytest.fixture()
+@pytest.fixture
 def db_session():
     engine = create_engine(
         "sqlite://",
@@ -27,8 +27,11 @@ def db_session():
     )
     Base.metadata.create_all(engine)
     SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
-    with SessionLocal() as db:
-        yield db
+    try:
+        with SessionLocal() as db:
+            yield db
+    finally:
+        engine.dispose()
 
 
 def telemetry_payload(
@@ -175,6 +178,7 @@ def test_cli_dry_run_prints_selected_inputs(tmp_path, capsys):
     with SessionLocal() as db:
         persist_telemetry(db, telemetry_payload(), source="test")
         seed_photo(db, tmp_path, photo_id="photo-cli")
+    engine.dispose()
 
     exit_code = analyze_recent_photos_main(["--database-url", database_url, "--dry-run", "--limit", "1"])
     output = json.loads(capsys.readouterr().out)

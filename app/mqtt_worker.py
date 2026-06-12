@@ -18,7 +18,13 @@ logger = logging.getLogger(__name__)
 stop_event = Event()
 
 
-def on_connect(client: mqtt.Client, _userdata: object, _flags: object, reason_code: int, _properties: object = None) -> None:
+def on_connect(
+    client: mqtt.Client,
+    _userdata: object,
+    _flags: object,
+    reason_code: int,
+    _properties: object = None,
+) -> None:
     if reason_code != 0:
         logger.error("MQTT connect failed: %s", reason_code)
         return

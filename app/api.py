@@ -47,10 +47,7 @@ def event_to_dict(event: TelemetryEvent) -> dict[str, Any]:
         }
         for reading in event.readings
     ]
-    errors = [
-        {"pod_key": error.pod_key, "sensor": error.sensor, "message": error.message}
-        for error in event.errors
-    ]
+    errors = [{"pod_key": error.pod_key, "sensor": error.sensor, "message": error.message} for error in event.errors]
     system_health = event.system_health_jsonb
     return {
         "id": event.id,

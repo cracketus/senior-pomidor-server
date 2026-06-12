@@ -1,6 +1,6 @@
 from datetime import UTC, datetime, timedelta
 
-from app.validation import TELEMETRY_SCHEMA, TELEMETRY_SCHEMA_V2, PHOTO_SCHEMA
+from app.validation import PHOTO_SCHEMA, TELEMETRY_SCHEMA, TELEMETRY_SCHEMA_V2
 
 
 def telemetry_payload(timestamp: str = "2026-06-07T12:00:00Z") -> dict:

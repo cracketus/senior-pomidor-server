@@ -24,7 +24,7 @@ def load_fixture(name: str) -> dict[str, Any]:
     return json.loads((FIXTURE_DIR / name).read_text(encoding="utf-8"))
 
 
-@pytest.fixture()
+@pytest.fixture
 def integration_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Generator[TestClient, None, None]:
     engine = create_engine(
         "sqlite://",
@@ -51,9 +51,12 @@ def integration_client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Gener
     app.dependency_overrides[get_db] = override_db
     app.dependency_overrides[get_settings] = override_settings
     monkeypatch.setattr(mqtt_worker, "SessionLocal", testing_session_local)
-    with TestClient(app) as client:
-        yield client
-    app.dependency_overrides.clear()
+    try:
+        with TestClient(app) as client:
+            yield client
+    finally:
+        app.dependency_overrides.clear()
+        engine.dispose()
 
 
 def mqtt_message(topic: str, payload: dict[str, Any]) -> SimpleNamespace:
