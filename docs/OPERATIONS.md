@@ -102,6 +102,9 @@ MQTT should be treated as the primary path. HTTP telemetry is the compatibility 
 
 ## Backup And Restore
 
+For longer-term sizing, retention, power estimates, and pod-count expansion
+planning, see [CAPACITY_PLANNING.md](CAPACITY_PLANNING.md).
+
 Create a backup directory outside the repository:
 
 ```powershell
