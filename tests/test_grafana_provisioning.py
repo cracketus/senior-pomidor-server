@@ -20,6 +20,10 @@ def panel_queries(dashboard: dict) -> str:
     return "\n".join(queries)
 
 
+def find_panel(dashboard: dict, title: str) -> dict:
+    return next(panel for panel in dashboard["panels"] if panel["title"] == title)
+
+
 def test_grafana_dashboard_provisioning_files_reference_checked_in_dashboard():
     datasource = DATASOURCE_PATH.read_text(encoding="utf-8")
     provider = PROVIDER_PATH.read_text(encoding="utf-8")
@@ -79,6 +83,23 @@ def test_grafana_dashboard_json_covers_issue_15_acceptance_criteria():
         assert metric in queries
 
 
+def test_grafana_air_vpd_panel_shows_documented_thresholds():
+    dashboard = load_dashboard()
+    air_vpd_panel = find_panel(dashboard, "Air VPD")
+
+    assert air_vpd_panel["fieldConfig"]["defaults"]["custom"]["thresholdsStyle"] == {"mode": "line"}
+    assert air_vpd_panel["fieldConfig"]["defaults"]["thresholds"]["steps"] == [
+        {"color": "red", "value": None},
+        {"color": "orange", "value": 0.4},
+        {"color": "yellow", "value": 0.5},
+        {"color": "green", "value": 0.8},
+        {"color": "yellow", "value": 1.3},
+        {"color": "orange", "value": 1.6},
+        {"color": "red", "value": 2.5},
+        {"color": "dark-red", "value": 4},
+    ]
+
+
 def test_grafana_alerting_provisioning_covers_collection_and_health_alerts():
     alerts = ALERTS_PATH.read_text(encoding="utf-8")
 
@@ -98,6 +119,12 @@ def test_grafana_alerting_provisioning_covers_collection_and_health_alerts():
         "System health threshold crossed",
         "System health probe errors",
         "Critical dry soil",
+        "VPD too low",
+        "VPD condensation risk",
+        "VPD high",
+        "VPD stress",
+        "VPD critical",
+        "VPD emergency",
     ):
         assert f"title: {title}" in alerts
 
@@ -127,5 +154,23 @@ def test_grafana_alerting_provisioning_covers_collection_and_health_alerts():
         "bus_current_ma",
         "500.0::double precision",
         "soil_moisture_percent < 10",
+        "air_vpd_kpa",
+        "air_vpd_kpa >= 0.4",
+        "air_vpd_kpa < 0.5",
+        "air_vpd_kpa < 0.4",
+        "air_vpd_kpa > 1.3",
+        "air_vpd_kpa <= 1.6",
+        "air_vpd_kpa > 1.6",
+        "air_vpd_kpa <= 2.5",
+        "air_vpd_kpa > 2.5",
+        "air_vpd_kpa <= 4.0",
+        "air_vpd_kpa > 4.0",
+        "for: 15m",
+        "for: 10m",
+        "for: 3m",
+        "for: 1m",
+        "severity: alert",
+        "severity: critical",
+        "severity: emergency",
     ):
         assert threshold in alerts

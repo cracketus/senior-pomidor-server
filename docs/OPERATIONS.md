@@ -170,6 +170,9 @@ The default alert set covers:
 - system health threshold crossings for CPU temperature, Wi-Fi RSSI, disk usage, I/O wait, pod bus voltage, and pod bus current
 - system health probe errors when `system_health_jsonb.errors` appears in the last 15 minutes
 - critical dry soil when an enabled pod's latest soil moisture stays below 10% for 30 minutes
+- VPD warning, stress, critical, and emergency ranges for enabled pods using `air_vpd_kpa`
+
+VPD threshold ranges and operational interpretation are documented in [VPD_ALERTS.md](VPD_ALERTS.md).
 
 ## Useful Read API Calls
 
