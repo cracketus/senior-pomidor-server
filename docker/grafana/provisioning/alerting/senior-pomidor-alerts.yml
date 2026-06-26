@@ -441,3 +441,463 @@ groups:
         labels:
           severity: warning
           category: plant
+
+      - uid: sp_vpd_too_low
+        title: VPD too low
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: senior-pomidor-postgres
+            relativeTimeRange:
+              from: 900
+              to: 0
+            model:
+              datasource:
+                type: postgres
+                uid: senior-pomidor-postgres
+              editorMode: code
+              format: table
+              intervalMs: 1000
+              maxDataPoints: 43200
+              rawQuery: true
+              refId: A
+              rawSql: |
+                SELECT
+                  device_id,
+                  pod_key,
+                  air_vpd_kpa::text AS observed,
+                  '0.4-0.5' AS threshold,
+                  1::double precision AS value
+                FROM (
+                  SELECT DISTINCT ON (device_id, pod_key)
+                    device_id,
+                    pod_key,
+                    timestamp_utc,
+                    air_vpd_kpa
+                  FROM telemetry_pod_readings_flat
+                  WHERE enabled = true
+                    AND air_vpd_kpa IS NOT NULL
+                    AND timestamp_utc >= now() - interval '15 minutes'
+                  ORDER BY device_id, pod_key, timestamp_utc DESC
+                ) latest
+                WHERE air_vpd_kpa >= 0.4
+                  AND air_vpd_kpa < 0.5
+          - refId: B
+            datasourceUid: __expr__
+            relativeTimeRange:
+              from: 0
+              to: 0
+            model:
+              conditions:
+                - evaluator:
+                    params: [0]
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: B
+              type: threshold
+        dashboardUid: senior-pomidor-telemetry
+        noDataState: OK
+        execErrState: Alerting
+        for: 15m
+        annotations:
+          summary: VPD is too low; humid air may weaken transpiration.
+          description: Check condensation risk, airflow, and night humidity.
+        labels:
+          severity: warning
+          category: plant
+
+      - uid: sp_vpd_condensation_risk
+        title: VPD condensation risk
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: senior-pomidor-postgres
+            relativeTimeRange:
+              from: 600
+              to: 0
+            model:
+              datasource:
+                type: postgres
+                uid: senior-pomidor-postgres
+              editorMode: code
+              format: table
+              intervalMs: 1000
+              maxDataPoints: 43200
+              rawQuery: true
+              refId: A
+              rawSql: |
+                SELECT
+                  device_id,
+                  pod_key,
+                  air_vpd_kpa::text AS observed,
+                  '0.4' AS threshold,
+                  1::double precision AS value
+                FROM (
+                  SELECT DISTINCT ON (device_id, pod_key)
+                    device_id,
+                    pod_key,
+                    timestamp_utc,
+                    air_vpd_kpa
+                  FROM telemetry_pod_readings_flat
+                  WHERE enabled = true
+                    AND air_vpd_kpa IS NOT NULL
+                    AND timestamp_utc >= now() - interval '10 minutes'
+                  ORDER BY device_id, pod_key, timestamp_utc DESC
+                ) latest
+                WHERE air_vpd_kpa < 0.4
+          - refId: B
+            datasourceUid: __expr__
+            relativeTimeRange:
+              from: 0
+              to: 0
+            model:
+              conditions:
+                - evaluator:
+                    params: [0]
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: B
+              type: threshold
+        dashboardUid: senior-pomidor-telemetry
+        noDataState: OK
+        execErrState: Alerting
+        for: 10m
+        annotations:
+          summary: VPD is in the condensation and disease risk zone.
+          description: Very humid air can reduce transpiration and increase condensation risk.
+        labels:
+          severity: alert
+          category: plant
+
+      - uid: sp_vpd_high
+        title: VPD high
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: senior-pomidor-postgres
+            relativeTimeRange:
+              from: 600
+              to: 0
+            model:
+              datasource:
+                type: postgres
+                uid: senior-pomidor-postgres
+              editorMode: code
+              format: table
+              intervalMs: 1000
+              maxDataPoints: 43200
+              rawQuery: true
+              refId: A
+              rawSql: |
+                SELECT
+                  device_id,
+                  pod_key,
+                  air_vpd_kpa::text AS observed,
+                  '1.3-1.6' AS threshold,
+                  1::double precision AS value
+                FROM (
+                  SELECT DISTINCT ON (device_id, pod_key)
+                    device_id,
+                    pod_key,
+                    timestamp_utc,
+                    air_vpd_kpa
+                  FROM telemetry_pod_readings_flat
+                  WHERE enabled = true
+                    AND air_vpd_kpa IS NOT NULL
+                    AND timestamp_utc >= now() - interval '10 minutes'
+                  ORDER BY device_id, pod_key, timestamp_utc DESC
+                ) latest
+                WHERE air_vpd_kpa > 1.3
+                  AND air_vpd_kpa <= 1.6
+          - refId: B
+            datasourceUid: __expr__
+            relativeTimeRange:
+              from: 0
+              to: 0
+            model:
+              conditions:
+                - evaluator:
+                    params: [0]
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: B
+              type: threshold
+        dashboardUid: senior-pomidor-telemetry
+        noDataState: OK
+        execErrState: Alerting
+        for: 10m
+        annotations:
+          summary: VPD is above the optimal tomato range.
+          description: Watch soil moisture, sun exposure, and leaf condition.
+        labels:
+          severity: warning
+          category: plant
+
+      - uid: sp_vpd_stress
+        title: VPD stress
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: senior-pomidor-postgres
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              datasource:
+                type: postgres
+                uid: senior-pomidor-postgres
+              editorMode: code
+              format: table
+              intervalMs: 1000
+              maxDataPoints: 43200
+              rawQuery: true
+              refId: A
+              rawSql: |
+                SELECT
+                  device_id,
+                  pod_key,
+                  air_vpd_kpa::text AS observed,
+                  '1.6-2.5' AS threshold,
+                  1::double precision AS value
+                FROM (
+                  SELECT DISTINCT ON (device_id, pod_key)
+                    device_id,
+                    pod_key,
+                    timestamp_utc,
+                    air_vpd_kpa
+                  FROM telemetry_pod_readings_flat
+                  WHERE enabled = true
+                    AND air_vpd_kpa IS NOT NULL
+                    AND timestamp_utc >= now() - interval '5 minutes'
+                  ORDER BY device_id, pod_key, timestamp_utc DESC
+                ) latest
+                WHERE air_vpd_kpa > 1.6
+                  AND air_vpd_kpa <= 2.5
+          - refId: B
+            datasourceUid: __expr__
+            relativeTimeRange:
+              from: 0
+              to: 0
+            model:
+              conditions:
+                - evaluator:
+                    params: [0]
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: B
+              type: threshold
+        dashboardUid: senior-pomidor-telemetry
+        noDataState: OK
+        execErrState: Alerting
+        for: 5m
+        annotations:
+          summary: VPD stress guardrail exceeded.
+          description: Check soil moisture, leaf condition, direct sun exposure, and ventilation.
+        labels:
+          severity: alert
+          category: plant
+
+      - uid: sp_vpd_critical
+        title: VPD critical
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: senior-pomidor-postgres
+            relativeTimeRange:
+              from: 180
+              to: 0
+            model:
+              datasource:
+                type: postgres
+                uid: senior-pomidor-postgres
+              editorMode: code
+              format: table
+              intervalMs: 1000
+              maxDataPoints: 43200
+              rawQuery: true
+              refId: A
+              rawSql: |
+                SELECT
+                  device_id,
+                  pod_key,
+                  air_vpd_kpa::text AS observed,
+                  '2.5-4.0' AS threshold,
+                  1::double precision AS value
+                FROM (
+                  SELECT DISTINCT ON (device_id, pod_key)
+                    device_id,
+                    pod_key,
+                    timestamp_utc,
+                    air_vpd_kpa
+                  FROM telemetry_pod_readings_flat
+                  WHERE enabled = true
+                    AND air_vpd_kpa IS NOT NULL
+                    AND timestamp_utc >= now() - interval '3 minutes'
+                  ORDER BY device_id, pod_key, timestamp_utc DESC
+                ) latest
+                WHERE air_vpd_kpa > 2.5
+                  AND air_vpd_kpa <= 4.0
+          - refId: B
+            datasourceUid: __expr__
+            relativeTimeRange:
+              from: 0
+              to: 0
+            model:
+              conditions:
+                - evaluator:
+                    params: [0]
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: B
+              type: threshold
+        dashboardUid: senior-pomidor-telemetry
+        noDataState: OK
+        execErrState: Alerting
+        for: 3m
+        annotations:
+          summary: VPD is critically high.
+          description: Add shading, reduce dry airflow, and check substrate moisture immediately.
+        labels:
+          severity: critical
+          category: plant
+
+      - uid: sp_vpd_emergency
+        title: VPD emergency
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: senior-pomidor-postgres
+            relativeTimeRange:
+              from: 60
+              to: 0
+            model:
+              datasource:
+                type: postgres
+                uid: senior-pomidor-postgres
+              editorMode: code
+              format: table
+              intervalMs: 1000
+              maxDataPoints: 43200
+              rawQuery: true
+              refId: A
+              rawSql: |
+                SELECT
+                  device_id,
+                  pod_key,
+                  air_vpd_kpa::text AS observed,
+                  '4.0' AS threshold,
+                  1::double precision AS value
+                FROM (
+                  SELECT DISTINCT ON (device_id, pod_key)
+                    device_id,
+                    pod_key,
+                    timestamp_utc,
+                    air_vpd_kpa
+                  FROM telemetry_pod_readings_flat
+                  WHERE enabled = true
+                    AND air_vpd_kpa IS NOT NULL
+                    AND timestamp_utc >= now() - interval '1 minute'
+                  ORDER BY device_id, pod_key, timestamp_utc DESC
+                ) latest
+                WHERE air_vpd_kpa > 4.0
+          - refId: B
+            datasourceUid: __expr__
+            relativeTimeRange:
+              from: 0
+              to: 0
+            model:
+              conditions:
+                - evaluator:
+                    params: [0]
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: B
+              type: threshold
+        dashboardUid: senior-pomidor-telemetry
+        noDataState: OK
+        execErrState: Alerting
+        for: 1m
+        annotations:
+          summary: Emergency VPD condition.
+          description: Consider shading, wind protection, irrigation checks, or moving the plant out of direct stress.
+        labels:
+          severity: emergency
+          category: plant

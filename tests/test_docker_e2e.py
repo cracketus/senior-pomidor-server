@@ -155,6 +155,12 @@ def assert_grafana_provisioning() -> None:
             "System health threshold crossed",
             "System health probe errors",
             "Critical dry soil",
+            "VPD too low",
+            "VPD condensation risk",
+            "VPD high",
+            "VPD stress",
+            "VPD critical",
+            "VPD emergency",
         }.issubset(alert_titles)
 
 
