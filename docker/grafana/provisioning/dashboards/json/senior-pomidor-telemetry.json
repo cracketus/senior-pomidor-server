@@ -77,7 +77,7 @@
           },
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT DISTINCT ON (device_id, pod_key)\n  timestamp_utc,\n  received_at,\n  device_id,\n  pod_key,\n  enabled,\n  soil_moisture_percent,\n  soil_temperature_c,\n  air_temperature_c,\n  air_humidity_percent,\n  air_pressure_hpa,\n  light_lux,\n  leaf_temp_c\nFROM telemetry_pod_readings_flat\nWHERE $__timeFilter(timestamp_utc)\n  AND ('${device_id:csv}' = 'All' OR device_id IN (${device_id:sqlstring}))\n  AND ('${pod_key:csv}' = 'All' OR pod_key IN (${pod_key:sqlstring}))\nORDER BY device_id, pod_key, timestamp_utc DESC",
+          "rawSql": "SELECT DISTINCT ON (device_id, pod_key)\n  timestamp_utc,\n  received_at,\n  device_id,\n  pod_key,\n  enabled,\n  soil_moisture_percent,\n  soil_temperature_c,\n  air_temperature_c,\n  air_humidity_percent,\n  air_pressure_hpa,\n  air_actual_vapor_pressure_kpa,\n  air_saturation_vapor_pressure_kpa,\n  air_vpd_kpa,\n  light_lux,\n  leaf_temp_c,\n  leaf_saturation_vapor_pressure_kpa,\n  leaf_vpd_kpa\nFROM telemetry_pod_readings_flat\nWHERE $__timeFilter(timestamp_utc)\n  AND ('${device_id:csv}' = 'All' OR device_id IN (${device_id:sqlstring}))\n  AND ('${pod_key:csv}' = 'All' OR pod_key IN (${pod_key:sqlstring}))\nORDER BY device_id, pod_key, timestamp_utc DESC",
           "refId": "A"
         }
       ],
@@ -891,6 +891,196 @@
       ],
       "title": "Leaf Temperature",
       "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "senior-pomidor-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "kPa",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 12,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "pressurekpa"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 32
+      },
+      "id": 11,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "senior-pomidor-postgres"
+          },
+          "format": "time_series",
+          "metricColumn": "metric",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  timestamp_utc AS \"time\",\n  concat(device_id, ' / ', pod_key) AS metric,\n  air_vpd_kpa AS value\nFROM telemetry_pod_readings_flat\nWHERE $__timeFilter(timestamp_utc)\n  AND air_vpd_kpa IS NOT NULL\n  AND ('${device_id:csv}' = 'All' OR device_id IN (${device_id:sqlstring}))\n  AND ('${pod_key:csv}' = 'All' OR pod_key IN (${pod_key:sqlstring}))\nORDER BY 1",
+          "refId": "A",
+          "timeColumn": "time",
+          "valueColumn": "value"
+        }
+      ],
+      "title": "Air VPD",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "senior-pomidor-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "kPa",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 12,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "pressurekpa"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 32
+      },
+      "id": 12,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "senior-pomidor-postgres"
+          },
+          "format": "time_series",
+          "metricColumn": "metric",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  timestamp_utc AS \"time\",\n  concat(device_id, ' / ', pod_key) AS metric,\n  leaf_vpd_kpa AS value\nFROM telemetry_pod_readings_flat\nWHERE $__timeFilter(timestamp_utc)\n  AND leaf_vpd_kpa IS NOT NULL\n  AND ('${device_id:csv}' = 'All' OR device_id IN (${device_id:sqlstring}))\n  AND ('${pod_key:csv}' = 'All' OR pod_key IN (${pod_key:sqlstring}))\nORDER BY 1",
+          "refId": "A",
+          "timeColumn": "time",
+          "valueColumn": "value"
+        }
+      ],
+      "title": "Leaf VPD",
+      "type": "timeseries"
     }
   ],
   "refresh": "30s",
@@ -955,6 +1145,6 @@
   "timezone": "browser",
   "title": "Senior Pomidor Telemetry",
   "uid": "senior-pomidor-telemetry",
-  "version": 1,
+  "version": 2,
   "weekStart": ""
 }

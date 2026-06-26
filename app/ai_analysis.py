@@ -98,9 +98,14 @@ def reading_metrics(reading: PodReading) -> dict[str, Any]:
         "air_temperature_c": reading.air_temperature_c,
         "air_humidity_percent": reading.air_humidity_percent,
         "air_pressure_hpa": reading.air_pressure_hpa,
+        "air_actual_vapor_pressure_kpa": reading.air_actual_vapor_pressure_kpa,
+        "air_saturation_vapor_pressure_kpa": reading.air_saturation_vapor_pressure_kpa,
+        "air_vpd_kpa": reading.air_vpd_kpa,
         "light_lux": reading.light_lux,
         "ir_ambient_temp_c": reading.ir_ambient_temp_c,
         "leaf_temp_c": reading.leaf_temp_c,
+        "leaf_saturation_vapor_pressure_kpa": reading.leaf_saturation_vapor_pressure_kpa,
+        "leaf_vpd_kpa": reading.leaf_vpd_kpa,
     }
     metrics.update(reading.metrics_jsonb or {})
     return {key: value for key, value in metrics.items() if value is not None}

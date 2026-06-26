@@ -12,9 +12,14 @@ KNOWN_METRICS = {
     "air_temperature_c",
     "air_humidity_percent",
     "air_pressure_hpa",
+    "air_actual_vapor_pressure_kpa",
+    "air_saturation_vapor_pressure_kpa",
+    "air_vpd_kpa",
     "light_lux",
     "ir_ambient_temp_c",
     "leaf_temp_c",
+    "leaf_saturation_vapor_pressure_kpa",
+    "leaf_vpd_kpa",
 }
 
 

@@ -29,10 +29,18 @@ PUBLIC_METRIC_FIELDS: tuple[str, ...] = (
     "air_temperature_c",
     "air_humidity_percent",
     "air_pressure_hpa",
+    "air_vpd_kpa",
     "light_lux",
     "leaf_temp_c",
+    "leaf_vpd_kpa",
 )
-NON_EXPORTED_FLAT_FIELDS: tuple[str, ...] = ("adc_raw", "ir_ambient_temp_c")
+NON_EXPORTED_FLAT_FIELDS: tuple[str, ...] = (
+    "adc_raw",
+    "air_actual_vapor_pressure_kpa",
+    "air_saturation_vapor_pressure_kpa",
+    "ir_ambient_temp_c",
+    "leaf_saturation_vapor_pressure_kpa",
+)
 MAX_LABEL_VALUE_LENGTH = 80
 PRIVATE_LABEL_PATTERN = re.compile(r"[/\\]|(?:^|[^0-9])(?:\d{1,3}\.){3}\d{1,3}(?:[^0-9]|$)")
 SAFE_LABEL_CHARS = re.compile(r"[^A-Za-z0-9_.-]+")
@@ -67,9 +75,14 @@ class ExportRow:
     air_temperature_c: float | None = None
     air_humidity_percent: float | None = None
     air_pressure_hpa: float | None = None
+    air_actual_vapor_pressure_kpa: float | None = None
+    air_saturation_vapor_pressure_kpa: float | None = None
+    air_vpd_kpa: float | None = None
     light_lux: float | None = None
     ir_ambient_temp_c: float | None = None
     leaf_temp_c: float | None = None
+    leaf_saturation_vapor_pressure_kpa: float | None = None
+    leaf_vpd_kpa: float | None = None
     metrics_jsonb: dict | None = None
 
 
@@ -229,9 +242,14 @@ def _row_from_orm(reading: PodReading, timestamp_utc: datetime) -> ExportRow:
         air_temperature_c=reading.air_temperature_c,
         air_humidity_percent=reading.air_humidity_percent,
         air_pressure_hpa=reading.air_pressure_hpa,
+        air_actual_vapor_pressure_kpa=reading.air_actual_vapor_pressure_kpa,
+        air_saturation_vapor_pressure_kpa=reading.air_saturation_vapor_pressure_kpa,
+        air_vpd_kpa=reading.air_vpd_kpa,
         light_lux=reading.light_lux,
         ir_ambient_temp_c=reading.ir_ambient_temp_c,
         leaf_temp_c=reading.leaf_temp_c,
+        leaf_saturation_vapor_pressure_kpa=reading.leaf_saturation_vapor_pressure_kpa,
+        leaf_vpd_kpa=reading.leaf_vpd_kpa,
         metrics_jsonb=reading.metrics_jsonb,
     )
 

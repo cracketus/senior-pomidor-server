@@ -75,9 +75,14 @@ def sample_row(**overrides) -> ExportRow:
         "air_temperature_c": 21.2,
         "air_humidity_percent": 58.0,
         "air_pressure_hpa": 1008.5,
+        "air_actual_vapor_pressure_kpa": 1.36,
+        "air_saturation_vapor_pressure_kpa": 7.38,
+        "air_vpd_kpa": 6.02,
         "light_lux": 1234.0,
         "ir_ambient_temp_c": 19.8,
         "leaf_temp_c": 18.7,
+        "leaf_saturation_vapor_pressure_kpa": 5.02,
+        "leaf_vpd_kpa": 3.66,
         "metrics_jsonb": {"battery_mv": 5010.0, "sensor_error_message": "private"},
     }
     values.update(overrides)
@@ -102,8 +107,13 @@ def telemetry_payload(timestamp: str, *, enabled: bool = True, moisture: float |
         "air_temperature_c": 21.2,
         "air_humidity_percent": 58.0,
         "air_pressure_hpa": 1008.5,
+        "air_actual_vapor_pressure_kpa": 1.36,
+        "air_saturation_vapor_pressure_kpa": 7.38,
+        "air_vpd_kpa": 6.02,
         "light_lux": 1234.0,
         "leaf_temp_c": 18.7,
+        "leaf_saturation_vapor_pressure_kpa": 5.02,
+        "leaf_vpd_kpa": 3.66,
         "battery_mv": 5010.0,
     }
     if moisture is not None:
@@ -141,12 +151,17 @@ def test_row_to_metric_samples_exports_only_public_allowlisted_metrics():
         "senior_pomidor_air_temperature_c",
         "senior_pomidor_air_humidity_percent",
         "senior_pomidor_air_pressure_hpa",
+        "senior_pomidor_air_vpd_kpa",
         "senior_pomidor_light_lux",
         "senior_pomidor_leaf_temp_c",
+        "senior_pomidor_leaf_vpd_kpa",
     }
     encoded = encode_write_request(samples)
     assert b"adc_raw" not in encoded
+    assert b"air_actual_vapor_pressure_kpa" not in encoded
+    assert b"air_saturation_vapor_pressure_kpa" not in encoded
     assert b"ir_ambient_temp_c" not in encoded
+    assert b"leaf_saturation_vapor_pressure_kpa" not in encoded
     assert b"battery_mv" not in encoded
     assert b"sensor_error_message" not in encoded
 
@@ -181,8 +196,10 @@ def test_disabled_pods_and_null_metric_fields_are_not_exported():
             air_temperature_c=None,
             air_humidity_percent=None,
             air_pressure_hpa=None,
+            air_vpd_kpa=None,
             light_lux=None,
             leaf_temp_c=None,
+            leaf_vpd_kpa=None,
         )
     )
     assert samples == []
@@ -243,7 +260,7 @@ def test_export_once_reads_postgres_rows_sends_metrics_and_advances_state():
     assert "senior_pomidor_soil_moisture_percent" not in names
     assert "senior_pomidor_soil_temperature_c" in names
     assert "senior_pomidor_telemetry_freshness_seconds" not in names
-    assert result.plant_samples == 6
+    assert result.plant_samples == 8
     assert result.freshness_samples == 0
     assert result.max_source_timestamp == datetime(2026, 6, 7, 12, 1, tzinfo=UTC)
     assert result.max_source_reading_id is not None

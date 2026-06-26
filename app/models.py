@@ -53,9 +53,14 @@ class PodReading(Base):
     air_temperature_c: Mapped[float | None] = mapped_column(Float)
     air_humidity_percent: Mapped[float | None] = mapped_column(Float)
     air_pressure_hpa: Mapped[float | None] = mapped_column(Float)
+    air_actual_vapor_pressure_kpa: Mapped[float | None] = mapped_column(Float)
+    air_saturation_vapor_pressure_kpa: Mapped[float | None] = mapped_column(Float)
+    air_vpd_kpa: Mapped[float | None] = mapped_column(Float)
     light_lux: Mapped[float | None] = mapped_column(Float)
     ir_ambient_temp_c: Mapped[float | None] = mapped_column(Float)
     leaf_temp_c: Mapped[float | None] = mapped_column(Float)
+    leaf_saturation_vapor_pressure_kpa: Mapped[float | None] = mapped_column(Float)
+    leaf_vpd_kpa: Mapped[float | None] = mapped_column(Float)
     metrics_jsonb: Mapped[dict] = mapped_column(JSON_TYPE, nullable=False, default=dict)
 
 

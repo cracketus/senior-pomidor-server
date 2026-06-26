@@ -12,7 +12,9 @@ def telemetry_payload(timestamp: str = "2026-06-07T12:00:00Z") -> dict:
             "pod-1": {
                 "enabled": True,
                 "soil_moisture_percent": 42.5,
+                "air_vpd_kpa": 6.02,
                 "leaf_temp_c": 21.2,
+                "leaf_vpd_kpa": 3.66,
                 "battery_mv": 5010,
                 "errors": [{"sensor": "soil", "message": "intermittent"}],
             },
@@ -53,6 +55,8 @@ def test_http_telemetry_ingest_and_latest(client):
     body = latest.json()
     assert body["device_id"] == "pi-001"
     assert body["readings"][0]["metrics"]["soil_moisture_percent"] == 42.5
+    assert body["readings"][0]["metrics"]["air_vpd_kpa"] == 6.02
+    assert body["readings"][0]["metrics"]["leaf_vpd_kpa"] == 3.66
     assert body["readings"][0]["metrics"]["battery_mv"] == 5010.0
     assert body["errors"][0]["message"] == "intermittent"
 

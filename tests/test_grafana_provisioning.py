@@ -55,6 +55,8 @@ def test_grafana_dashboard_json_covers_issue_15_acceptance_criteria():
         "Air Pressure",
         "Light",
         "Leaf Temperature",
+        "Air VPD",
+        "Leaf VPD",
         "Latest Telemetry By Pod",
         "Latest Device Status",
         "Recent Photo Metadata",
@@ -66,8 +68,13 @@ def test_grafana_dashboard_json_covers_issue_15_acceptance_criteria():
         "air_temperature_c",
         "air_humidity_percent",
         "air_pressure_hpa",
+        "air_actual_vapor_pressure_kpa",
+        "air_saturation_vapor_pressure_kpa",
+        "air_vpd_kpa",
         "light_lux",
         "leaf_temp_c",
+        "leaf_saturation_vapor_pressure_kpa",
+        "leaf_vpd_kpa",
     ):
         assert metric in queries
 
