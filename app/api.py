@@ -37,9 +37,14 @@ def event_to_dict(event: TelemetryEvent) -> dict[str, Any]:
                     "air_temperature_c": reading.air_temperature_c,
                     "air_humidity_percent": reading.air_humidity_percent,
                     "air_pressure_hpa": reading.air_pressure_hpa,
+                    "air_actual_vapor_pressure_kpa": reading.air_actual_vapor_pressure_kpa,
+                    "air_saturation_vapor_pressure_kpa": reading.air_saturation_vapor_pressure_kpa,
+                    "air_vpd_kpa": reading.air_vpd_kpa,
                     "light_lux": reading.light_lux,
                     "ir_ambient_temp_c": reading.ir_ambient_temp_c,
                     "leaf_temp_c": reading.leaf_temp_c,
+                    "leaf_saturation_vapor_pressure_kpa": reading.leaf_saturation_vapor_pressure_kpa,
+                    "leaf_vpd_kpa": reading.leaf_vpd_kpa,
                     **reading.metrics_jsonb,
                 }.items()
                 if value is not None
