@@ -84,6 +84,20 @@ On a fresh `postgres_data` volume this role is initialized automatically. On an 
 docker compose exec -T postgres sh /docker-entrypoint-initdb.d/20-grafana-reader.sh
 ```
 
+## Grafana Cloud Public Metrics Export
+
+Grafana Cloud export is optional and disabled by default. It reads local PostgreSQL telemetry and sends a read-only public projection to Grafana Cloud Metrics with Prometheus remote write:
+
+```powershell
+GRAFANA_CLOUD_EXPORT_ENABLED=true
+GRAFANA_CLOUD_REMOTE_WRITE_URL=<remote-write-url>
+GRAFANA_CLOUD_INSTANCE_ID=<instance-id>
+GRAFANA_CLOUD_API_TOKEN=<metrics-publisher-token>
+docker compose --profile cloud-export up -d grafana-cloud-exporter
+```
+
+Only low-cardinality plant metrics are exported, using metric names prefixed with `senior_pomidor_` and labels limited to `device_id` and `pod_key`. Photos, raw payload JSON, system health, sensor error text, host/network details, database credentials, file paths, and MQTT topics are not exported. Grafana Cloud is a public read-only projection; PostgreSQL remains the local source of truth.
+
 For deployment checks, backups, restore, and Raspberry Pi configuration examples, see [docs/OPERATIONS.md](docs/OPERATIONS.md).
 For 3/6/12 month hardware, storage, power, and 4/8/16 pod expansion estimates, see [docs/CAPACITY_PLANNING.md](docs/CAPACITY_PLANNING.md).
 
