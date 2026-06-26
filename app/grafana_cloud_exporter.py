@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import importlib
 import logging
 import math
 import re
@@ -11,7 +12,7 @@ import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Protocol
+from typing import Protocol, cast
 
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
@@ -208,9 +209,7 @@ def freshness_sample(row: ExportRow, exported_at: datetime) -> MetricSample | No
 
 def non_exported_fields(row: ExportRow) -> list[str]:
     fields = [
-        field_name
-        for field_name in NON_EXPORTED_FLAT_FIELDS
-        if _numeric_or_none(getattr(row, field_name)) is not None
+        field_name for field_name in NON_EXPORTED_FLAT_FIELDS if _numeric_or_none(getattr(row, field_name)) is not None
     ]
     if row.metrics_jsonb:
         fields.extend(sorted(str(key) for key in row.metrics_jsonb))
@@ -361,10 +360,10 @@ class RemoteWriteTransport:
         if self._compressor is not None:
             return self._compressor.compress(payload)
         try:
-            import snappy
+            snappy = importlib.import_module("snappy")
         except ImportError as exc:
             raise ExporterConfigError("python-snappy is required for Grafana Cloud remote write export") from exc
-        return snappy.compress(payload)
+        return cast(Compressor, snappy).compress(payload)
 
     def send(self, samples: list[MetricSample]) -> None:
         if not samples:

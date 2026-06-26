@@ -1,3 +1,4 @@
+import urllib.request
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -54,9 +55,9 @@ class FakeResponse:
 
 class FakeOpener:
     def __init__(self) -> None:
-        self.requests = []
+        self.requests: list[tuple[urllib.request.Request, float]] = []
 
-    def open(self, request, timeout: float) -> FakeResponse:
+    def open(self, request: urllib.request.Request, timeout: float) -> FakeResponse:
         self.requests.append((request, timeout))
         return FakeResponse()
 
@@ -348,6 +349,7 @@ def test_remote_write_transport_posts_snappy_protobuf_with_basic_auth():
     assert request.headers["Content-encoding"] == "snappy"
     assert request.headers["Content-type"] == "application/x-protobuf"
     payload = request.data
+    assert isinstance(payload, bytes)
     assert payload.startswith(b"snappy:")
     assert b"senior_pomidor_soil_moisture_percent" in payload
     assert b"device_id" in payload
