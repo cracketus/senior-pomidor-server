@@ -405,7 +405,7 @@ class RemoteWriteTransport:
             with self._opener.open(request, timeout=self.timeout_seconds) as response:
                 if response.status < 200 or response.status >= 300:
                     raise RemoteWriteError(f"Grafana Cloud remote write returned HTTP {response.status}")
-        except urllib.error.URLError as exc:
+        except OSError as exc:
             raise RemoteWriteError(f"Grafana Cloud remote write failed: {exc}") from exc
 
 
@@ -479,8 +479,11 @@ def run_forever() -> None:
     state = ExportState.initial(datetime.now(UTC), settings.grafana_cloud_export_lookback_minutes)
     transport = build_transport(settings)
     while True:
-        with SessionLocal() as db:
-            export_once(db, settings, state, transport=transport)
+        try:
+            with SessionLocal() as db:
+                export_once(db, settings, state, transport=transport)
+        except RemoteWriteError:
+            LOGGER.exception("Grafana Cloud export attempt failed; retrying on next interval")
         time.sleep(settings.grafana_cloud_export_interval_seconds)
 
 

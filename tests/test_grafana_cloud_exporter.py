@@ -6,17 +6,20 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+import app.grafana_cloud_exporter as grafana_cloud_exporter
 from app.config import Settings
 from app.grafana_cloud_exporter import (
     ExporterConfigError,
     ExportRow,
     ExportState,
     MetricSample,
+    RemoteWriteError,
     RemoteWriteTransport,
     encode_write_request,
     export_once,
     public_labels,
     row_to_metric_samples,
+    run_forever,
     sanitize_label_value,
     validate_export_settings,
 )
@@ -60,6 +63,11 @@ class FakeOpener:
     def open(self, request: urllib.request.Request, timeout: float) -> FakeResponse:
         self.requests.append((request, timeout))
         return FakeResponse()
+
+
+class TimeoutOpener:
+    def open(self, request: urllib.request.Request, timeout: float) -> FakeResponse:
+        raise TimeoutError("connection timed out")
 
 
 def sample_row(**overrides) -> ExportRow:
@@ -371,3 +379,47 @@ def test_remote_write_transport_posts_snappy_protobuf_with_basic_auth():
     assert b"senior_pomidor_soil_moisture_percent" in payload
     assert b"device_id" in payload
     assert b"pod_key" in payload
+
+
+def test_remote_write_transport_wraps_connection_timeouts():
+    transport = RemoteWriteTransport(
+        url="https://prometheus-prod.example/api/prom/push",
+        instance_id="12345",
+        api_token="secret-token",
+        compressor=FakeCompressor(),
+        opener=TimeoutOpener(),
+    )
+
+    with pytest.raises(RemoteWriteError, match="connection timed out"):
+        transport.send(
+            [
+                MetricSample(
+                    name="senior_pomidor_soil_moisture_percent",
+                    labels={"device_id": "pi-001", "pod_key": "pod-1"},
+                    value=42.5,
+                    timestamp_ms=int(datetime(2026, 6, 7, 12, 0, tzinfo=UTC).timestamp() * 1000),
+                )
+            ]
+        )
+
+
+def test_run_forever_retries_after_remote_write_failure(monkeypatch):
+    class StopLoopError(RuntimeError):
+        pass
+
+    attempts = 0
+
+    def fail_once(*args, **kwargs):
+        nonlocal attempts
+        attempts += 1
+        raise RemoteWriteError("temporary remote write outage")
+
+    monkeypatch.setattr(grafana_cloud_exporter, "settings", enabled_settings(grafana_cloud_export_interval_seconds=0))
+    monkeypatch.setattr(grafana_cloud_exporter, "build_transport", lambda export_settings: RecordingTransport())
+    monkeypatch.setattr(grafana_cloud_exporter, "export_once", fail_once)
+    monkeypatch.setattr(grafana_cloud_exporter.time, "sleep", lambda seconds: (_ for _ in ()).throw(StopLoopError()))
+
+    with pytest.raises(StopLoopError):
+        run_forever()
+
+    assert attempts == 1
