@@ -1,5 +1,15 @@
 from datetime import UTC, datetime, timedelta
 
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
+
+from app.config import Settings, get_settings
+from app.db import get_db
+from app.main import app
+from app.models import Base, Photo
 from app.validation import PHOTO_SCHEMA, TELEMETRY_SCHEMA, TELEMETRY_SCHEMA_V2
 
 
@@ -128,6 +138,27 @@ def test_rejects_bad_schema(client):
     payload["schema_version"] = "wrong"
     response = client.post("/api/v1/edge/telemetry", json=payload)
     assert response.status_code == 400
+
+
+def test_telemetry_requires_configured_bearer_token(client_factory):
+    client = client_factory(telemetry_upload_token="secret")
+
+    missing = client.post("/api/v1/edge/telemetry", json=telemetry_payload())
+    assert missing.status_code == 401
+
+    rejected = client.post(
+        "/api/v1/edge/telemetry",
+        json=telemetry_payload(),
+        headers={"Authorization": "Bearer wrong"},
+    )
+    assert rejected.status_code == 401
+
+    accepted = client.post(
+        "/api/v1/edge/telemetry",
+        json=telemetry_payload(),
+        headers={"Authorization": "Bearer secret"},
+    )
+    assert accepted.status_code == 202
 
 
 def test_rejects_timestamp_without_z(client):
@@ -268,6 +299,121 @@ def test_photo_rejects_content_over_size_limit(client_factory):
         files={"photo": ("photo.jpg", b"\xff\xd8fake-jpeg\xff\xd9", "image/jpeg")},
     )
     assert response.status_code == 413
+
+
+def test_photo_rejects_unsafe_device_id(client):
+    response = client.post(
+        "/api/v1/edge/photos",
+        data={
+            "photo_id": "photo-1",
+            "device_id": "../pi-001",
+            "captured_at_utc": "2026-06-07T12:00:00Z",
+            "schema_version": PHOTO_SCHEMA,
+        },
+        files={"photo": ("photo.jpg", b"\xff\xd8fake-jpeg\xff\xd9", "image/jpeg")},
+    )
+    assert response.status_code == 400
+
+
+def test_photo_rejects_unsafe_photo_id(client):
+    response = client.post(
+        "/api/v1/edge/photos",
+        data={
+            "photo_id": "../photo-1",
+            "device_id": "pi-001",
+            "captured_at_utc": "2026-06-07T12:00:00Z",
+            "schema_version": PHOTO_SCHEMA,
+        },
+        files={"photo": ("photo.jpg", b"\xff\xd8fake-jpeg\xff\xd9", "image/jpeg")},
+    )
+    assert response.status_code == 400
+
+
+def test_oversized_photo_rejection_does_not_persist_file_or_row(client_factory, tmp_path):
+    storage_dir = tmp_path / "bounded-photos"
+    client = client_factory(photo_max_bytes=4, photo_storage_dir=str(storage_dir))
+
+    response = client.post(
+        "/api/v1/edge/photos",
+        data={
+            "photo_id": "photo-1",
+            "device_id": "pi-001",
+            "captured_at_utc": "2026-06-07T12:00:00Z",
+            "schema_version": PHOTO_SCHEMA,
+        },
+        files={"photo": ("photo.jpg", b"\xff\xd8fake-jpeg\xff\xd9", "image/jpeg")},
+    )
+    assert response.status_code == 413
+    assert client.get("/api/v1/photos/photo-1").status_code == 404
+    if storage_dir.exists():
+        assert not list(storage_dir.rglob("*.jpg"))
+
+
+def test_get_photo_rejects_stored_path_outside_storage_dir(tmp_path):
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(engine)
+    TestingSessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
+    storage_dir = tmp_path / "photos"
+    outside_file = tmp_path / "outside.jpg"
+    outside_file.write_bytes(b"\xff\xd8outside\xff\xd9")
+
+    with TestingSessionLocal() as db:
+        db.add(
+            Photo(
+                photo_id="photo-1",
+                device_id="pi-001",
+                captured_at_utc=datetime(2026, 6, 7, 12, 0, tzinfo=UTC),
+                schema_version=PHOTO_SCHEMA,
+                sharpness_score=None,
+                content_type="image/jpeg",
+                file_size_bytes=outside_file.stat().st_size,
+                storage_path=str(outside_file),
+                sha256="0" * 64,
+                received_at=datetime(2026, 6, 7, 12, 1, tzinfo=UTC),
+            )
+        )
+        db.commit()
+
+    def override_db():
+        db = TestingSessionLocal()
+        try:
+            yield db
+        finally:
+            db.close()
+
+    app.dependency_overrides[get_db] = override_db
+    app.dependency_overrides[get_settings] = lambda: Settings(photo_storage_dir=str(storage_dir))
+    try:
+        with TestClient(app) as client:
+            response = client.get("/api/v1/photos/photo-1")
+    finally:
+        app.dependency_overrides.clear()
+        engine.dispose()
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "photo file not found"}
+
+
+def test_unexpected_database_errors_are_logged_without_traceback_response(caplog):
+    def override_db():
+        raise SQLAlchemyError("database unavailable")
+        yield
+
+    app.dependency_overrides[get_db] = override_db
+    try:
+        with TestClient(app, raise_server_exceptions=False) as client, caplog.at_level("ERROR"):
+            response = client.get("/api/v1/devices")
+    finally:
+        app.dependency_overrides.clear()
+
+    assert response.status_code == 500
+    assert response.json() == {"detail": "internal server error"}
+    assert "database unavailable" not in response.text
+    assert any("Unhandled database error" in record.message for record in caplog.records)
 
 
 def test_dashboard_is_served(client):

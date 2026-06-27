@@ -1,6 +1,6 @@
 from typing import Any
 
-from app.validation import KNOWN_METRICS
+from app.validation import KNOWN_METRICS, validate_pod_key
 
 HEALTH_ALERT_RULES: dict[str, dict[str, float | str]] = {
     "cpu_temp_c": {"level": "warning", "op": ">=", "threshold": 75.0, "message": "CPU temperature is high"},
@@ -31,7 +31,7 @@ def iter_pods(payload: dict[str, Any]) -> list[dict[str, Any]]:
 
 def pod_key(pod: dict[str, Any], index: int) -> str:
     value = pod.get("pod_key") or pod.get("pod") or pod.get("key") or pod.get("id") or f"pod_{index + 1}"
-    return str(value)
+    return validate_pod_key(value)
 
 
 def pod_enabled(pod: dict[str, Any]) -> bool:

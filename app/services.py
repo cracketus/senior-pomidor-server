@@ -17,7 +17,38 @@ from app.telemetry import (
     pod_key,
     pod_metrics,
 )
-from app.validation import PHOTO_SCHEMA, ValidationError, parse_utc_z, validate_telemetry_payload
+from app.validation import (
+    PHOTO_SCHEMA,
+    ValidationError,
+    parse_utc_z,
+    validate_device_id,
+    validate_photo_id,
+    validate_pod_key,
+    validate_telemetry_payload,
+)
+
+
+def resolve_photo_storage_dir(storage_dir: str) -> Path:
+    return Path(storage_dir).expanduser().resolve()
+
+
+def resolve_photo_target_path(storage_dir: str, device_id: str, photo_id: str) -> Path:
+    base_dir = resolve_photo_storage_dir(storage_dir)
+    target_path = (base_dir / device_id / f"{photo_id}.jpg").resolve()
+    if not target_path.is_relative_to(base_dir):
+        raise ValidationError("photo storage path escapes storage directory")
+    return target_path
+
+
+def resolve_stored_photo_path(storage_dir: str, storage_path: str) -> Path:
+    base_dir = resolve_photo_storage_dir(storage_dir)
+    path = Path(storage_path).expanduser()
+    if not path.is_absolute():
+        path = base_dir / path
+    resolved = path.resolve()
+    if not resolved.is_relative_to(base_dir):
+        raise ValidationError("photo storage path escapes storage directory")
+    return resolved
 
 
 def now_utc() -> datetime:
@@ -31,6 +62,7 @@ def as_utc(value: datetime) -> datetime:
 
 
 def upsert_device(db: Session, device_id: str, payload_at: datetime, received_at: datetime) -> Device:
+    device_id = validate_device_id(device_id)
     device = db.get(Device, device_id)
     if device is None:
         device = Device(
@@ -98,17 +130,18 @@ def persist_telemetry(db: Session, payload: dict[str, Any], source: str) -> Tele
                 PodError(
                     telemetry_event_id=event.id,
                     device_id=device_id,
-                    pod_key=str(error["pod_key"]),
+                    pod_key=validate_pod_key(error["pod_key"]),
                     sensor=error["sensor"],
                     message=str(error["message"]),
                 )
             )
     for error in iter_unmatched_pod_errors(payload, pod_keys):
+        key = validate_pod_key(error["pod_key"])
         db.add(
             PodError(
                 telemetry_event_id=event.id,
                 device_id=device_id,
-                pod_key=str(error["pod_key"]),
+                pod_key=key,
                 sensor=error["sensor"],
                 message=str(error["message"]),
             )
@@ -133,10 +166,8 @@ def persist_photo(
     if schema_version != PHOTO_SCHEMA:
         raise ValidationError(f"unsupported photo schema: {schema_version}")
     captured_at = parse_utc_z(captured_at_utc)
-    if not photo_id.strip():
-        raise ValidationError("photo_id is required")
-    if not device_id.strip():
-        raise ValidationError("device_id is required")
+    photo_id = validate_photo_id(photo_id)
+    device_id = validate_device_id(device_id)
     existing = db.get(Photo, photo_id)
     if existing is not None:
         return existing, False
@@ -144,9 +175,9 @@ def persist_photo(
     received_at = now_utc()
     upsert_device(db, device_id, captured_at, received_at)
     digest = hashlib.sha256(content).hexdigest()
-    target_dir = Path(storage_dir) / device_id
+    target_path = resolve_photo_target_path(storage_dir, device_id, photo_id)
+    target_dir = target_path.parent
     target_dir.mkdir(parents=True, exist_ok=True)
-    target_path = target_dir / f"{photo_id}.jpg"
     target_path.write_bytes(content)
 
     photo = Photo(

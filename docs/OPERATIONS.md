@@ -23,6 +23,7 @@
    - Grafana: `3000/tcp`, only needed when the observability profile is enabled
 
    Override the published host ports with `API_PUBLISHED_PORT`, `MQTT_PUBLISHED_PORT`, `POSTGRES_PUBLISHED_PORT`, and `GRAFANA_PUBLISHED_PORT` in `.env` if any defaults are already in use.
+   Treat all published ports as LAN-only. Use a VPN, firewall allow-list, or reverse proxy with authentication/TLS before any remote access.
 
 5. Start infrastructure and apply migrations:
 
@@ -97,9 +98,10 @@ CORE_HTTP_URL=http://192.168.1.50:8000/api/v1/edge/telemetry
 PHOTO_UPLOAD_ENABLED=true
 PHOTO_UPLOAD_URL=http://192.168.1.50:8000/api/v1/edge/photos
 PHOTO_UPLOAD_TOKEN=<same value as server PHOTO_UPLOAD_TOKEN, if configured>
+TELEMETRY_UPLOAD_TOKEN=<same value as server TELEMETRY_UPLOAD_TOKEN, if configured>
 ```
 
-MQTT should be treated as the primary path. HTTP telemetry is the compatibility fallback.
+MQTT should be treated as the primary path. HTTP telemetry is the compatibility fallback and is open by default for trusted-LAN compatibility unless `TELEMETRY_UPLOAD_TOKEN` is configured.
 
 ## Backup And Restore
 

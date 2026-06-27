@@ -1,5 +1,6 @@
+import hmac
+import logging
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, Response, UploadFile, status
@@ -10,11 +11,13 @@ from sqlalchemy.orm import Session, selectinload
 from app.config import Settings, get_settings
 from app.db import get_db
 from app.models import Device, Photo, PodReading, TelemetryEvent
-from app.services import persist_photo, persist_telemetry
+from app.services import persist_photo, persist_telemetry, resolve_stored_photo_path
 from app.telemetry import health_alerts
-from app.validation import ValidationError, parse_utc_z
+from app.validation import ValidationError, parse_utc_z, validate_device_id, validate_photo_id, validate_pod_key
 
 router = APIRouter(prefix="/api/v1")
+logger = logging.getLogger(__name__)
+UPLOAD_READ_CHUNK_BYTES = 1024 * 1024
 
 
 def format_utc(value: datetime) -> str:
@@ -99,8 +102,34 @@ def apply_event_filters(
     return query
 
 
+def bearer_token_matches(authorization: str | None, expected_token: str | None) -> bool:
+    if not expected_token:
+        return True
+    prefix = "Bearer "
+    if authorization is None or not authorization.startswith(prefix):
+        return False
+    supplied = authorization[len(prefix) :]
+    return hmac.compare_digest(supplied, expected_token)
+
+
+async def read_bounded_upload(upload: UploadFile, max_bytes: int) -> bytes:
+    content = bytearray()
+    while chunk := await upload.read(UPLOAD_READ_CHUNK_BYTES):
+        content.extend(chunk)
+        if len(content) > max_bytes:
+            raise HTTPException(status_code=status.HTTP_413_CONTENT_TOO_LARGE, detail="photo exceeds size limit")
+    return bytes(content)
+
+
 @router.post("/edge/telemetry", status_code=status.HTTP_202_ACCEPTED)
-def ingest_telemetry(payload: dict[str, Any], db: Session = Depends(get_db)) -> dict[str, Any]:
+def ingest_telemetry(
+    payload: dict[str, Any],
+    authorization: Annotated[str | None, Header()] = None,
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+) -> dict[str, Any]:
+    if not bearer_token_matches(authorization, settings.telemetry_upload_token):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid telemetry upload token")
     try:
         event = persist_telemetry(db, payload, source="http")
     except ValidationError as exc:
@@ -121,15 +150,11 @@ async def upload_photo(
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
 ) -> dict[str, Any]:
-    if settings.photo_upload_token:
-        expected = f"Bearer {settings.photo_upload_token}"
-        if authorization != expected:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid photo upload token")
+    if not bearer_token_matches(authorization, settings.photo_upload_token):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid photo upload token")
     if photo.content_type not in {"image/jpeg", "image/pjpeg"}:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="photo must be JPEG")
-    content = await photo.read()
-    if len(content) > settings.photo_max_bytes:
-        raise HTTPException(status_code=status.HTTP_413_CONTENT_TOO_LARGE, detail="photo exceeds size limit")
+    content = await read_bounded_upload(photo, settings.photo_max_bytes)
     if not content.startswith(b"\xff\xd8"):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="photo must be JPEG")
     try:
@@ -183,6 +208,10 @@ def latest_telemetry_by_device(db: Session = Depends(get_db)) -> list[dict[str, 
 
 @router.get("/devices/{device_id}/latest")
 def latest_telemetry(device_id: str, db: Session = Depends(get_db)) -> dict[str, Any]:
+    try:
+        device_id = validate_device_id(device_id)
+    except ValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     event = db.scalar(
         select(TelemetryEvent)
         .options(selectinload(TelemetryEvent.readings), selectinload(TelemetryEvent.errors))
@@ -205,6 +234,12 @@ def telemetry_history(
     limit: int = Query(default=100, ge=1, le=1000),
     db: Session = Depends(get_db),
 ) -> list[dict[str, Any]]:
+    try:
+        device_id = validate_device_id(device_id)
+        if pod:
+            pod = validate_pod_key(pod)
+    except ValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     query = (
         select(TelemetryEvent)
         .options(selectinload(TelemetryEvent.readings), selectinload(TelemetryEvent.errors))
@@ -234,6 +269,10 @@ def list_photos(
     limit: int = Query(default=100, ge=1, le=1000),
     db: Session = Depends(get_db),
 ) -> list[dict[str, Any]]:
+    try:
+        device_id = validate_device_id(device_id)
+    except ValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     query = select(Photo).where(Photo.device_id == device_id).order_by(desc(Photo.captured_at_utc)).limit(limit)
     try:
         if from_:
@@ -266,11 +305,23 @@ def recent_photos(
 
 
 @router.get("/photos/{photo_id}")
-def get_photo(photo_id: str, db: Session = Depends(get_db)) -> FileResponse:
+def get_photo(
+    photo_id: str,
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+) -> FileResponse:
+    try:
+        photo_id = validate_photo_id(photo_id)
+    except ValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     photo = db.get(Photo, photo_id)
     if photo is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="photo not found")
-    path = Path(photo.storage_path)
+    try:
+        path = resolve_stored_photo_path(settings.photo_storage_dir, photo.storage_path)
+    except ValidationError:
+        logger.warning("Rejected unsafe stored photo path for photo_id=%s", photo_id)
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="photo file not found") from None
     if not path.is_file():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="photo file not found")
     return FileResponse(path, media_type=photo.content_type, filename=path.name)

@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from app.config import Settings, settings
 from app.db import SessionLocal
+from app.logging_config import configure_logging
 from app.models import PodReading, TelemetryEvent
 
 LOGGER = logging.getLogger(__name__)
@@ -470,7 +471,7 @@ def export_once(
 
 
 def run_forever() -> None:
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+    configure_logging()
     if not settings.grafana_cloud_export_enabled:
         LOGGER.info("Grafana Cloud export is disabled; exiting")
         return
@@ -484,6 +485,8 @@ def run_forever() -> None:
                 export_once(db, settings, state, transport=transport)
         except RemoteWriteError:
             LOGGER.exception("Grafana Cloud export attempt failed; retrying on next interval")
+        except Exception:
+            LOGGER.exception("Unexpected Grafana Cloud export attempt failure; retrying on next interval")
         time.sleep(settings.grafana_cloud_export_interval_seconds)
 
 

@@ -91,3 +91,31 @@ def test_mqtt_worker_rejects_topic_device_mismatch(monkeypatch):
             assert count == 0
     finally:
         dispose_session_factory(TestingSessionLocal)
+
+
+def test_mqtt_worker_retries_initial_connect_failure():
+    class FakeClient:
+        def __init__(self) -> None:
+            self.attempts = 0
+
+        def connect(self, host, port, keepalive):
+            self.attempts += 1
+            if self.attempts == 1:
+                raise OSError("broker unavailable")
+
+    class FakeStop:
+        def __init__(self) -> None:
+            self.waits: list[float] = []
+
+        def is_set(self) -> bool:
+            return False
+
+        def wait(self, delay: float) -> None:
+            self.waits.append(delay)
+
+    client = FakeClient()
+    stop = FakeStop()
+
+    assert mqtt_worker.connect_with_retry(client, stop, initial_delay_seconds=0.25) is True
+    assert client.attempts == 2
+    assert stop.waits == [0.25]
