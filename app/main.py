@@ -1,10 +1,47 @@
-from fastapi import FastAPI
-from fastapi.responses import HTMLResponse
+import logging
+
+from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse, JSONResponse
+from sqlalchemy.exc import SQLAlchemyError
+from starlette import status
 
 from app.api import router
+from app.config import settings
+from app.logging_config import configure_logging
 
-app = FastAPI(title="Senior Pomidor Core Server", version="0.1.0")
+configure_logging()
+logger = logging.getLogger(__name__)
+
+docs_url = "/docs" if settings.api_docs_enabled else None
+redoc_url = "/redoc" if settings.api_docs_enabled else None
+openapi_url = "/openapi.json" if settings.api_docs_enabled else None
+
+app = FastAPI(
+    title="Senior Pomidor Core Server",
+    version="0.1.0",
+    docs_url=docs_url,
+    redoc_url=redoc_url,
+    openapi_url=openapi_url,
+)
 app.include_router(router)
+
+
+@app.exception_handler(SQLAlchemyError)
+async def sqlalchemy_exception_handler(_request: Request, exc: SQLAlchemyError) -> JSONResponse:
+    logger.error("Unhandled database error", exc_info=(type(exc), exc, exc.__traceback__))
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={"detail": "internal server error"},
+    )
+
+
+@app.exception_handler(Exception)
+async def unexpected_exception_handler(_request: Request, exc: Exception) -> JSONResponse:
+    logger.error("Unhandled application error", exc_info=(type(exc), exc, exc.__traceback__))
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={"detail": "internal server error"},
+    )
 
 
 @app.get("/health")

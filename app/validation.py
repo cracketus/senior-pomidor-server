@@ -1,3 +1,4 @@
+import re
 from datetime import UTC, datetime
 from typing import Any
 
@@ -21,10 +22,39 @@ KNOWN_METRICS = {
     "leaf_saturation_vapor_pressure_kpa",
     "leaf_vpd_kpa",
 }
+DEVICE_ID_MAX_LENGTH = 128
+PHOTO_ID_MAX_LENGTH = 128
+POD_KEY_MAX_LENGTH = 64
+SAFE_IDENTIFIER_PATTERN = re.compile(r"^[A-Za-z0-9_.-]+$")
 
 
 class ValidationError(ValueError):
     pass
+
+
+def validate_safe_identifier(value: object, field_name: str, max_length: int) -> str:
+    if not isinstance(value, str):
+        raise ValidationError(f"{field_name} is required")
+    text = value.strip()
+    if not text:
+        raise ValidationError(f"{field_name} is required")
+    if len(text) > max_length:
+        raise ValidationError(f"{field_name} exceeds {max_length} characters")
+    if ".." in text or not SAFE_IDENTIFIER_PATTERN.fullmatch(text):
+        raise ValidationError(f"{field_name} contains unsafe characters")
+    return text
+
+
+def validate_device_id(value: object) -> str:
+    return validate_safe_identifier(value, "device_id", DEVICE_ID_MAX_LENGTH)
+
+
+def validate_photo_id(value: object) -> str:
+    return validate_safe_identifier(value, "photo_id", PHOTO_ID_MAX_LENGTH)
+
+
+def validate_pod_key(value: object) -> str:
+    return validate_safe_identifier(value, "pod_key", POD_KEY_MAX_LENGTH)
 
 
 def parse_utc_z(value: str) -> datetime:
@@ -51,10 +81,7 @@ def payload_timestamp(payload: dict[str, Any]) -> datetime:
 
 
 def payload_device_id(payload: dict[str, Any]) -> str:
-    device_id = payload.get("device_id")
-    if not isinstance(device_id, str) or not device_id.strip():
-        raise ValidationError("device_id is required")
-    return device_id.strip()
+    return validate_device_id(payload.get("device_id"))
 
 
 def validate_optional_number(value: Any, path: str) -> None:

@@ -67,6 +67,7 @@ docker compose up -d api worker
 
 The API is available at `http://localhost:8000`, and the MQTT broker listens on `localhost:1883`.
 Host port mappings can be changed with `API_PUBLISHED_PORT`, `POSTGRES_PUBLISHED_PORT`, `MQTT_PUBLISHED_PORT`, and `GRAFANA_PUBLISHED_PORT` in `.env`.
+Published API, PostgreSQL, MQTT, and Grafana ports are intended for trusted LAN use only. Do not expose them directly to the public internet; put remote access behind a VPN or a hardened reverse proxy/firewall.
 
 Start optional Grafana for local observability:
 
@@ -120,8 +121,9 @@ PHOTO_UPLOAD_URL=http://<server-lan-ip>:8000/api/v1/edge/photos
 ```
 
 If `PHOTO_UPLOAD_TOKEN` is set on the server, the edge photo uploader must send it as a bearer token.
+If `TELEMETRY_UPLOAD_TOKEN` is set on the server, HTTP telemetry ingestion must also send `Authorization: Bearer <token>`.
 
-HTTP telemetry ingestion is intentionally unauthenticated in v1 for compatibility with the current edge sender. Run the server on a trusted LAN and do not expose ingestion ports directly to the public internet.
+HTTP telemetry ingestion remains unauthenticated by default for compatibility with current trusted-LAN edge senders. Set `API_DOCS_ENABLED=false` for production-like appliance deployments to disable `/docs`, `/redoc`, and `/openapi.json`. The built-in `/dashboard` is a LAN convenience view and is not designed as a public internet dashboard.
 
 ## HTTP API
 

@@ -10,10 +10,11 @@ import paho.mqtt.client as mqtt
 
 from app.config import settings
 from app.db import SessionLocal
+from app.logging_config import configure_logging
 from app.services import persist_telemetry
 from app.validation import ValidationError, validate_telemetry_payload, validate_topic_device
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+configure_logging()
 logger = logging.getLogger(__name__)
 stop_event = Event()
 
@@ -52,7 +53,10 @@ def on_message(_client: mqtt.Client, _userdata: object, message: mqtt.MQTTMessag
 
 
 def main() -> int:
+    stop_event.clear()
     client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
+    if settings.mqtt_username:
+        client.username_pw_set(settings.mqtt_username, settings.mqtt_password)
     client.on_connect = on_connect
     client.on_message = on_message
 
@@ -63,11 +67,40 @@ def main() -> int:
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
 
-    client.connect(settings.mqtt_host, settings.mqtt_port, keepalive=60)
+    if not connect_with_retry(client, stop_event):
+        return 0
     client.loop_start()
     stop_event.wait()
     client.loop_stop()
     return 0
+
+
+def connect_with_retry(
+    client: mqtt.Client,
+    stop: Event,
+    *,
+    initial_delay_seconds: float = 1.0,
+    max_delay_seconds: float = 30.0,
+) -> bool:
+    delay = initial_delay_seconds
+    while not stop.is_set():
+        try:
+            client.connect(settings.mqtt_host, settings.mqtt_port, keepalive=60)
+            return True
+        except OSError:
+            logger.exception(
+                "MQTT broker connection failed host=%s port=%s; retrying in %.1fs",
+                settings.mqtt_host,
+                settings.mqtt_port,
+                delay,
+            )
+            stop.wait(delay)
+            delay = min(delay * 2, max_delay_seconds)
+        except Exception:
+            logger.exception("Unexpected MQTT startup failure; retrying in %.1fs", delay)
+            stop.wait(delay)
+            delay = min(delay * 2, max_delay_seconds)
+    return False
 
 
 if __name__ == "__main__":

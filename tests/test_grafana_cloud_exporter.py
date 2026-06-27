@@ -423,3 +423,25 @@ def test_run_forever_retries_after_remote_write_failure(monkeypatch):
         run_forever()
 
     assert attempts == 1
+
+
+def test_run_forever_retries_after_unexpected_export_failure(monkeypatch):
+    class StopLoopError(RuntimeError):
+        pass
+
+    attempts = 0
+
+    def fail_once(*args, **kwargs):
+        nonlocal attempts
+        attempts += 1
+        raise RuntimeError("temporary database outage")
+
+    monkeypatch.setattr(grafana_cloud_exporter, "settings", enabled_settings(grafana_cloud_export_interval_seconds=0))
+    monkeypatch.setattr(grafana_cloud_exporter, "build_transport", lambda export_settings: RecordingTransport())
+    monkeypatch.setattr(grafana_cloud_exporter, "export_once", fail_once)
+    monkeypatch.setattr(grafana_cloud_exporter.time, "sleep", lambda seconds: (_ for _ in ()).throw(StopLoopError()))
+
+    with pytest.raises(StopLoopError):
+        run_forever()
+
+    assert attempts == 1

@@ -16,6 +16,10 @@ class Settings(BaseSettings):
     photo_storage_dir: str = "data/photos"
     photo_max_bytes: int = 25 * 1024 * 1024
     photo_upload_token: str | None = Field(default=None)
+    telemetry_upload_token: str | None = Field(default=None)
+    api_docs_enabled: bool = True
+    mqtt_username: str | None = Field(default=None)
+    mqtt_password: str | None = Field(default=None)
     grafana_cloud_export_enabled: bool = False
     grafana_cloud_remote_write_url: str | None = Field(default=None)
     grafana_cloud_instance_id: str | None = Field(default=None)
