@@ -1,15 +1,19 @@
 from datetime import UTC, datetime, timedelta
 
+import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+import app.main as main_module
 from app.config import Settings, get_settings
 from app.db import get_db
 from app.main import app
 from app.models import Base, Photo
+from app.readiness import get_alembic_head
+from app.services import persist_photo
 from app.validation import PHOTO_SCHEMA, TELEMETRY_SCHEMA, TELEMETRY_SCHEMA_V2
 
 
@@ -414,6 +418,90 @@ def test_unexpected_database_errors_are_logged_without_traceback_response(caplog
     assert response.json() == {"detail": "internal server error"}
     assert "database unavailable" not in response.text
     assert any("Unhandled database error" in record.message for record in caplog.records)
+
+
+def test_ready_reports_current_database_revision(monkeypatch):
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(engine)
+    with engine.begin() as connection:
+        connection.execute(text("CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL)"))
+        connection.execute(
+            text("INSERT INTO alembic_version (version_num) VALUES (:revision)"),
+            {"revision": get_alembic_head()},
+        )
+
+    monkeypatch.setattr(main_module, "engine", engine)
+    try:
+        with TestClient(app) as client:
+            response = client.get("/ready")
+    finally:
+        engine.dispose()
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["ready"] is True
+    assert body["database"] == "ok"
+    assert body["migration"] == "current"
+
+
+def test_ready_reports_migration_mismatch(monkeypatch):
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(engine)
+
+    monkeypatch.setattr(main_module, "engine", engine)
+    try:
+        with TestClient(app) as client:
+            response = client.get("/ready")
+    finally:
+        engine.dispose()
+
+    assert response.status_code == 503
+    body = response.json()
+    assert body["ready"] is False
+    assert body["database"] == "ok"
+    assert body["migration"] == "mismatch"
+
+
+def test_photo_temp_file_is_cleaned_up_when_database_commit_fails(tmp_path):
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    Base.metadata.create_all(engine)
+    TestingSessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
+    storage_dir = tmp_path / "photos"
+
+    with TestingSessionLocal() as db:
+
+        def fail_commit() -> None:
+            raise RuntimeError("commit failed")
+
+        db.commit = fail_commit  # type: ignore[method-assign]
+        with pytest.raises(RuntimeError, match="commit failed"):
+            persist_photo(
+                db,
+                photo_id="photo-1",
+                device_id="pi-001",
+                captured_at_utc="2026-06-07T12:00:00Z",
+                schema_version=PHOTO_SCHEMA,
+                sharpness_score=None,
+                content_type="image/jpeg",
+                content=b"\xff\xd8fake-jpeg\xff\xd9",
+                storage_dir=str(storage_dir),
+            )
+
+    engine.dispose()
+    assert not list(storage_dir.rglob("*.tmp"))
+    assert not list(storage_dir.rglob("*.jpg"))
 
 
 def test_dashboard_is_served(client):

@@ -1,4 +1,6 @@
+import tempfile
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -20,6 +22,7 @@ class Settings(BaseSettings):
     api_docs_enabled: bool = True
     mqtt_username: str | None = Field(default=None)
     mqtt_password: str | None = Field(default=None)
+    worker_health_file: str = str(Path(tempfile.gettempdir()) / "senior-pomidor-worker-health.json")
     grafana_cloud_export_enabled: bool = False
     grafana_cloud_remote_write_url: str | None = Field(default=None)
     grafana_cloud_instance_id: str | None = Field(default=None)

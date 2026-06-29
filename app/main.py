@@ -7,7 +7,9 @@ from starlette import status
 
 from app.api import router
 from app.config import settings
+from app.db import engine
 from app.logging_config import configure_logging
+from app.readiness import check_readiness
 
 configure_logging()
 logger = logging.getLogger(__name__)
@@ -47,6 +49,13 @@ async def unexpected_exception_handler(_request: Request, exc: Exception) -> JSO
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/ready")
+def ready() -> JSONResponse:
+    state = check_readiness(engine)
+    status_code = status.HTTP_200_OK if state.ready else status.HTTP_503_SERVICE_UNAVAILABLE
+    return JSONResponse(status_code=status_code, content=state.__dict__)
 
 
 @app.get("/dashboard", response_class=HTMLResponse)

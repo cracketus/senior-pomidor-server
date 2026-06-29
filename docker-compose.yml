@@ -1,4 +1,22 @@
+---
+x-default-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
+  migrate:
+    build: .
+    command: alembic upgrade head
+    restart: "no"
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://senior_pomidor:senior_pomidor@postgres:5432/senior_pomidor}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    logging: *default-logging
+
   api:
     build: .
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000
@@ -16,6 +34,8 @@ services:
       TELEMETRY_UPLOAD_TOKEN: ${TELEMETRY_UPLOAD_TOKEN:-}
       API_DOCS_ENABLED: ${API_DOCS_ENABLED:-true}
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       mosquitto:
@@ -25,11 +45,12 @@ services:
     volumes:
       - photo_data:/app/data/photos
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5).read()\""]
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=5).read()\""]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 20s
+    logging: *default-logging
 
   worker:
     build: .
@@ -46,13 +67,23 @@ services:
       PHOTO_MAX_BYTES: ${PHOTO_MAX_BYTES:-26214400}
       PHOTO_UPLOAD_TOKEN: ${PHOTO_UPLOAD_TOKEN:-}
       TELEMETRY_UPLOAD_TOKEN: ${TELEMETRY_UPLOAD_TOKEN:-}
+      WORKER_HEALTH_FILE: /tmp/senior-pomidor-worker-health.json
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       mosquitto:
         condition: service_healthy
     volumes:
       - photo_data:/app/data/photos
+    healthcheck:
+      test: ["CMD", "python", "-m", "app.worker_healthcheck"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    logging: *default-logging
 
   grafana-cloud-exporter:
     build: .
@@ -71,6 +102,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    logging: *default-logging
 
   postgres:
     image: postgres:16-alpine
@@ -92,6 +124,7 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+    logging: *default-logging
 
   mosquitto:
     image: eclipse-mosquitto:2
@@ -100,15 +133,17 @@ services:
       - "${MQTT_PUBLISHED_PORT:-1883}:1883"
     volumes:
       - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mosquitto_data:/mosquitto/data
     healthcheck:
       test: ["CMD-SHELL", "mosquitto_pub -h 127.0.0.1 -t healthcheck -m ok"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 10s
+    logging: *default-logging
 
   grafana:
-    image: grafana/grafana-oss:latest
+    image: grafana/grafana-oss:11.5.0
     restart: unless-stopped
     profiles:
       - observability
@@ -122,8 +157,16 @@ services:
     volumes:
       - grafana_data:/var/lib/grafana
       - ./docker/grafana/provisioning:/etc/grafana/provisioning:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://127.0.0.1:3000/api/health >/dev/null"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    logging: *default-logging
 
 volumes:
   postgres_data:
   photo_data:
   grafana_data:
+  mosquitto_data:

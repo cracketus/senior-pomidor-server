@@ -94,7 +94,9 @@ ignore = [
 ]
 "tools/**" = [
     "N806", # tools use SQLAlchemy SessionLocal naming convention locally.
+    "S310", # status publisher reads configured local HTTP endpoints.
     "S603", # tool subprocess calls use fixed argument lists.
+    "S607", # tool subprocesses intentionally call docker/git from PATH.
 ]
 "migrations/**" = [
     "E501", # Alembic-generated table definitions are clearer without manual wrapping.
