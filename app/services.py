@@ -1,7 +1,9 @@
 import hashlib
+import os
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -178,7 +180,8 @@ def persist_photo(
     target_path = resolve_photo_target_path(storage_dir, device_id, photo_id)
     target_dir = target_path.parent
     target_dir.mkdir(parents=True, exist_ok=True)
-    target_path.write_bytes(content)
+    temp_path = target_dir / f".{photo_id}.{uuid4().hex}.tmp"
+    temp_path.write_bytes(content)
 
     photo = Photo(
         photo_id=photo_id,
@@ -193,6 +196,16 @@ def persist_photo(
         received_at=received_at,
     )
     db.add(photo)
-    db.commit()
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        temp_path.unlink(missing_ok=True)
+        raise
+    try:
+        os.replace(temp_path, target_path)
+    except Exception:
+        temp_path.unlink(missing_ok=True)
+        raise
     db.refresh(photo)
     return photo, True

@@ -1,3 +1,4 @@
+import json
 import os
 import subprocess
 import time
@@ -72,7 +73,7 @@ def wait_for_api() -> None:
     deadline = time.monotonic() + 60
     while time.monotonic() < deadline:
         try:
-            response = httpx.get(f"{BASE_URL}/health", timeout=2)
+            response = httpx.get(f"{BASE_URL}/ready", timeout=2)
             if response.status_code == 200:
                 return
         except httpx.HTTPError:
@@ -164,6 +165,49 @@ def assert_grafana_provisioning() -> None:
         }.issubset(alert_titles)
 
 
+def compose_service_container_id(service: str) -> str:
+    result = compose("ps", "-q", service)
+    container_id = result.stdout.strip()
+    assert container_id, f"{service} container id not found"
+    return container_id
+
+
+def assert_container_healthy(service: str) -> None:
+    container_id = compose_service_container_id(service)
+    result = subprocess.run(
+        ["docker", "inspect", "--format", "{{json .State.Health}}", container_id],
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        capture_output=True,
+        check=True,
+    )
+    health = json.loads(result.stdout)
+    assert health["Status"] == "healthy", f"{service} health was {health}"
+
+
+def assert_migration_completed() -> None:
+    result = compose("ps", "-q", "migrate")
+    container_id = result.stdout.strip()
+    assert container_id, "migrate container id not found"
+    inspect = subprocess.run(
+        ["docker", "inspect", "--format", "{{.State.ExitCode}}", container_id],
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        capture_output=True,
+        check=True,
+    )
+    assert inspect.stdout.strip() == "0"
+
+
+def assert_mosquitto_named_volume() -> None:
+    result = compose("config", "--format", "json")
+    config = json.loads(result.stdout)
+    mosquitto_volumes = config["services"]["mosquitto"]["volumes"]
+    assert any(volume["source"] == f"{PROJECT_NAME}_mosquitto_data" for volume in mosquitto_volumes)
+
+
 def telemetry_payload() -> dict:
     return {
         "schema_version": TELEMETRY_SCHEMA,
@@ -189,13 +233,16 @@ def upload_photo(client: httpx.Client) -> httpx.Response:
 
 def test_docker_compose_stack_ingests_and_serves_data():
     try:
-        compose("up", "-d", "--build", "postgres", "mosquitto")
-        wait_for_postgres()
-        compose("build", "api")
-        compose("run", "--rm", "api", "alembic", "upgrade", "head")
+        compose("up", "-d", "--build")
+        assert_migration_completed()
         apply_grafana_reader_grants()
-        compose("up", "-d", "--build", "api", "worker")
+        wait_for_postgres()
         wait_for_api()
+        assert_container_healthy("postgres")
+        assert_container_healthy("mosquitto")
+        assert_container_healthy("api")
+        assert_container_healthy("worker")
+        assert_mosquitto_named_volume()
 
         with httpx.Client(base_url=BASE_URL, timeout=10) as client:
             telemetry = client.post("/api/v1/edge/telemetry", json=telemetry_payload())

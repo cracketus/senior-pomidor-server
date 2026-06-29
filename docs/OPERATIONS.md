@@ -25,22 +25,27 @@
    Override the published host ports with `API_PUBLISHED_PORT`, `MQTT_PUBLISHED_PORT`, `POSTGRES_PUBLISHED_PORT`, and `GRAFANA_PUBLISHED_PORT` in `.env` if any defaults are already in use.
    Treat all published ports as LAN-only. Use a VPN, firewall allow-list, or reverse proxy with authentication/TLS before any remote access.
 
-5. Start infrastructure and apply migrations:
+5. Start the stack. The one-shot `migrate` service applies Alembic migrations before the API and worker start:
 
    ```powershell
-   docker compose up -d postgres mosquitto
-   docker compose run --rm api alembic upgrade head
-   docker compose up -d api worker
+   docker compose up -d --build
    ```
 
 6. Verify service health:
 
    ```powershell
    Invoke-RestMethod http://localhost:8000/health
+   Invoke-RestMethod http://localhost:8000/ready
    docker compose ps
    docker compose logs --tail 100 api
    docker compose logs --tail 100 worker
-   docker compose run --rm api alembic current
+   docker compose ps migrate
+   ```
+
+   Recreate containers after Compose healthcheck or dependency changes so Docker health metadata is active:
+
+   ```powershell
+   docker compose up -d --build --force-recreate
    ```
 
 7. Open the read-only dashboard:
@@ -108,19 +113,26 @@ MQTT should be treated as the primary path. HTTP telemetry is the compatibility 
 For longer-term sizing, retention, power estimates, and pod-count expansion
 planning, see [CAPACITY_PLANNING.md](CAPACITY_PLANNING.md).
 
-Create a backup directory outside the repository:
+Create timestamped backups outside the repository:
 
 ```powershell
-New-Item -ItemType Directory -Force backups
+.\tools\backup_data.ps1 -BackupRoot D:\senior-pomidor-backups
 ```
 
-Back up PostgreSQL:
+Recommended schedule:
+
+- Daily PostgreSQL backup.
+- Weekly photo archive.
+- Fresh backup before Docker image, schema, or host OS upgrades.
+- Investigate disk usage at 70%; uploaded photos are the primary growth risk.
+
+Manual PostgreSQL backup:
 
 ```powershell
 docker compose exec -T postgres pg_dump -U senior_pomidor senior_pomidor > backups\senior_pomidor.sql
 ```
 
-Back up uploaded photos:
+Manual uploaded photo backup:
 
 ```powershell
 docker run --rm -v senior-pomidor-server_photo_data:/data -v ${PWD}\backups:/backup alpine tar czf /backup/photo_data.tgz -C /data .
@@ -137,6 +149,53 @@ Restore uploaded photos:
 ```powershell
 docker run --rm -v senior-pomidor-server_photo_data:/data -v ${PWD}\backups:/backup alpine sh -c "cd /data && tar xzf /backup/photo_data.tgz"
 ```
+
+Verify photo metadata and files agree:
+
+```powershell
+python tools/check_photo_storage.py
+```
+
+Restore drill:
+
+1. Create a disposable Compose project name and empty volumes.
+2. Restore the latest SQL dump and photo archive into that project.
+3. Run `docker compose -p <temporary-project> up -d --build`.
+4. Confirm `/ready`, `/api/v1/devices`, and representative photo downloads work.
+5. Remove the disposable project with `docker compose -p <temporary-project> down -v`.
+
+Mosquitto persistence is mounted at `mosquitto_data:/mosquitto/data`. Broker persistence only protects queued QoS messages when clients use durable sessions; telemetry idempotency and long-term durability remain database responsibilities.
+
+## Host Startup And Docker Recovery
+
+Keep service policies at `restart: unless-stopped`, then make the host start Docker and this Compose project after boot.
+
+Windows Task Scheduler example:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'E:\MyProjects\senior-pomidor-server'; docker compose up -d"
+```
+
+Linux systemd example:
+
+```ini
+[Unit]
+Description=Senior Pomidor Compose stack
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/senior-pomidor-server
+ExecStart=/usr/bin/docker compose up -d
+ExecStop=/usr/bin/docker compose down
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Docker Desktop does not enable Docker daemon live-restore in the current local setup. Enable live-restore only on target hosts and Docker editions that explicitly support it, then test host reboot and daemon restart behavior before relying on it.
 
 ## Verification Commands
 
@@ -155,6 +214,34 @@ Remove-Item Env:RUN_DOCKER_E2E
 ```
 
 If Docker Desktop is installed on Windows, start Docker Desktop and wait for the Linux engine before running the E2E test. A missing `dockerDesktopLinuxEngine` pipe means Docker is not running.
+
+## Public GitHub Pages Status
+
+The server can publish a sanitized outbound-only status JSON file for the `senior-pomidor-plant-v2` GitHub Pages site. The publisher intentionally excludes hostnames, ports, container IDs, paths, logs, environment variables, secrets, and raw telemetry payloads.
+
+Preview the JSON locally:
+
+```powershell
+python -m tools.public_status --project-dir . --api-base-url http://127.0.0.1:8000
+```
+
+Write to a local file without committing:
+
+```powershell
+python -m tools.public_status --project-dir . --output .\status-preview.json
+```
+
+Recommended production flow:
+
+1. Create a separate checkout or worktree of `senior-pomidor-plant-v2` on branch `status-data`.
+2. Configure Git credentials with write access only to that repository.
+3. Schedule the publisher every 5 minutes:
+
+   ```powershell
+   python -m tools.public_status --project-dir E:\MyProjects\senior-pomidor-server --pages-repo E:\MyProjects\senior-pomidor-plant-v2-status --push
+   ```
+
+The public contract is written to `status/status.json` with schema `senior-pomidor.status.v1`. GitHub Pages reads it from the `status-data` branch raw URL and treats data older than 15 minutes as stale.
 
 ## Grafana Alerts
 

@@ -57,17 +57,16 @@ Compose has safe defaults, so a `.env` file is optional. To customize settings:
 Copy-Item .env.example .env
 ```
 
-Start the services and apply migrations:
+Start the services. The one-shot `migrate` service applies Alembic migrations before the API and worker start:
 
 ```powershell
-docker compose up -d postgres mosquitto
-docker compose run --rm api alembic upgrade head
-docker compose up -d api worker
+docker compose up -d --build
 ```
 
 The API is available at `http://localhost:8000`, and the MQTT broker listens on `localhost:1883`.
 Host port mappings can be changed with `API_PUBLISHED_PORT`, `POSTGRES_PUBLISHED_PORT`, `MQTT_PUBLISHED_PORT`, and `GRAFANA_PUBLISHED_PORT` in `.env`.
 Published API, PostgreSQL, MQTT, and Grafana ports are intended for trusted LAN use only. Do not expose them directly to the public internet; put remote access behind a VPN or a hardened reverse proxy/firewall.
+Use `GET /health` for shallow liveness and `GET /ready` for database plus migration readiness.
 
 Start optional Grafana for local observability:
 
@@ -137,6 +136,7 @@ HTTP telemetry ingestion remains unauthenticated by default for compatibility wi
 - `GET /api/v1/photos/recent?from=&to=&limit=`
 - `GET /api/v1/photos/{photo_id}`
 - `GET /health`
+- `GET /ready`
 - `GET /dashboard`
 
 Telemetry may use schema `senior-pomidor.edge.telemetry.v1` or `senior-pomidor.edge.telemetry.v2`. Photos must use schema `senior-pomidor.edge.photo.v1` and upload a JPEG multipart field named `photo`.

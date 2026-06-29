@@ -10,6 +10,7 @@ dist/
 build/
 *.egg-info/
 data/
+backups/
 *.db
 .codex-known-hosts
 .codex-pi-key*
