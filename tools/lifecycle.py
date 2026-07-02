@@ -34,8 +34,7 @@ def telemetry_candidates(db: Session, now: datetime, retention_days: int | None)
     if cutoff_at is None:
         return LifecycleCategory("telemetry", None, 0, None, "retention disabled")
     count = (
-        db.scalar(select(func.count()).select_from(TelemetryEvent).where(TelemetryEvent.timestamp_utc < cutoff_at))
-        or 0
+        db.scalar(select(func.count()).select_from(TelemetryEvent).where(TelemetryEvent.timestamp_utc < cutoff_at)) or 0
     )
     return LifecycleCategory("telemetry", retention_days, int(count), None, "dry-run only")
 
