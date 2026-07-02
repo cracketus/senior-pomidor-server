@@ -58,6 +58,22 @@
                                                            "io_wait_percent":  0.0,
                                                            "disk_usage_percent":  8.2
                                                        },
+                                          "network":  {
+                                                          "wifi_connected":  true,
+                                                          "interface_up":  true,
+                                                          "default_gateway_reachable":  true,
+                                                          "dns_resolution_ok":  true,
+                                                          "internet_reachable":  true,
+                                                          "active_profile_present":  true,
+                                                          "preferred_profile_present":  true,
+                                                          "ssid":  "private-wifi",
+                                                          "ip_address":  "192.168.1.25",
+                                                          "last_recovery_action":  "none",
+                                                          "last_recovery_result":  "not_needed",
+                                                          "last_recovery_at_utc":  "2026-06-11T17:39:00Z",
+                                                          "wifi_profile_count":  2,
+                                                          "last_recovery_exit_code":  0
+                                                      },
                                           "pod_1_hardware":  {
 
                                                              }

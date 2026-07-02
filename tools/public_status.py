@@ -17,6 +17,14 @@ DEFAULT_API_BASE_URL = "http://127.0.0.1:8000"
 DEFAULT_STATUS_PATH = "status/status.json"
 EDGE_STALE_AFTER_MINUTES = 15
 CRITICAL_CORE_SERVICES = {"api", "worker", "postgres", "mosquitto"}
+PUBLIC_NETWORK_HEALTH_FIELDS = (
+    "wifi_connected",
+    "wifi_profile_count",
+    "internet_reachable",
+    "dns_resolution_ok",
+    "last_recovery_result",
+    "last_recovery_exit_code",
+)
 
 
 @dataclass(frozen=True)
@@ -147,6 +155,9 @@ def normalize_edge_device(event: dict[str, Any], now: datetime) -> dict[str, Any
     system_health = event.get("system_health")
     if isinstance(system_health, dict) and isinstance(system_health.get("rpi_core"), dict):
         rpi_core = system_health["rpi_core"]
+    network: dict[str, Any] = {}
+    if isinstance(system_health, dict) and isinstance(system_health.get("network"), dict):
+        network = system_health["network"]
     status = edge_status(minutes_since, len(health_alerts))
     return {
         "device_id": str(event.get("device_id") or "unknown"),
@@ -157,7 +168,22 @@ def normalize_edge_device(event: dict[str, Any], now: datetime) -> dict[str, Any
         "telemetry_buffer_file_count": numeric_or_none(rpi_core.get("telemetry_buffer_file_count")),
         "photo_buffer_file_count": numeric_or_none(rpi_core.get("photo_buffer_file_count")),
         "disk_free_percent": numeric_or_none(rpi_core.get("disk_free_percent")),
+        "network_health": normalize_public_network_health(network),
     }
+
+
+def normalize_public_network_health(network: dict[str, Any]) -> dict[str, bool | int | str | None]:
+    return {field: public_network_value(network.get(field)) for field in PUBLIC_NETWORK_HEALTH_FIELDS}
+
+
+def public_network_value(value: Any) -> bool | int | str | None:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        return value
+    return None
 
 
 def numeric_or_none(value: Any) -> int | float | None:

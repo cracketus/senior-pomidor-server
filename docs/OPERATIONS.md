@@ -36,11 +36,14 @@
    ```powershell
    Invoke-RestMethod http://localhost:8000/health
    Invoke-RestMethod http://localhost:8000/ready
+   python -m tools.edge_readiness --api-base-url http://127.0.0.1:8000 --mqtt-host 127.0.0.1 --photo-storage-dir data/photos
    docker compose ps
    docker compose logs --tail 100 api
    docker compose logs --tail 100 worker
    docker compose ps migrate
    ```
+
+   `tools.edge_readiness` checks API health, database migration readiness, MQTT broker TCP reachability, and photo storage writability. Use `--json` for machine-readable output.
 
    Recreate containers after Compose healthcheck or dependency changes so Docker health metadata is active:
 
@@ -112,6 +115,7 @@ MQTT should be treated as the primary path. HTTP telemetry is the compatibility 
 
 For longer-term sizing, retention, power estimates, and pod-count expansion
 planning, see [CAPACITY_PLANNING.md](CAPACITY_PLANNING.md).
+For public export boundaries, see [PUBLIC_DATA_POLICY.md](PUBLIC_DATA_POLICY.md).
 
 Create timestamped backups outside the repository:
 
@@ -165,6 +169,22 @@ Restore drill:
 5. Remove the disposable project with `docker compose -p <temporary-project> down -v`.
 
 Mosquitto persistence is mounted at `mosquitto_data:/mosquitto/data`. Broker persistence only protects queued QoS messages when clients use durable sessions; telemetry idempotency and long-term durability remain database responsibilities.
+
+## Data Lifecycle Dry Run
+
+Inspect retention candidates without deleting anything:
+
+```powershell
+python -m tools.lifecycle --telemetry-retention-days 180 --photo-retention-days 180 --ai-output-dir data/ai-analysis --ai-retention-days 180
+```
+
+Optional file-tree inspection for Grafana data can be included when a host path is available:
+
+```powershell
+python -m tools.lifecycle --grafana-data-dir <grafana-data-path> --grafana-retention-days 180
+```
+
+The lifecycle tool is intentionally dry-run only. Create a fresh backup before any future destructive cleanup command is added or used.
 
 ## Host Startup And Docker Recovery
 
@@ -258,6 +278,7 @@ The default alert set covers:
 - pod sensor errors when any pod reports errors in the last 15 minutes
 - system health threshold crossings for CPU temperature, Wi-Fi RSSI, disk usage, I/O wait, pod bus voltage, and pod bus current
 - system health probe errors when `system_health_jsonb.errors` appears in the last 15 minutes
+- edge network failures for missing Wi-Fi profiles, disconnected Wi-Fi, failed internet reachability, and non-zero recovery exit code
 - critical dry soil when an enabled pod's latest soil moisture stays below 10% for 30 minutes
 - VPD warning, stress, critical, and emergency ranges for enabled pods using `air_vpd_kpa`
 

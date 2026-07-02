@@ -91,6 +91,27 @@ def validate_optional_number(value: Any, path: str) -> None:
         raise ValidationError(f"{path} must be a number")
 
 
+def validate_optional_boolean(value: Any, path: str) -> None:
+    if value is None:
+        return
+    if not isinstance(value, bool):
+        raise ValidationError(f"{path} must be a boolean")
+
+
+def validate_optional_integer(value: Any, path: str) -> None:
+    if value is None:
+        return
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ValidationError(f"{path} must be an integer")
+
+
+def validate_optional_string(value: Any, path: str) -> None:
+    if value is None:
+        return
+    if not isinstance(value, str):
+        raise ValidationError(f"{path} must be a string")
+
+
 def validate_optional_object(value: Any, path: str) -> dict[str, Any] | None:
     if value is None:
         return None
@@ -138,6 +159,23 @@ def validate_system_health(payload: dict[str, Any]) -> None:
         if box_climate is not None:
             for field in ("air_temp_c", "air_humidity_percent"):
                 validate_optional_number(box_climate.get(field), f"system_health.pod_1_hardware.box_climate.{field}")
+
+    network = validate_optional_object(system_health.get("network"), "system_health.network")
+    if network is not None:
+        for field in (
+            "wifi_connected",
+            "interface_up",
+            "default_gateway_reachable",
+            "dns_resolution_ok",
+            "internet_reachable",
+            "active_profile_present",
+            "preferred_profile_present",
+        ):
+            validate_optional_boolean(network.get(field), f"system_health.network.{field}")
+        for field in ("ssid", "ip_address", "last_recovery_action", "last_recovery_result", "last_recovery_at_utc"):
+            validate_optional_string(network.get(field), f"system_health.network.{field}")
+        for field in ("wifi_profile_count", "last_recovery_exit_code"):
+            validate_optional_integer(network.get(field), f"system_health.network.{field}")
 
     validate_health_errors(system_health.get("errors"))
 

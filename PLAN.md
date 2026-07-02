@@ -1,5 +1,7 @@
 # Senior Pomidor Core Server Specification
 
+Historical note: this was the original v1 implementation plan. Current active contracts are documented in `docs/CONTRACTS.md`; this file is retained for project history and may describe constraints that have since changed, such as telemetry v2 support.
+
 ## Summary
 Build a separate `senior-pomidor-server` repository for the first Core server version. The v1 server will run with Docker Compose on the home LAN, use **FastAPI + PostgreSQL**, receive telemetry from the Raspberry Pi edge node over MQTT first, accept HTTP telemetry as fallback, accept photo uploads over HTTP multipart, persist all received data, and expose read APIs for future dashboard/AI work.
 

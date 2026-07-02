@@ -1,0 +1,29 @@
+{
+  "schema_version": "senior-pomidor.edge.telemetry.v2",
+  "device_id": "pi-001",
+  "timestamp_utc": "2026-07-02T12:00:00Z",
+  "pods": {
+    "pod_1": {
+      "enabled": true,
+      "metrics": {
+        "soil_moisture_percent": 42.5,
+        "air_vpd_kpa": 1.1
+      }
+    }
+  },
+  "system_health": {
+    "rpi_core": {
+      "cpu_temp_c": 45.0,
+      "wifi_rssi_dbm": -55.0
+    },
+    "network": {
+      "wifi_connected": true,
+      "wifi_profile_count": 2,
+      "internet_reachable": true,
+      "dns_resolution_ok": true,
+      "last_recovery_result": "not_needed",
+      "last_recovery_exit_code": 0
+    },
+    "errors": []
+  }
+}

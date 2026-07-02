@@ -10,6 +10,32 @@ HEALTH_ALERT_RULES: dict[str, dict[str, float | str]] = {
     "bus_voltage_v": {"level": "warning", "op": "<=", "threshold": 3.1, "message": "Pod bus voltage is low"},
     "bus_current_ma": {"level": "warning", "op": ">=", "threshold": 500.0, "message": "Pod bus current is high"},
 }
+NETWORK_BOOLEAN_FIELDS = (
+    "wifi_connected",
+    "interface_up",
+    "default_gateway_reachable",
+    "dns_resolution_ok",
+    "internet_reachable",
+    "active_profile_present",
+    "preferred_profile_present",
+)
+NETWORK_STRING_FIELDS = (
+    "ssid",
+    "ip_address",
+    "last_recovery_action",
+    "last_recovery_result",
+    "last_recovery_at_utc",
+)
+NETWORK_INTEGER_FIELDS = ("wifi_profile_count", "last_recovery_exit_code")
+NETWORK_ALERT_MESSAGES = {
+    "wifi_connected": "Wi-Fi is disconnected",
+    "wifi_profile_count": "No Wi-Fi profiles are configured",
+    "internet_reachable": "Internet reachability check failed",
+    "dns_resolution_ok": "DNS resolution check failed",
+    "default_gateway_reachable": "Default gateway reachability check failed",
+    "preferred_profile_present": "Preferred Wi-Fi profile is missing",
+    "last_recovery_exit_code": "Last network recovery command failed",
+}
 
 
 def _plant(payload: dict[str, Any]) -> dict[str, Any]:
@@ -110,6 +136,12 @@ def optional_float(value: Any) -> float | None:
     return float(value)
 
 
+def optional_int(value: Any) -> int | None:
+    if isinstance(value, bool) or not isinstance(value, int):
+        return None
+    return value
+
+
 def normalize_system_health(payload: dict[str, Any]) -> dict[str, Any] | None:
     source = payload.get("system_health")
     if not isinstance(source, dict):
@@ -149,6 +181,24 @@ def normalize_system_health(payload: dict[str, Any]) -> dict[str, Any] | None:
             if isinstance(error, dict) and error.get("message")
         ]
 
+    network = source.get("network")
+    if isinstance(network, dict):
+        normalized_network: dict[str, Any] = {}
+        for field in NETWORK_BOOLEAN_FIELDS:
+            value = network.get(field)
+            if isinstance(value, bool):
+                normalized_network[field] = value
+        for field in NETWORK_STRING_FIELDS:
+            value = network.get(field)
+            if isinstance(value, str):
+                normalized_network[field] = value
+        for field in NETWORK_INTEGER_FIELDS:
+            value = optional_int(network.get(field))
+            if value is not None:
+                normalized_network[field] = value
+        if normalized_network:
+            normalized["network"] = normalized_network
+
     return normalized
 
 
@@ -161,6 +211,8 @@ def health_alerts(system_health: dict[str, Any] | None) -> list[dict[str, Any]]:
     rpi_core: dict[str, Any] = rpi_core_value if isinstance(rpi_core_value, dict) else {}
     pod_1_hardware_value = system_health.get("pod_1_hardware")
     pod_1_hardware: dict[str, Any] = pod_1_hardware_value if isinstance(pod_1_hardware_value, dict) else {}
+    network_value = system_health.get("network")
+    network: dict[str, Any] = network_value if isinstance(network_value, dict) else {}
     values = {
         "cpu_temp_c": rpi_core.get("cpu_temp_c"),
         "wifi_rssi_dbm": rpi_core.get("wifi_rssi_dbm"),
@@ -195,6 +247,47 @@ def health_alerts(system_health: dict[str, Any] | None) -> list[dict[str, Any]]:
                 "level": "warning",
                 "sensor": error.get("sensor"),
                 "message": error.get("message") or "Health probe error",
+            }
+        )
+
+    for metric in ("wifi_connected", "internet_reachable", "dns_resolution_ok", "default_gateway_reachable"):
+        if network.get(metric) is False:
+            alerts.append({"metric": metric, "level": "warning", "message": NETWORK_ALERT_MESSAGES[metric]})
+
+    if network.get("preferred_profile_present") is False:
+        alerts.append(
+            {
+                "metric": "preferred_profile_present",
+                "level": "warning",
+                "message": NETWORK_ALERT_MESSAGES["preferred_profile_present"],
+            }
+        )
+
+    wifi_profile_count = network.get("wifi_profile_count")
+    if isinstance(wifi_profile_count, int) and not isinstance(wifi_profile_count, bool) and wifi_profile_count == 0:
+        alerts.append(
+            {
+                "metric": "wifi_profile_count",
+                "level": "critical",
+                "message": NETWORK_ALERT_MESSAGES["wifi_profile_count"],
+                "value": wifi_profile_count,
+                "threshold": 1,
+            }
+        )
+
+    last_recovery_exit_code = network.get("last_recovery_exit_code")
+    if (
+        isinstance(last_recovery_exit_code, int)
+        and not isinstance(last_recovery_exit_code, bool)
+        and last_recovery_exit_code != 0
+    ):
+        alerts.append(
+            {
+                "metric": "last_recovery_exit_code",
+                "level": "warning",
+                "message": NETWORK_ALERT_MESSAGES["last_recovery_exit_code"],
+                "value": last_recovery_exit_code,
+                "threshold": 0,
             }
         )
     return alerts

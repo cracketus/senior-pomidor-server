@@ -86,6 +86,8 @@ def assert_fixture_visible(client: TestClient, payload: dict[str, Any], *, expec
     system_health = body["system_health"]
     assert system_health["rpi_core"]["cpu_temp_c"] > 0
     assert "wifi_rssi_dbm" in system_health["rpi_core"]
+    assert system_health["network"]["wifi_connected"] is True
+    assert system_health["network"]["wifi_profile_count"] == 2
     assert body["health_alerts"]
 
     history = client.get(f"/api/v1/devices/{device_id}/telemetry?pod={first_pod_key}")

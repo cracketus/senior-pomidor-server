@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "senior-pomidor.edge.telemetry.v1",
+  "type": "object",
+  "required": ["schema_version", "device_id", "timestamp_utc"],
+  "properties": {
+    "schema_version": {"const": "senior-pomidor.edge.telemetry.v1"},
+    "device_id": {"type": "string"},
+    "timestamp_utc": {"type": "string", "pattern": "Z$"},
+    "pods": {"type": ["array", "object"]},
+    "pod_readings": {"type": ["array", "object"]},
+    "plant": {"type": "object"}
+  },
+  "additionalProperties": true
+}

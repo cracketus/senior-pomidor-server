@@ -60,6 +60,27 @@ def telemetry_v2_payload(timestamp: str = "2026-06-07T12:00:00Z") -> dict:
     return payload
 
 
+def network_health_payload(timestamp: str = "2026-06-07T12:00:00Z") -> dict:
+    payload = telemetry_v2_payload(timestamp)
+    payload["system_health"]["network"] = {
+        "wifi_connected": True,
+        "interface_up": True,
+        "default_gateway_reachable": True,
+        "dns_resolution_ok": True,
+        "internet_reachable": True,
+        "active_profile_present": True,
+        "preferred_profile_present": True,
+        "ssid": "private-wifi",
+        "ip_address": "192.168.1.25",
+        "last_recovery_action": "none",
+        "last_recovery_result": "not_needed",
+        "last_recovery_at_utc": "2026-06-07T11:59:00Z",
+        "wifi_profile_count": 2,
+        "last_recovery_exit_code": 0,
+    }
+    return payload
+
+
 def test_http_telemetry_ingest_and_latest(client):
     response = client.post("/api/v1/edge/telemetry", json=telemetry_payload())
     assert response.status_code == 202
@@ -87,6 +108,51 @@ def test_http_telemetry_v2_persists_system_health(client):
     assert body["system_health"]["rpi_core"]["cpu_temp_c"] == 56.4
     assert body["system_health"]["pod_1_hardware"]["box_climate"]["air_humidity_percent"] == 45.0
     assert body["health_alerts"] == []
+
+
+def test_http_telemetry_v2_persists_network_health(client):
+    response = client.post("/api/v1/edge/telemetry", json=network_health_payload())
+    assert response.status_code == 202
+
+    latest = client.get("/api/v1/devices/pi-001/latest")
+    body = latest.json()
+    network = body["system_health"]["network"]
+    assert network["wifi_connected"] is True
+    assert network["wifi_profile_count"] == 2
+    assert network["ssid"] == "private-wifi"
+    assert network["ip_address"] == "192.168.1.25"
+    assert body["health_alerts"] == []
+
+
+def test_http_telemetry_v2_reports_network_health_alerts(client):
+    payload = network_health_payload()
+    payload["system_health"]["network"].update(
+        {
+            "wifi_connected": False,
+            "wifi_profile_count": 0,
+            "internet_reachable": False,
+            "dns_resolution_ok": False,
+            "default_gateway_reachable": False,
+            "preferred_profile_present": False,
+            "last_recovery_exit_code": 2,
+        }
+    )
+
+    response = client.post("/api/v1/edge/telemetry", json=payload)
+    assert response.status_code == 202
+
+    latest = client.get("/api/v1/devices/pi-001/latest")
+    alerts = {alert["metric"]: alert for alert in latest.json()["health_alerts"]}
+    assert {
+        "wifi_connected",
+        "wifi_profile_count",
+        "internet_reachable",
+        "dns_resolution_ok",
+        "default_gateway_reachable",
+        "preferred_profile_present",
+        "last_recovery_exit_code",
+    }.issubset(alerts)
+    assert alerts["wifi_profile_count"]["level"] == "critical"
 
 
 def test_http_telemetry_v2_accepts_partial_system_health_errors(client):
@@ -120,6 +186,14 @@ def test_http_telemetry_v1_reports_unknown_system_health(client):
 def test_http_telemetry_rejects_invalid_health_field_type(client):
     payload = telemetry_v2_payload()
     payload["system_health"]["rpi_core"]["cpu_temp_c"] = "hot"
+
+    response = client.post("/api/v1/edge/telemetry", json=payload)
+    assert response.status_code == 400
+
+
+def test_http_telemetry_rejects_invalid_network_health_field_type(client):
+    payload = network_health_payload()
+    payload["system_health"]["network"]["wifi_connected"] = "yes"
 
     response = client.post("/api/v1/edge/telemetry", json=payload)
     assert response.status_code == 400
