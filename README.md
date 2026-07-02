@@ -66,6 +66,7 @@ docker compose up -d --build
 The API is available at `http://localhost:8000`, and the MQTT broker listens on `localhost:1883`.
 Host port mappings can be changed with `API_PUBLISHED_PORT`, `POSTGRES_PUBLISHED_PORT`, `MQTT_PUBLISHED_PORT`, and `GRAFANA_PUBLISHED_PORT` in `.env`.
 Published API, PostgreSQL, MQTT, and Grafana ports are intended for trusted LAN use only. Do not expose them directly to the public internet; put remote access behind a VPN or a hardened reverse proxy/firewall.
+For appliance-like deployments, set non-default PostgreSQL and Grafana credentials, configure `TELEMETRY_UPLOAD_TOKEN` and `PHOTO_UPLOAD_TOKEN`, and set `API_DOCS_ENABLED=false`.
 Use `GET /health` for shallow liveness and `GET /ready` for database plus migration readiness.
 
 Start optional Grafana for local observability:
@@ -98,10 +99,11 @@ docker compose --profile cloud-export up -d grafana-cloud-exporter
 
 Only low-cardinality plant metrics are exported, using metric names prefixed with `senior_pomidor_` and labels limited to `device_id` and `pod_key`. Photos, raw payload JSON, system health, sensor error text, host/network details, database credentials, file paths, and MQTT topics are not exported. Grafana Cloud is a public read-only projection; PostgreSQL remains the local source of truth.
 
-For active API/edge contracts, see [docs/CONTRACTS.md](docs/CONTRACTS.md).
+For active API/edge contracts and example requests/responses, see [docs/CONTRACTS.md](docs/CONTRACTS.md).
 For deployment checks, backups, restore, and Raspberry Pi configuration examples, see [docs/OPERATIONS.md](docs/OPERATIONS.md).
 For step-by-step Raspberry Pi integration, see [docs/PI_INTEGRATION_RUNBOOK.md](docs/PI_INTEGRATION_RUNBOOK.md).
 For 3/6/12 month hardware, storage, power, and 4/8/16 pod expansion estimates, see [docs/CAPACITY_PLANNING.md](docs/CAPACITY_PLANNING.md).
+For release notes, see [CHANGELOG.md](CHANGELOG.md).
 
 The offline AI analysis prototype for stored photos and telemetry is documented in
 [docs/OPERATIONS.md](docs/OPERATIONS.md#offline-ai-analysis-prototype). It runs as a separate
@@ -124,7 +126,7 @@ PHOTO_UPLOAD_URL=http://<server-lan-ip>:8000/api/v1/edge/photos
 If `PHOTO_UPLOAD_TOKEN` is set on the server, the edge photo uploader must send it as a bearer token.
 If `TELEMETRY_UPLOAD_TOKEN` is set on the server, HTTP telemetry ingestion must also send `Authorization: Bearer <token>`.
 
-HTTP telemetry ingestion remains unauthenticated by default for compatibility with current trusted-LAN edge senders. Set `API_DOCS_ENABLED=false` for production-like appliance deployments to disable `/docs`, `/redoc`, and `/openapi.json`. The built-in `/dashboard` is a LAN convenience view and is not designed as a public internet dashboard.
+HTTP telemetry ingestion and photo upload remain unauthenticated by default unless their bearer-token environment variables are configured. This default is for compatibility with current trusted-LAN edge senders only. Set `API_DOCS_ENABLED=false` for production-like appliance deployments to disable `/docs`, `/redoc`, and `/openapi.json`. The built-in `/dashboard` is a LAN convenience view and is not designed as a public internet dashboard.
 
 ## HTTP API
 
