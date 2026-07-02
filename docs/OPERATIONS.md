@@ -1,5 +1,34 @@
 # Senior Pomidor Server Operations
 
+## Architecture
+
+```text
+Raspberry Pi edge nodes
+  |-- MQTT telemetry --> mosquitto --> worker ----.
+  `-- HTTP telemetry/photos --> FastAPI API ------+--> PostgreSQL
+                                                   `--> photo volume
+
+FastAPI API --> /dashboard and /api/v1 read APIs
+PostgreSQL --> Grafana local dashboard and alerts
+PostgreSQL --> optional Grafana Cloud exporter with sanitized low-cardinality metrics
+```
+
+The API, MQTT broker, PostgreSQL port, dashboard, and Grafana UI are intended for trusted LAN use. For any remote access, put the service behind a VPN, firewall allow-list, or reverse proxy with authentication and TLS.
+
+## Release Checklist
+
+Before tagging or publishing a server release:
+
+- Run `python -m pytest -q`.
+- Run `nox -s tests lint format_check types security deps_audit`.
+- Run the Docker Compose E2E test when Docker is available.
+- Confirm there are no local `.env`, private key, known-hosts, `.db`, `data/`, or `backups/` files in the release checkout.
+- Confirm `.env.example` still uses local bootstrap defaults only, and document any required production overrides.
+- Verify `GET /ready` after `docker compose up -d --build`.
+- Verify `python -m tools.edge_readiness --api-base-url http://127.0.0.1:8000 --mqtt-host 127.0.0.1 --photo-storage-dir data/photos`.
+- Verify `tools/backup_data.ps1` can write a backup outside the repository.
+- Confirm release notes state the trusted-LAN security boundary, optional bearer-token behavior, MQTT default auth posture, and public dataset/export limitations.
+
 ## LAN Deployment Checklist
 
 1. Install Docker Engine or Docker Desktop on the home server.

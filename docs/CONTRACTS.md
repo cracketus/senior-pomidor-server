@@ -22,8 +22,8 @@ Authorization: Bearer <TELEMETRY_UPLOAD_TOKEN>  # only when configured
 
 Supported telemetry schemas:
 
-- `senior-pomidor.edge.telemetry.v1`
-- `senior-pomidor.edge.telemetry.v2`
+- `senior-pomidor.edge.telemetry.v1`: frozen for this release.
+- `senior-pomidor.edge.telemetry.v2`: active in this release and may evolve in later releases.
 
 Required fields:
 
@@ -43,6 +43,71 @@ Telemetry v2 may include optional `system_health`:
 - `errors`: list of objects with optional `sensor` and required `message`
 
 Invalid schema names, malformed timestamps, unsafe identifiers, and wrong typed `system_health` fields return HTTP `400` for HTTP ingestion and are rejected by the MQTT worker.
+
+Example HTTP request:
+
+```powershell
+$body = @{
+  schema_version = 'senior-pomidor.edge.telemetry.v2'
+  device_id = 'pi-001'
+  timestamp_utc = '2026-07-02T12:00:00Z'
+  pods = @{
+    pod_1 = @{
+      enabled = $true
+      metrics = @{
+        soil_moisture_percent = 42.5
+        air_vpd_kpa = 1.1
+        light_lux = 18000
+      }
+    }
+  }
+  system_health = @{
+    rpi_core = @{ cpu_temp_c = 45.0; wifi_rssi_dbm = -55.0 }
+    network = @{
+      wifi_connected = $true
+      wifi_profile_count = 2
+      internet_reachable = $true
+      dns_resolution_ok = $true
+      last_recovery_result = 'not_needed'
+      last_recovery_exit_code = 0
+    }
+    errors = @()
+  }
+} | ConvertTo-Json -Depth 8
+
+Invoke-RestMethod `
+  -Method Post `
+  -Uri http://localhost:8000/api/v1/edge/telemetry `
+  -ContentType 'application/json' `
+  -Body $body
+```
+
+Successful HTTP response:
+
+```json
+{
+  "accepted": true,
+  "event_id": 1
+}
+```
+
+Invalid payload example:
+
+```json
+{
+  "schema_version": "senior-pomidor.edge.telemetry.v2",
+  "device_id": "pi-001",
+  "timestamp_utc": "2026-07-02T12:00:00+00:00"
+}
+```
+
+HTTP response:
+
+```json
+{
+  "detail": "timestamp must be a UTC ISO string ending in Z"
+}
+```
 
 ## Photo Upload
 
@@ -67,6 +132,41 @@ Optional form fields:
 - `sharpness_score`
 
 Uploads are idempotent by `photo_id`. The server rejects invalid schema names, invalid timestamps, unsafe identifiers, non-JPEG content, oversized photos, and invalid bearer tokens.
+New uploads return HTTP `202`; repeated uploads with the same `photo_id` return HTTP `200` with the existing metadata.
+
+Example upload:
+
+```powershell
+curl.exe -X POST http://localhost:8000/api/v1/edge/photos `
+  -F "photo_id=pi-001-20260702T120000Z" `
+  -F "device_id=pi-001" `
+  -F "captured_at_utc=2026-07-02T12:00:00Z" `
+  -F "schema_version=senior-pomidor.edge.photo.v1" `
+  -F "sharpness_score=0.91" `
+  -F "photo=@sample.jpg;type=image/jpeg"
+```
+
+Successful first-upload response:
+
+```json
+{
+  "accepted": true,
+  "created": true,
+  "photo": {
+    "photo_id": "pi-001-20260702T120000Z",
+    "device_id": "pi-001",
+    "captured_at_utc": "2026-07-02T12:00:00Z",
+    "schema_version": "senior-pomidor.edge.photo.v1",
+    "sharpness_score": 0.91,
+    "content_type": "image/jpeg",
+    "file_size_bytes": 123456,
+    "sha256": "<sha256>",
+    "received_at": "2026-07-02T12:00:01Z"
+  }
+}
+```
+
+Known consistency limitation: photo metadata is committed before the final `os.replace` moves the JPEG into place. A crash between those steps could leave a photo row whose file is missing; `GET /api/v1/photos/{photo_id}` then returns `404`, and `python tools/check_photo_storage.py` can be used to find mismatches.
 
 ## Read APIs
 
@@ -85,6 +185,66 @@ Implemented read endpoints:
 
 Latest and history telemetry responses include pod readings, pod errors, preserved `system_health`, and derived `health_alerts`.
 
+Example latest telemetry call:
+
+```powershell
+Invoke-RestMethod http://localhost:8000/api/v1/devices/pi-001/latest
+```
+
+Example response:
+
+```json
+{
+  "id": 1,
+  "device_id": "pi-001",
+  "timestamp_utc": "2026-07-02T12:00:00Z",
+  "schema_version": "senior-pomidor.edge.telemetry.v2",
+  "source": "http",
+  "received_at": "2026-07-02T12:00:01Z",
+  "plant": {
+    "readings": [
+      {
+        "pod_key": "pod_1",
+        "enabled": true,
+        "metrics": {
+          "soil_moisture_percent": 42.5,
+          "air_vpd_kpa": 1.1,
+          "light_lux": 18000
+        }
+      }
+    ],
+    "errors": []
+  },
+  "system_health": {
+    "rpi_core": {
+      "cpu_temp_c": 45.0,
+      "wifi_rssi_dbm": -55.0
+    }
+  },
+  "health_alerts": [],
+  "readings": [
+    {
+      "pod_key": "pod_1",
+      "enabled": true,
+      "metrics": {
+        "soil_moisture_percent": 42.5,
+        "air_vpd_kpa": 1.1,
+        "light_lux": 18000
+      }
+    }
+  ],
+  "errors": []
+}
+```
+
+Example history query:
+
+```powershell
+Invoke-RestMethod "http://localhost:8000/api/v1/devices/pi-001/telemetry?since_hours=24&pod=pod_1&limit=100"
+```
+
+History responses are arrays of the same event shape used by the latest telemetry endpoint.
+
 ## Operational Boundaries
 
 Current capabilities include telemetry v1/v2 ingestion, MQTT ingestion, HTTP fallback ingestion, photo upload/list/download, local dashboard, Grafana/PostgreSQL observability, Grafana Cloud public metrics export, public status JSON, and offline AI analysis.
@@ -95,3 +255,5 @@ Deferred or out of scope for the active contract:
 - prototype-only `state_v1`, `action_v1`, `anomaly_v1`, `forecast_36h_v1`, `targets_v1`, and `sampling_plan_v1`
 - weather-adapted targets or control-loop scheduling
 - public dataset publishing APIs
+
+Current public outputs are limited to sanitized status JSON from `tools.public_status` and optional low-cardinality Grafana Cloud metrics export. Raw telemetry, raw photo metadata, stored photos, and database exports are not public dataset APIs.
