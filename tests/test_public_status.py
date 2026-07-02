@@ -62,7 +62,19 @@ def test_normalize_edge_device_reports_freshness_and_buffers() -> None:
                 "telemetry_buffer_file_count": 2,
                 "photo_buffer_file_count": 1,
                 "disk_free_percent": 72.5,
-            }
+            },
+            "network": {
+                "wifi_connected": False,
+                "wifi_profile_count": 0,
+                "internet_reachable": False,
+                "dns_resolution_ok": True,
+                "default_gateway_reachable": False,
+                "last_recovery_result": "failed",
+                "last_recovery_exit_code": 2,
+                "ssid": "private-wifi",
+                "ip_address": "192.168.1.25",
+                "last_recovery_action": "wpa_cli -i wlan0 reconfigure",
+            },
         },
     }
 
@@ -75,6 +87,18 @@ def test_normalize_edge_device_reports_freshness_and_buffers() -> None:
     assert device["telemetry_buffer_file_count"] == 2
     assert device["photo_buffer_file_count"] == 1
     assert device["disk_free_percent"] == 72.5
+    assert device["network_health"] == {
+        "wifi_connected": False,
+        "wifi_profile_count": 0,
+        "internet_reachable": False,
+        "dns_resolution_ok": True,
+        "last_recovery_result": "failed",
+        "last_recovery_exit_code": 2,
+    }
+    public_json = json.dumps(device)
+    assert "private-wifi" not in public_json
+    assert "192.168.1.25" not in public_json
+    assert "wpa_cli" not in public_json
 
 
 def test_edge_status_marks_stale_after_threshold() -> None:

@@ -139,11 +139,11 @@
           },
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT\n  timestamp_utc,\n  received_at,\n  device_id,\n  system_health_jsonb #>> '{rpi_core,cpu_temp_c}' AS cpu_temp_c,\n  system_health_jsonb #>> '{rpi_core,wifi_rssi_dbm}' AS wifi_rssi_dbm,\n  system_health_jsonb #>> '{rpi_core,disk_usage_percent}' AS disk_usage_percent,\n  system_health_jsonb #>> '{rpi_core,io_wait_percent}' AS io_wait_percent,\n  system_health_jsonb #>> '{pod_1_hardware,bus_voltage_v}' AS bus_voltage_v,\n  system_health_jsonb #>> '{pod_1_hardware,bus_current_ma}' AS bus_current_ma,\n  system_health_jsonb #> '{errors}' AS health_errors\nFROM telemetry_events\nWHERE $__timeFilter(timestamp_utc)\n  AND system_health_jsonb IS NOT NULL\n  AND ('${device_id:csv}' = 'All' OR device_id IN (${device_id:sqlstring}))\nORDER BY timestamp_utc DESC\nLIMIT 25",
+          "rawSql": "SELECT\n  timestamp_utc,\n  received_at,\n  device_id,\n  system_health_jsonb #>> '{rpi_core,cpu_temp_c}' AS cpu_temp_c,\n  system_health_jsonb #>> '{rpi_core,wifi_rssi_dbm}' AS wifi_rssi_dbm,\n  system_health_jsonb #>> '{rpi_core,disk_usage_percent}' AS disk_usage_percent,\n  system_health_jsonb #>> '{rpi_core,io_wait_percent}' AS io_wait_percent,\n  system_health_jsonb #>> '{pod_1_hardware,bus_voltage_v}' AS bus_voltage_v,\n  system_health_jsonb #>> '{pod_1_hardware,bus_current_ma}' AS bus_current_ma,\n  system_health_jsonb #>> '{network,wifi_connected}' AS wifi_connected,\n  system_health_jsonb #>> '{network,wifi_profile_count}' AS wifi_profile_count,\n  system_health_jsonb #>> '{network,active_profile_present}' AS active_profile_present,\n  system_health_jsonb #>> '{network,preferred_profile_present}' AS preferred_profile_present,\n  system_health_jsonb #>> '{network,default_gateway_reachable}' AS default_gateway_reachable,\n  system_health_jsonb #>> '{network,dns_resolution_ok}' AS dns_resolution_ok,\n  system_health_jsonb #>> '{network,internet_reachable}' AS internet_reachable,\n  system_health_jsonb #>> '{network,last_recovery_result}' AS last_recovery_result,\n  system_health_jsonb #>> '{network,last_recovery_exit_code}' AS last_recovery_exit_code,\n  system_health_jsonb #> '{errors}' AS health_errors\nFROM telemetry_events\nWHERE $__timeFilter(timestamp_utc)\n  AND system_health_jsonb IS NOT NULL\n  AND ('${device_id:csv}' = 'All' OR device_id IN (${device_id:sqlstring}))\nORDER BY timestamp_utc DESC\nLIMIT 25",
           "refId": "A"
         }
       ],
-      "title": "Latest Device Status",
+      "title": "Latest Device And Network Status",
       "type": "table"
     },
     {

@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "senior-pomidor.edge.photo.v1",
+  "type": "object",
+  "required": ["photo_id", "device_id", "captured_at_utc", "schema_version"],
+  "properties": {
+    "photo_id": {"type": "string"},
+    "device_id": {"type": "string"},
+    "captured_at_utc": {"type": "string", "pattern": "Z$"},
+    "schema_version": {"const": "senior-pomidor.edge.photo.v1"},
+    "sharpness_score": {"type": ["number", "null"]}
+  },
+  "additionalProperties": true
+}

@@ -27,6 +27,14 @@ def telemetry_v2_payload() -> dict:
     payload["schema_version"] = TELEMETRY_SCHEMA_V2
     payload["system_health"] = {
         "rpi_core": {"wifi_rssi_dbm": -82.0},
+        "network": {
+            "wifi_connected": True,
+            "wifi_profile_count": 2,
+            "internet_reachable": True,
+            "dns_resolution_ok": True,
+            "last_recovery_result": "not_needed",
+            "last_recovery_exit_code": 0,
+        },
         "errors": [{"sensor": "rpi_wifi_rssi", "message": "weak signal"}],
     }
     return payload
@@ -78,6 +86,8 @@ def test_mqtt_worker_accepts_v2_system_health(monkeypatch):
             assert event is not None
             assert event.schema_version == TELEMETRY_SCHEMA_V2
             assert event.system_health_jsonb["rpi_core"]["wifi_rssi_dbm"] == -82.0
+            assert event.system_health_jsonb["network"]["wifi_connected"] is True
+            assert event.system_health_jsonb["network"]["wifi_profile_count"] == 2
     finally:
         dispose_session_factory(TestingSessionLocal)
 

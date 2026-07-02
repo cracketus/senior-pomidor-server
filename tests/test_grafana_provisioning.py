@@ -62,7 +62,7 @@ def test_grafana_dashboard_json_covers_issue_15_acceptance_criteria():
         "Air VPD",
         "Leaf VPD",
         "Latest Telemetry By Pod",
-        "Latest Device Status",
+        "Latest Device And Network Status",
         "Recent Photo Metadata",
     }.issubset(panel_titles)
 
@@ -118,6 +118,7 @@ def test_grafana_alerting_provisioning_covers_collection_and_health_alerts():
         "Pod sensor errors",
         "System health threshold crossed",
         "System health probe errors",
+        "Edge network health failures",
         "Critical dry soil",
         "VPD too low",
         "VPD condensation risk",
@@ -145,6 +146,10 @@ def test_grafana_alerting_provisioning_covers_collection_and_health_alerts():
         "75.0::double precision",
         "wifi_rssi_dbm",
         "-75.0::double precision",
+        "wifi_connected",
+        "wifi_profile_count",
+        "internet_reachable",
+        "last_recovery_exit_code",
         "disk_usage_percent",
         "85.0::double precision",
         "io_wait_percent",

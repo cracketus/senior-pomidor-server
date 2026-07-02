@@ -901,3 +901,88 @@ groups:
         labels:
           severity: emergency
           category: plant
+
+      - uid: sp_edge_network_health_failures
+        title: Edge network health failures
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: senior-pomidor-postgres
+            relativeTimeRange:
+              from: 600
+              to: 0
+            model:
+              datasource:
+                type: postgres
+                uid: senior-pomidor-postgres
+              editorMode: code
+              format: table
+              intervalMs: 1000
+              maxDataPoints: 43200
+              rawQuery: true
+              refId: A
+              rawSql: |
+                WITH latest AS (
+                  SELECT DISTINCT ON (device_id)
+                    device_id,
+                    timestamp_utc,
+                    system_health_jsonb
+                  FROM telemetry_events
+                  WHERE timestamp_utc >= now() - interval '10 minutes'
+                    AND system_health_jsonb ? 'network'
+                  ORDER BY device_id, timestamp_utc DESC
+                ),
+                checks AS (
+                  SELECT
+                    device_id,
+                    check_name,
+                    observed,
+                    1::double precision AS value
+                  FROM latest
+                  CROSS JOIN LATERAL (
+                    VALUES
+                      ('wifi_profile_count', system_health_jsonb #>> '{network,wifi_profile_count}', (nullif(system_health_jsonb #>> '{network,wifi_profile_count}', '')::integer = 0)),
+                      ('wifi_connected', system_health_jsonb #>> '{network,wifi_connected}', (system_health_jsonb #>> '{network,wifi_connected}' = 'false')),
+                      ('internet_reachable', system_health_jsonb #>> '{network,internet_reachable}', (system_health_jsonb #>> '{network,internet_reachable}' = 'false')),
+                      ('last_recovery_exit_code', system_health_jsonb #>> '{network,last_recovery_exit_code}', (nullif(system_health_jsonb #>> '{network,last_recovery_exit_code}', '')::integer <> 0))
+                  ) AS network_checks(check_name, observed, failed)
+                  WHERE failed
+                )
+                SELECT *
+                FROM checks
+          - refId: B
+            datasourceUid: __expr__
+            relativeTimeRange:
+              from: 0
+              to: 0
+            model:
+              conditions:
+                - evaluator:
+                    params: [0]
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: B
+              type: threshold
+        dashboardUid: senior-pomidor-telemetry
+        noDataState: OK
+        execErrState: Alerting
+        for: 5m
+        annotations:
+          summary: Edge network health check failed.
+          description: Inspect Wi-Fi profiles, Wi-Fi connection state, internet reachability, and the last recovery exit code.
+        labels:
+          severity: warning
+          category: network

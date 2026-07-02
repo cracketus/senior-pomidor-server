@@ -1,0 +1,12 @@
+{
+  "schema_version": "senior-pomidor.edge.telemetry.v1",
+  "device_id": "pi-001",
+  "timestamp_utc": "2026-07-02T12:00:00Z",
+  "pods": [
+    {
+      "pod_key": "pod_1",
+      "enabled": true,
+      "soil_moisture_percent": 42.5
+    }
+  ]
+}

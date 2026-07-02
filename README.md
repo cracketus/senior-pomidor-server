@@ -98,7 +98,9 @@ docker compose --profile cloud-export up -d grafana-cloud-exporter
 
 Only low-cardinality plant metrics are exported, using metric names prefixed with `senior_pomidor_` and labels limited to `device_id` and `pod_key`. Photos, raw payload JSON, system health, sensor error text, host/network details, database credentials, file paths, and MQTT topics are not exported. Grafana Cloud is a public read-only projection; PostgreSQL remains the local source of truth.
 
+For active API/edge contracts, see [docs/CONTRACTS.md](docs/CONTRACTS.md).
 For deployment checks, backups, restore, and Raspberry Pi configuration examples, see [docs/OPERATIONS.md](docs/OPERATIONS.md).
+For step-by-step Raspberry Pi integration, see [docs/PI_INTEGRATION_RUNBOOK.md](docs/PI_INTEGRATION_RUNBOOK.md).
 For 3/6/12 month hardware, storage, power, and 4/8/16 pod expansion estimates, see [docs/CAPACITY_PLANNING.md](docs/CAPACITY_PLANNING.md).
 
 The offline AI analysis prototype for stored photos and telemetry is documented in
