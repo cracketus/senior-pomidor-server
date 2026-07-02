@@ -20,14 +20,16 @@ The API, MQTT broker, PostgreSQL port, dashboard, and Grafana UI are intended fo
 Before tagging or publishing a server release:
 
 - Run `python -m pytest -q`.
-- Run `nox -s tests lint format_check types security deps_audit`.
-- Run the Docker Compose E2E test when Docker is available.
+- Run `nox -s lint format_check types security`.
+- Run `nox -s deps_audit`.
+- Run `$env:RUN_DOCKER_E2E='1'; python -m pytest -q tests/test_docker_e2e.py` when Docker is available.
+- Verify `GET /health` and `GET /ready` after `docker compose up -d --build`.
 - Confirm there are no local `.env`, private key, known-hosts, `.db`, `data/`, or `backups/` files in the release checkout.
 - Confirm `.env.example` still uses local bootstrap defaults only, and document any required production overrides.
-- Verify `GET /ready` after `docker compose up -d --build`.
 - Verify `python -m tools.edge_readiness --api-base-url http://127.0.0.1:8000 --mqtt-host 127.0.0.1 --photo-storage-dir data/photos`.
 - Verify `tools/backup_data.ps1` can write a backup outside the repository.
 - Confirm release notes state the trusted-LAN security boundary, optional bearer-token behavior, MQTT default auth posture, and public dataset/export limitations.
+- Confirm `git status -sb` is clean on the intended release branch before tagging.
 
 ## LAN Deployment Checklist
 
