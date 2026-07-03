@@ -18,6 +18,11 @@ def stable_json(value: object) -> bytes:
 def test_config_loads_independent_pod_probe_metadata() -> None:
     config, calibration = load_estimator_runtime()
 
+    assert config.sensor_poll_seconds == 600
+    assert config.state_period_seconds == 600
+    assert config.collection_window_seconds == 900
+    assert config.max_sensor_age_seconds == 1200
+    assert config.max_device_age_seconds == 1200
     assert config.minimum_valid_soil_probes == 1
     assert set(calibration.soil_probes) == {"pod_1", "pod_2"}
     assert calibration.soil_probes["pod_1"].position is None

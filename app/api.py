@@ -10,8 +10,18 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.config import Settings, get_settings
 from app.db import get_db
-from app.models import AnomalyRecord, Device, Photo, PodReading, SensorHealthSnapshot, StateSnapshot, TelemetryEvent
+from app.models import (
+    ActionSimulation,
+    AnomalyRecord,
+    Device,
+    Photo,
+    PodReading,
+    SensorHealthSnapshot,
+    StateSnapshot,
+    TelemetryEvent,
+)
 from app.services import persist_photo, persist_telemetry, resolve_stored_photo_path
+from app.state_estimator.decisions import build_guardrails
 from app.state_estimator.persistence import latest_state_or_estimate
 from app.state_estimator.replay import replay_observations
 from app.telemetry import health_alerts
@@ -321,12 +331,7 @@ def latest_sensor_health(node_id: str, db: Session = Depends(get_db)) -> dict[st
     return snapshot.payload_jsonb
 
 
-@router.get("/anomalies/active")
-def active_anomalies(node_id: str, db: Session = Depends(get_db)) -> list[dict[str, Any]]:
-    try:
-        node_id = validate_device_id(node_id)
-    except ValidationError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+def latest_active_anomaly_payloads(db: Session, node_id: str) -> list[dict[str, Any]]:
     records = db.scalars(
         select(AnomalyRecord)
         .where(AnomalyRecord.node_id == node_id, AnomalyRecord.status == "ACTIVE")
@@ -336,6 +341,77 @@ def active_anomalies(node_id: str, db: Session = Depends(get_db)) -> list[dict[s
     for record in records:
         latest_by_type.setdefault(record.type, record.payload_jsonb)
     return list(latest_by_type.values())
+
+
+@router.get("/anomalies/active")
+def active_anomalies(node_id: str, db: Session = Depends(get_db)) -> list[dict[str, Any]]:
+    try:
+        node_id = validate_device_id(node_id)
+    except ValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return latest_active_anomaly_payloads(db, node_id)
+
+
+@router.get("/guardrails/latest")
+def latest_guardrails(node_id: str, db: Session = Depends(get_db)) -> dict[str, Any]:
+    try:
+        node_id = validate_device_id(node_id)
+    except ValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    state_snapshot = db.scalar(
+        select(StateSnapshot).where(StateSnapshot.node_id == node_id).order_by(desc(StateSnapshot.ts)).limit(1)
+    )
+    health_snapshot = db.scalar(
+        select(SensorHealthSnapshot)
+        .where(SensorHealthSnapshot.node_id == node_id)
+        .order_by(desc(SensorHealthSnapshot.ts))
+        .limit(1)
+    )
+    return build_guardrails(
+        node_id=node_id,
+        state=state_snapshot.payload_jsonb if state_snapshot is not None else None,
+        sensor_health=health_snapshot.payload_jsonb if health_snapshot is not None else None,
+        active_anomalies=latest_active_anomaly_payloads(db, node_id),
+    )
+
+
+@router.get("/action-simulations/latest")
+def latest_action_simulation(node_id: str, db: Session = Depends(get_db)) -> dict[str, Any]:
+    try:
+        node_id = validate_device_id(node_id)
+    except ValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    simulation = db.scalar(
+        select(ActionSimulation).where(ActionSimulation.node_id == node_id).order_by(desc(ActionSimulation.ts)).limit(1)
+    )
+    if simulation is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="action simulation not found")
+    return simulation.payload_jsonb
+
+
+@router.get("/action-simulations/range")
+def action_simulation_range(
+    node_id: str,
+    from_: str | None = Query(default=None, alias="from"),
+    to: str | None = None,
+    limit: int = Query(default=100, ge=1, le=1000),
+    db: Session = Depends(get_db),
+) -> list[dict[str, Any]]:
+    try:
+        node_id = validate_device_id(node_id)
+        query = (
+            select(ActionSimulation)
+            .where(ActionSimulation.node_id == node_id)
+            .order_by(ActionSimulation.ts)
+            .limit(limit)
+        )
+        if from_:
+            query = query.where(ActionSimulation.ts >= parse_utc_z(from_))
+        if to:
+            query = query.where(ActionSimulation.ts <= parse_utc_z(to))
+    except ValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return [simulation.payload_jsonb for simulation in db.scalars(query).all()]
 
 
 @router.post("/state-estimator/replay")

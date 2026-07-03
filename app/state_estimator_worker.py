@@ -11,6 +11,7 @@ from app.config import settings
 from app.db import SessionLocal
 from app.logging_config import configure_logging
 from app.models import Device
+from app.state_estimator.config import load_estimator_runtime
 from app.state_estimator.models import EstimatorHistory
 from app.state_estimator.persistence import estimate_latest_from_telemetry
 from app.worker_health import write_worker_health
@@ -47,6 +48,10 @@ def main() -> int:
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
     write_worker_health("state_estimator_starting")
+    estimator_config, _calibration = load_estimator_runtime(
+        settings.state_estimator_config_path,
+        timezone=settings.state_estimator_timezone,
+    )
     while not stop_event.is_set():
         try:
             count = run_once()
@@ -54,7 +59,7 @@ def main() -> int:
         except Exception:
             logger.exception("State estimator worker cycle failed")
             write_worker_health("state_estimator_failed")
-        stop_event.wait(60)
+        stop_event.wait(estimator_config.state_period_seconds)
     write_worker_health("state_estimator_stopped")
     return 0
 

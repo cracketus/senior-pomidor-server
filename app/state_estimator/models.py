@@ -30,9 +30,11 @@ class EstimatorContext:
 @dataclass
 class EstimatorConfig:
     timezone: str = "Europe/Vienna"
-    collection_window_seconds: int = 90
-    max_sensor_age_seconds: int = 120
-    max_device_age_seconds: int = 120
+    sensor_poll_seconds: int = 600
+    state_period_seconds: int = 600
+    collection_window_seconds: int = 900
+    max_sensor_age_seconds: int = 1200
+    max_device_age_seconds: int = 1200
     minimum_for_normal_control: float = 0.65
     minimum_for_any_autonomy: float = 0.40
     high_temp_warn_c: float = 30.0

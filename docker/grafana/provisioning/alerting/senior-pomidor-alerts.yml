@@ -66,10 +66,10 @@ groups:
               rawSql: |
                 SELECT
                   device_id,
-                  'last payload older than 10 minutes' AS reason,
+                  'last payload older than 20 minutes' AS reason,
                   1::double precision AS value
                 FROM devices
-                WHERE last_payload_at < now() - interval '10 minutes'
+                WHERE last_payload_at < now() - interval '20 minutes'
           - refId: B
             datasourceUid: __expr__
             relativeTimeRange:
@@ -101,7 +101,7 @@ groups:
         execErrState: Alerting
         for: 5m
         annotations:
-          summary: No telemetry has been received from this device for more than 10 minutes.
+          summary: No telemetry has been received from this device for more than 20 minutes.
         labels:
           severity: warning
           category: collection
@@ -129,7 +129,7 @@ groups:
                 SELECT
                   device_id,
                   pod_key,
-                  'pod reading older than 10 minutes' AS reason,
+                  'pod reading older than 20 minutes' AS reason,
                   1::double precision AS value
                 FROM (
                   SELECT
@@ -139,7 +139,7 @@ groups:
                   FROM telemetry_pod_readings_flat
                   GROUP BY device_id, pod_key
                 ) latest
-                WHERE latest_timestamp_utc < now() - interval '10 minutes'
+                WHERE latest_timestamp_utc < now() - interval '20 minutes'
           - refId: B
             datasourceUid: __expr__
             relativeTimeRange:
@@ -171,7 +171,7 @@ groups:
         execErrState: Alerting
         for: 5m
         annotations:
-          summary: A pod has not produced telemetry for more than 10 minutes.
+          summary: A pod has not produced telemetry for more than 20 minutes.
         labels:
           severity: warning
           category: collection
@@ -1317,7 +1317,7 @@ groups:
           - refId: A
             datasourceUid: senior-pomidor-postgres
             relativeTimeRange:
-              from: 900
+              from: 1800
               to: 0
             model:
               datasource:
@@ -1342,10 +1342,10 @@ groups:
                   FROM state_snapshots
                   GROUP BY node_id
                 ) state_latest ON state_latest.node_id = devices.device_id
-                WHERE devices.last_payload_at >= now() - interval '15 minutes'
+                WHERE devices.last_payload_at >= now() - interval '30 minutes'
                   AND (
                     state_latest.latest_state_ts IS NULL
-                    OR state_latest.latest_state_ts < now() - interval '5 minutes'
+                    OR state_latest.latest_state_ts < now() - interval '20 minutes'
                   )
           - refId: B
             datasourceUid: __expr__

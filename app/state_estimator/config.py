@@ -32,9 +32,11 @@ def _estimator_config_from_data(data: dict[str, Any]) -> EstimatorConfig:
     lifecycle = _dict(anomalies.get("lifecycle"))
     return EstimatorConfig(
         timezone=str(data.get("timezone") or EstimatorConfig.timezone),
-        collection_window_seconds=_int(cadence.get("collection_window_seconds"), 90),
-        max_sensor_age_seconds=_int(cadence.get("max_sensor_age_seconds"), 120),
-        max_device_age_seconds=_int(cadence.get("max_device_age_seconds"), 120),
+        sensor_poll_seconds=_int(cadence.get("sensor_poll_seconds"), 600),
+        state_period_seconds=_int(cadence.get("state_period_seconds"), 600),
+        collection_window_seconds=_int(cadence.get("collection_window_seconds"), 900),
+        max_sensor_age_seconds=_int(cadence.get("max_sensor_age_seconds"), 1200),
+        max_device_age_seconds=_int(cadence.get("max_device_age_seconds"), 1200),
         minimum_for_normal_control=_float(confidence.get("minimum_for_normal_control"), 0.65),
         minimum_for_any_autonomy=_float(confidence.get("minimum_for_any_autonomy"), 0.40),
         high_temp_warn_c=_float(anomalies.get("high_temp_warn_c"), 30.0),

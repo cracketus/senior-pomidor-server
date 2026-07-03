@@ -131,8 +131,8 @@ External compatibility check:
 | Canonical schema | Use nested `state_v1.env`, `state_v1.plant`, `state_v1.soil`, `state_v1.devices`, `state_v1.budgets`, `state_v1.quality`. |
 | Legacy flat schema | Supported only through an input/output adapter during migration. It is not canonical. |
 | MVP filtering | Median-of-3 followed by EMA for noisy numeric sensors. No Kalman filter in MVP. |
-| State cadence | Produce private operational `state_v1` every 60 seconds when telemetry is available. |
-| Sensor polling | Default raw polling every 30 seconds. |
+| State cadence | Produce private operational `state_v1` every 10 minutes when new telemetry is available. |
+| Sensor polling | Default raw polling every 10 minutes for slow plant and environment parameters. |
 | Public logging | Public state logs may be downsampled to 30 minutes plus anomalies. |
 | Decision cadence | Downstream control may run every 2 hours plus event-driven anomaly cycles. |
 | Timezone | Store timestamps with timezone. Default project timezone: `Europe/Vienna`. |
@@ -299,10 +299,10 @@ The estimator stores:
 
 Default MVP window:
 
-- `state_period_seconds`: 60
-- `collection_window_seconds`: 90
-- `max_sensor_age_seconds`: 120
-- `max_device_age_seconds`: 120
+- `state_period_seconds`: 600
+- `collection_window_seconds`: 900
+- `max_sensor_age_seconds`: 1200
+- `max_device_age_seconds`: 1200
 - `max_vision_age_seconds`: 7200
 
 At each state tick, the estimator selects the newest valid reading per sensor within the collection window. If no reading exists but a recent reading exists within `max_sensor_age_seconds`, it may be carried forward with freshness penalty.
@@ -317,9 +317,9 @@ Default hints:
 
 | Condition | Sampling Hint |
 |---|---:|
-| `HIGH_VPD`, `HIGH_TEMP`, `LEAF_STRESS` | 5 minutes for 1 hour |
-| `SENSOR_JUMP`, `SENSOR_STALE` | 30 seconds for 15 minutes |
-| `CRITICAL_HEAT`, `DEVICE_DISCONNECTED` | 30 seconds until cleared |
+| `HIGH_VPD`, `HIGH_TEMP`, `LEAF_STRESS` | recommend 120 seconds for 30 minutes |
+| `SENSOR_JUMP`, `SENSOR_STALE` | recommend 120 seconds for 30 minutes |
+| `CRITICAL_HEAT`, `DEVICE_DISCONNECTED` | recommend 60 seconds until cleared |
 
 The scheduler decides how to apply the hint.
 
@@ -1214,11 +1214,11 @@ schema_version: state_estimator_config_v1
 timezone: Europe/Vienna
 
 cadence:
-  sensor_poll_seconds: 30
-  state_period_seconds: 60
-  collection_window_seconds: 90
-  max_sensor_age_seconds: 120
-  max_device_age_seconds: 120
+  sensor_poll_seconds: 600
+  state_period_seconds: 600
+  collection_window_seconds: 900
+  max_sensor_age_seconds: 1200
+  max_device_age_seconds: 1200
   max_vision_age_seconds: 7200
 
 filtering:
@@ -1263,7 +1263,7 @@ MVP requirements for <= 20 configured sensors:
 | Requirement | Target |
 |---|---:|
 | estimator processing time | `<100 ms` per state cycle on Raspberry Pi 3B+ |
-| average CPU | `<5%` at 30s polling and 60s state cadence |
+| average CPU | `<5%` at 10-minute polling and 10-minute state cadence |
 | memory | `<100 MB` resident memory |
 | startup time | `<5 s` excluding dependency initialization |
 | replay throughput | at least `24h` logs in `<60 s` on local server |
@@ -1344,7 +1344,7 @@ Required:
 
 State Estimator MVP is complete when:
 
-1. It produces valid nested `state_v1` every 60 seconds from raw telemetry.
+1. It produces valid nested `state_v1` every 10 minutes from new raw telemetry.
 2. It computes VPD, vapor pressure, dew point, leaf-air delta and soil aggregates.
 3. It produces `sensor_health_v1` with explicit status and confidence per sensor.
 4. It emits `anomaly_v1` for all MVP anomaly rules.
