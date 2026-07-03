@@ -85,6 +85,31 @@ services:
       start_period: 20s
     logging: *default-logging
 
+  state-estimator-worker:
+    build: .
+    command: python -m app.state_estimator_worker
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://senior_pomidor:senior_pomidor@postgres:5432/senior_pomidor}
+      STATE_ESTIMATOR_ENABLED: ${STATE_ESTIMATOR_ENABLED:-true}
+      STATE_ESTIMATOR_TIMEZONE: ${STATE_ESTIMATOR_TIMEZONE:-Europe/Vienna}
+      STATE_ESTIMATOR_PRIVATE_LOG_DIR: /app/data/private
+      WORKER_HEALTH_FILE: /tmp/senior-pomidor-state-estimator-health.json
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+    volumes:
+      - estimator_private_data:/app/data/private
+    healthcheck:
+      test: ["CMD", "python", "-m", "app.worker_healthcheck", "state_estimator_healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    logging: *default-logging
+
   grafana-cloud-exporter:
     build: .
     command: python -m app.grafana_cloud_exporter
@@ -168,5 +193,6 @@ services:
 volumes:
   postgres_data:
   photo_data:
+  estimator_private_data:
   grafana_data:
   mosquitto_data:

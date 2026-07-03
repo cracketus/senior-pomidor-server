@@ -6,6 +6,7 @@ Server implementation for the Senior Pomidor project.
 
 - `api`: FastAPI HTTP server on port `8000`.
 - `worker`: MQTT subscriber for `senior-pomidor/+/telemetry`.
+- `state-estimator-worker`: recurring canonical state, sensor health, anomaly, diagnostic, and private JSONL writer.
 - `postgres`: persistent telemetry/photo metadata storage.
 - `mosquitto`: local MQTT broker exposed on port `1883`.
 - `grafana`: optional local observability UI exposed on port `3000`.
@@ -57,13 +58,14 @@ Compose has safe defaults, so a `.env` file is optional. To customize settings:
 Copy-Item .env.example .env
 ```
 
-Start the services. The one-shot `migrate` service applies Alembic migrations before the API and worker start:
+Start the services. The one-shot `migrate` service applies Alembic migrations before the API, MQTT worker, and state estimator worker start:
 
 ```powershell
 docker compose up -d --build
 ```
 
 The API is available at `http://localhost:8000`, and the MQTT broker listens on `localhost:1883`.
+The state estimator runs continuously in Compose by default. It writes canonical `state_v1` snapshots, sensor health, anomalies, diagnostics, and private JSONL logs under the `estimator_private_data` Docker volume.
 Host port mappings can be changed with `API_PUBLISHED_PORT`, `POSTGRES_PUBLISHED_PORT`, `MQTT_PUBLISHED_PORT`, and `GRAFANA_PUBLISHED_PORT` in `.env`.
 Published API, PostgreSQL, MQTT, and Grafana ports are intended for trusted LAN use only. Do not expose them directly to the public internet; put remote access behind a VPN or a hardened reverse proxy/firewall.
 For appliance-like deployments, set non-default PostgreSQL and Grafana credentials, configure `TELEMETRY_UPLOAD_TOKEN` and `PHOTO_UPLOAD_TOKEN`, and set `API_DOCS_ENABLED=false`.
@@ -77,8 +79,8 @@ docker compose --profile observability up -d grafana
 
 Grafana is available at `http://localhost:3000`. The default local admin credentials are documented in `.env.example` and can be changed in `.env`.
 Grafana uses the dedicated readonly PostgreSQL role from `GRAFANA_DB_USER` and `GRAFANA_DB_PASSWORD`, not the app database credentials.
-The `Senior Pomidor Telemetry` dashboard is provisioned automatically and includes device/pod filters, telemetry panels, latest status, and recent photo metadata links.
-The `Senior Pomidor Alerts` rule group is provisioned automatically and surfaces collection freshness, sensor error, system health, critical dry-soil, and VPD stress alerts in Grafana Alerting. VPD ranges are documented in [docs/VPD_ALERTS.md](docs/VPD_ALERTS.md).
+The `Senior Pomidor Telemetry` dashboard is provisioned automatically and includes device/pod filters, raw telemetry panels, canonical state panels, latest sensor health, active anomalies, latest status, and recent photo metadata links.
+The `Senior Pomidor Alerts` rule group is provisioned automatically and surfaces collection freshness, sensor error, system health, critical dry-soil, raw telemetry VPD, canonical state VPD, state confidence, active anomaly, and stale state alerts in Grafana Alerting. VPD ranges are documented in [docs/VPD_ALERTS.md](docs/VPD_ALERTS.md).
 On a fresh `postgres_data` volume this role is initialized automatically. On an existing volume, re-apply the readonly grants after migrations:
 
 ```powershell
@@ -97,7 +99,7 @@ GRAFANA_CLOUD_API_TOKEN=<metrics-publisher-token>
 docker compose --profile cloud-export up -d grafana-cloud-exporter
 ```
 
-Only low-cardinality plant metrics are exported, using metric names prefixed with `senior_pomidor_` and labels limited to `device_id` and `pod_key`. Photos, raw payload JSON, system health, sensor error text, host/network details, database credentials, file paths, and MQTT topics are not exported. Grafana Cloud is a public read-only projection; PostgreSQL remains the local source of truth.
+Only low-cardinality raw telemetry plant metrics are exported, using metric names prefixed with `senior_pomidor_` and labels limited to `device_id` and `pod_key`. Canonical state estimator metrics are not exported to Grafana Cloud in this iteration. Photos, raw payload JSON, system health, sensor error text, host/network details, database credentials, file paths, and MQTT topics are not exported. Grafana Cloud is a public read-only projection; PostgreSQL remains the local source of truth.
 
 For active API/edge contracts and example requests/responses, see [docs/CONTRACTS.md](docs/CONTRACTS.md).
 For deployment checks, backups, restore, and Raspberry Pi configuration examples, see [docs/OPERATIONS.md](docs/OPERATIONS.md).
@@ -139,6 +141,9 @@ HTTP telemetry ingestion and photo upload remain unauthenticated by default unle
 - `GET /api/v1/devices/{device_id}/photos?from=&to=&limit=`
 - `GET /api/v1/photos/recent?from=&to=&limit=`
 - `GET /api/v1/photos/{photo_id}`
+- `GET /api/v1/state/latest?node_id=`
+- `GET /api/v1/sensor-health/latest?node_id=`
+- `GET /api/v1/anomalies/active?node_id=`
 - `GET /health`
 - `GET /ready`
 - `GET /dashboard`

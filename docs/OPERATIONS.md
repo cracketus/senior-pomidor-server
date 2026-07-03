@@ -5,12 +5,13 @@
 ```text
 Raspberry Pi edge nodes
   |-- MQTT telemetry --> mosquitto --> worker ----.
-  `-- HTTP telemetry/photos --> FastAPI API ------+--> PostgreSQL
+  `-- HTTP telemetry/photos --> FastAPI API ------+--> PostgreSQL <-- state-estimator-worker
+                                                   |                  `--> private JSONL volume
                                                    `--> photo volume
 
 FastAPI API --> /dashboard and /api/v1 read APIs
-PostgreSQL --> Grafana local dashboard and alerts
-PostgreSQL --> optional Grafana Cloud exporter with sanitized low-cardinality metrics
+PostgreSQL --> Grafana local dashboard and alerts using raw telemetry and canonical state
+PostgreSQL --> optional Grafana Cloud exporter with sanitized low-cardinality raw telemetry metrics
 ```
 
 The API, MQTT broker, PostgreSQL port, dashboard, and Grafana UI are intended for trusted LAN use. For any remote access, put the service behind a VPN, firewall allow-list, or reverse proxy with authentication and TLS.
@@ -56,7 +57,7 @@ Before tagging or publishing a server release:
    Override the published host ports with `API_PUBLISHED_PORT`, `MQTT_PUBLISHED_PORT`, `POSTGRES_PUBLISHED_PORT`, and `GRAFANA_PUBLISHED_PORT` in `.env` if any defaults are already in use.
    Treat all published ports as LAN-only. Use a VPN, firewall allow-list, or reverse proxy with authentication/TLS before any remote access.
 
-5. Start the stack. The one-shot `migrate` service applies Alembic migrations before the API and worker start:
+5. Start the stack. The one-shot `migrate` service applies Alembic migrations before the API, MQTT worker, and state estimator worker start:
 
    ```powershell
    docker compose up -d --build
@@ -71,6 +72,7 @@ Before tagging or publishing a server release:
    docker compose ps
    docker compose logs --tail 100 api
    docker compose logs --tail 100 worker
+   docker compose logs --tail 100 state-estimator-worker
    docker compose ps migrate
    ```
 
@@ -80,6 +82,18 @@ Before tagging or publishing a server release:
 
    ```powershell
    docker compose up -d --build --force-recreate
+   ```
+
+   Normal state estimator operation is worker-driven. The `GET /api/v1/state/latest` endpoint can still lazily create a snapshot for compatibility, but the Compose service should continuously refresh canonical state during normal operation.
+
+   Verify state estimator health and outputs:
+
+   ```powershell
+   docker compose ps state-estimator-worker
+   docker compose exec -T postgres psql -U senior_pomidor senior_pomidor -c "SELECT node_id, ts, payload_jsonb #>> '{quality,level}' AS quality_level, payload_jsonb #>> '{env,vpd_kpa}' AS vpd_kpa FROM state_snapshots ORDER BY ts DESC LIMIT 5;"
+   docker compose exec -T postgres psql -U senior_pomidor senior_pomidor -c "SELECT node_id, ts, payload_jsonb ->> 'overall_status' AS overall_status FROM sensor_health_snapshots ORDER BY ts DESC LIMIT 5;"
+   docker compose exec -T postgres psql -U senior_pomidor senior_pomidor -c "SELECT node_id, type, severity, status, ts FROM anomaly_records ORDER BY ts DESC LIMIT 10;"
+   docker compose exec -T state-estimator-worker sh -c "find /app/data/private -maxdepth 1 -type f -name '*.jsonl' -print"
    ```
 
 7. Open the read-only dashboard:
@@ -97,6 +111,7 @@ Before tagging or publishing a server release:
    Grafana is available at `http://localhost:3000`. Default local admin credentials are defined by `GRAFANA_ADMIN_USER` and `GRAFANA_ADMIN_PASSWORD` in `.env.example`.
    Its PostgreSQL datasource uses `GRAFANA_DB_USER` and `GRAFANA_DB_PASSWORD`, which default to the readonly `grafana_reader` role.
    The `Senior Pomidor Alerts` rule group is provisioned in Grafana Alerting. This first version is Grafana-only and does not configure external email or webhook notifications.
+   Confirm the dashboard includes the raw telemetry panels plus `Latest State Summary`, `Canonical Env VPD`, `State Confidence`, `Average Soil Moisture`, `Latest Sensor Health Summary`, and `Active Anomalies`.
 
 9. If the PostgreSQL volume already existed before Grafana DB access was configured, re-apply the readonly role and grants after migrations:
 
@@ -112,6 +127,10 @@ Before tagging or publishing a server release:
    docker compose exec -T postgres psql "postgresql://grafana_reader:grafana_reader@localhost:5432/senior_pomidor" -c "SELECT count(*) FROM pod_readings;"
    docker compose exec -T postgres psql "postgresql://grafana_reader:grafana_reader@localhost:5432/senior_pomidor" -c "SELECT count(*) FROM pod_errors;"
    docker compose exec -T postgres psql "postgresql://grafana_reader:grafana_reader@localhost:5432/senior_pomidor" -c "SELECT count(*) FROM photos;"
+   docker compose exec -T postgres psql "postgresql://grafana_reader:grafana_reader@localhost:5432/senior_pomidor" -c "SELECT count(*) FROM state_snapshots;"
+   docker compose exec -T postgres psql "postgresql://grafana_reader:grafana_reader@localhost:5432/senior_pomidor" -c "SELECT count(*) FROM sensor_health_snapshots;"
+   docker compose exec -T postgres psql "postgresql://grafana_reader:grafana_reader@localhost:5432/senior_pomidor" -c "SELECT count(*) FROM anomaly_records;"
+   docker compose exec -T postgres psql "postgresql://grafana_reader:grafana_reader@localhost:5432/senior_pomidor" -c "SELECT count(*) FROM estimator_diagnostics;"
    ```
 
    Verify the Grafana user cannot mutate tables:
@@ -311,7 +330,11 @@ The default alert set covers:
 - system health probe errors when `system_health_jsonb.errors` appears in the last 15 minutes
 - edge network failures for missing Wi-Fi profiles, disconnected Wi-Fi, failed internet reachability, and non-zero recovery exit code
 - critical dry soil when an enabled pod's latest soil moisture stays below 10% for 30 minutes
-- VPD warning, stress, critical, and emergency ranges for enabled pods using `air_vpd_kpa`
+- legacy raw telemetry VPD warning, stress, critical, and emergency ranges for enabled pods using `telemetry_pod_readings_flat.air_vpd_kpa`
+- canonical state VPD guardrail and critical alerts using `state_snapshots.payload_jsonb #>> '{env,vpd_kpa}'`
+- low canonical state confidence using `state_snapshots.payload_jsonb #>> '{quality,state_confidence}'`
+- active high or critical state estimator anomalies from `anomaly_records`
+- stale or missing state snapshots when telemetry is current
 
 VPD threshold ranges and operational interpretation are documented in [VPD_ALERTS.md](VPD_ALERTS.md).
 
@@ -323,6 +346,9 @@ Invoke-RestMethod http://localhost:8000/api/v1/devices/latest
 Invoke-RestMethod "http://localhost:8000/api/v1/devices/pi-001/telemetry?since_hours=24&limit=100"
 Invoke-RestMethod "http://localhost:8000/api/v1/devices/pi-001/photos?limit=25"
 Invoke-RestMethod "http://localhost:8000/api/v1/photos/recent?limit=12"
+Invoke-RestMethod "http://localhost:8000/api/v1/state/latest?node_id=pi-001"
+Invoke-RestMethod "http://localhost:8000/api/v1/sensor-health/latest?node_id=pi-001"
+Invoke-RestMethod "http://localhost:8000/api/v1/anomalies/active?node_id=pi-001"
 ```
 
 ## Offline AI Analysis Prototype
