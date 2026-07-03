@@ -1,0 +1,40 @@
+schema_version: state_estimator_config_v1
+timezone: Europe/Vienna
+
+cadence:
+  sensor_poll_seconds: 30
+  state_period_seconds: 60
+  collection_window_seconds: 90
+  max_sensor_age_seconds: 120
+  max_device_age_seconds: 120
+  max_vision_age_seconds: 7200
+
+filtering:
+  default_filter: median3_ema
+  alpha:
+    air_temp_c: 0.30
+    rh_pct: 0.35
+    co2_ppm: 0.40
+    soil_moisture_pct: 0.20
+    soil_temp_c: 0.20
+    leaf_temp_c: 0.40
+    lux: 0.50
+
+confidence:
+  minimum_for_normal_control: 0.65
+  minimum_for_any_autonomy: 0.40
+
+anomalies:
+  high_temp_warn_c: 30.0
+  critical_heat_c: 32.0
+  low_temp_warn_c: 15.0
+  critical_cold_c: 12.0
+  high_rh_pct: 85.0
+  saturation_rh_pct: 98.0
+  high_vpd_kpa: 1.6
+  low_vpd_kpa: 0.5
+  leaf_air_delta_abs_c: 3.0
+
+soil:
+  minimum_valid_probes: 1
+  prefer_two_zone_model: true
