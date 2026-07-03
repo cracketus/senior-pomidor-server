@@ -174,20 +174,27 @@ def compose_service_container_id(service: str) -> str:
 
 def assert_container_healthy(service: str) -> None:
     container_id = compose_service_container_id(service)
-    result = subprocess.run(
-        ["docker", "inspect", "--format", "{{json .State.Health}}", container_id],
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        capture_output=True,
-        check=True,
-    )
-    health = json.loads(result.stdout)
+    deadline = time.monotonic() + 60
+    health = None
+    while time.monotonic() < deadline:
+        result = subprocess.run(
+            ["docker", "inspect", "--format", "{{json .State.Health}}", container_id],
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            capture_output=True,
+            check=True,
+        )
+        health = json.loads(result.stdout)
+        if health["Status"] == "healthy":
+            return
+        time.sleep(1)
+    assert health is not None
     assert health["Status"] == "healthy", f"{service} health was {health}"
 
 
 def assert_migration_completed() -> None:
-    result = compose("ps", "-q", "migrate")
+    result = compose("ps", "-a", "-q", "migrate")
     container_id = result.stdout.strip()
     assert container_id, "migrate container id not found"
     inspect = subprocess.run(
@@ -205,7 +212,11 @@ def assert_mosquitto_named_volume() -> None:
     result = compose("config", "--format", "json")
     config = json.loads(result.stdout)
     mosquitto_volumes = config["services"]["mosquitto"]["volumes"]
-    assert any(volume["source"] == f"{PROJECT_NAME}_mosquitto_data" for volume in mosquitto_volumes)
+    assert any(
+        volume["type"] == "volume" and volume["source"] == "mosquitto_data" and volume["target"] == "/mosquitto/data"
+        for volume in mosquitto_volumes
+    )
+    assert config["volumes"]["mosquitto_data"]["name"] == f"{PROJECT_NAME}_mosquitto_data"
 
 
 def telemetry_payload() -> dict:
@@ -245,6 +256,9 @@ def test_docker_compose_stack_ingests_and_serves_data():
         assert_mosquitto_named_volume()
 
         with httpx.Client(base_url=BASE_URL, timeout=10) as client:
+            health = client.get("/health")
+            assert health.status_code == 200
+
             telemetry = client.post("/api/v1/edge/telemetry", json=telemetry_payload())
             assert telemetry.status_code == 202
 
