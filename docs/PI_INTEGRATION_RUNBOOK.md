@@ -40,6 +40,8 @@ curl http://192.168.1.50:8000/health
 curl http://192.168.1.50:8000/ready
 ```
 
+Use a normal telemetry interval of 10 minutes for slow plant and environment readings. Faster sampling is advisory only: the server may recommend 120 seconds for 30 minutes during anomaly watch conditions, or 60 seconds until cleared for critical heat or device-disconnected conditions.
+
 ## 4. MQTT Telemetry Publish Test
 
 From the Pi:
@@ -98,5 +100,8 @@ curl http://192.168.1.50:8000/api/v1/devices
 curl http://192.168.1.50:8000/api/v1/devices/latest
 curl 'http://192.168.1.50:8000/api/v1/devices/pi-001/telemetry?limit=10'
 curl 'http://192.168.1.50:8000/api/v1/devices/pi-001/photos?limit=10'
+curl 'http://192.168.1.50:8000/api/v1/guardrails/latest?node_id=pi-001'
+curl 'http://192.168.1.50:8000/api/v1/action-simulations/latest?node_id=pi-001'
+curl 'http://192.168.1.50:8000/api/v1/action-simulations/range?node_id=pi-001&limit=10'
 curl http://192.168.1.50:8000/api/v1/photos/pi-001-test-photo --output downloaded-test.jpg
 ```

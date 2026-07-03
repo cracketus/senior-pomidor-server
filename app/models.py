@@ -130,3 +130,14 @@ class EstimatorDiagnostic(Base):
     ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     state_id: Mapped[str | None] = mapped_column(String(256), index=True)
     payload_jsonb: Mapped[dict] = mapped_column(JSON_TYPE, nullable=False)
+
+
+class ActionSimulation(Base):
+    __tablename__ = "action_simulations"
+
+    simulation_id: Mapped[str] = mapped_column(String(256), primary_key=True)
+    node_id: Mapped[str] = mapped_column(String(128), index=True)
+    ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    state_id: Mapped[str | None] = mapped_column(String(256), index=True)
+    decision: Mapped[str] = mapped_column(String(64), index=True)
+    payload_jsonb: Mapped[dict] = mapped_column(JSON_TYPE, nullable=False)

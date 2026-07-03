@@ -4,7 +4,7 @@ from sqlalchemy.pool import StaticPool
 
 from app import state_estimator_worker
 from app.config import settings
-from app.models import AnomalyRecord, Base, EstimatorDiagnostic, SensorHealthSnapshot, StateSnapshot
+from app.models import ActionSimulation, AnomalyRecord, Base, EstimatorDiagnostic, SensorHealthSnapshot, StateSnapshot
 from app.services import persist_telemetry
 from app.validation import TELEMETRY_SCHEMA
 
@@ -75,12 +75,37 @@ soil:
             assert db.scalar(select(func.count()).select_from(SensorHealthSnapshot)) == 1
             assert db.scalar(select(func.count()).select_from(AnomalyRecord)) >= 1
             assert db.scalar(select(func.count()).select_from(EstimatorDiagnostic)) == 1
+            assert db.scalar(select(func.count()).select_from(ActionSimulation)) == 1
             snapshot = db.scalar(select(StateSnapshot))
             assert snapshot.payload_jsonb["soil"]["probes"][0]["dry_threshold_pct"] == 50.0
 
         assert (private_log_dir / "states_2026-07.jsonl").is_file()
         assert (private_log_dir / "sensor_health_2026-07.jsonl").is_file()
         assert (private_log_dir / "anomalies_2026-07.jsonl").is_file()
+        assert (private_log_dir / "action_simulations_2026-07.jsonl").is_file()
         assert (private_log_dir / "estimator_diagnostics_2026-07-02.jsonl").is_file()
+    finally:
+        dispose_session_factory(TestingSessionLocal)
+
+
+def test_state_estimator_worker_skips_duplicate_snapshot_for_unchanged_telemetry(monkeypatch, tmp_path) -> None:
+    TestingSessionLocal = session_factory()
+    private_log_dir = tmp_path / "private"
+    try:
+        monkeypatch.setattr(state_estimator_worker, "SessionLocal", TestingSessionLocal)
+        monkeypatch.setattr(settings, "state_estimator_timezone", "Europe/Vienna")
+        monkeypatch.setattr(settings, "state_estimator_private_log_dir", str(private_log_dir))
+
+        with TestingSessionLocal() as db:
+            persist_telemetry(db, telemetry_payload(), source="http")
+
+        assert state_estimator_worker.run_once() == 1
+        assert state_estimator_worker.run_once() == 1
+
+        with TestingSessionLocal() as db:
+            assert db.scalar(select(func.count()).select_from(StateSnapshot)) == 1
+            assert db.scalar(select(func.count()).select_from(ActionSimulation)) == 1
+
+        assert (private_log_dir / "states_2026-07.jsonl").read_text(encoding="utf-8").count("\n") == 1
     finally:
         dispose_session_factory(TestingSessionLocal)

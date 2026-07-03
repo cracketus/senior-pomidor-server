@@ -7,9 +7,17 @@ from typing import Any
 from sqlalchemy import desc, select
 from sqlalchemy.orm import Session, selectinload
 
-from app.models import AnomalyRecord, EstimatorDiagnostic, SensorHealthSnapshot, StateSnapshot, TelemetryEvent
+from app.models import (
+    ActionSimulation,
+    AnomalyRecord,
+    EstimatorDiagnostic,
+    SensorHealthSnapshot,
+    StateSnapshot,
+    TelemetryEvent,
+)
 from app.state_estimator.adapters import observations_from_event
 from app.state_estimator.config import load_estimator_runtime
+from app.state_estimator.decisions import build_action_simulation, build_guardrails
 from app.state_estimator.estimator import estimate_state
 from app.state_estimator.logging import append_jsonl, daily_name, monthly_name
 from app.state_estimator.models import EstimatorContext, EstimatorHistory, EstimatorResult
@@ -76,10 +84,35 @@ def persist_estimator_result(db: Session, result: EstimatorResult, *, private_lo
             payload_jsonb=result.diagnostics,
         )
     )
+    active_anomalies = [item for item in current_anomalies if item.get("status") == "ACTIVE"]
+    guardrails = build_guardrails(
+        node_id=result.state["node_id"],
+        state=result.state,
+        sensor_health=result.sensor_health,
+        active_anomalies=active_anomalies,
+        now=generated_at,
+    )
+    simulation = build_action_simulation(
+        node_id=result.state["node_id"],
+        guardrails=guardrails,
+        state=result.state,
+        active_anomalies=active_anomalies,
+        now=generated_at,
+    )
+    db.merge(
+        ActionSimulation(
+            simulation_id=simulation["simulation_id"],
+            node_id=simulation["node_id"],
+            ts=parse_state_ts(simulation["generated_ts"]),
+            state_id=simulation.get("state_id"),
+            decision=simulation["decision"],
+            payload_jsonb=simulation,
+        )
+    )
     db.commit()
     if private_log_dir:
         try:
-            append_estimator_logs(private_log_dir, result, state_ts, anomalies=current_anomalies)
+            append_estimator_logs(private_log_dir, result, state_ts, anomalies=current_anomalies, simulation=simulation)
         except OSError:
             logger.exception("Failed to append state estimator JSONL logs")
 
@@ -90,12 +123,15 @@ def append_estimator_logs(
     state_ts: datetime,
     *,
     anomalies: list[dict[str, Any]] | None = None,
+    simulation: dict[str, Any] | None = None,
 ) -> None:
     append_jsonl(private_log_dir, monthly_name("states", state_ts), result.state)
     append_jsonl(private_log_dir, monthly_name("sensor_health", state_ts), result.sensor_health)
     append_jsonl(private_log_dir, daily_name("estimator_diagnostics", state_ts), result.diagnostics)
     for item in anomalies if anomalies is not None else result.anomalies:
         append_jsonl(private_log_dir, monthly_name("anomalies", state_ts), item)
+    if simulation is not None:
+        append_jsonl(private_log_dir, monthly_name("action_simulations", state_ts), simulation)
 
 
 def dedupe_and_clear_anomalies(
@@ -180,7 +216,13 @@ def estimate_latest_from_telemetry(
     )
     if latest is None:
         return None
-    since = latest.timestamp_utc - timedelta(minutes=5)
+    latest_snapshot_ts = db.scalar(
+        select(StateSnapshot.ts).where(StateSnapshot.node_id == node_id).order_by(desc(StateSnapshot.ts)).limit(1)
+    )
+    if latest_snapshot_ts is not None and latest_snapshot_ts >= latest.timestamp_utc:
+        return None
+    config, calibration = load_estimator_runtime(config_path, timezone=timezone)
+    since = latest.timestamp_utc - timedelta(seconds=config.collection_window_seconds)
     events = db.scalars(
         select(TelemetryEvent)
         .options(selectinload(TelemetryEvent.readings), selectinload(TelemetryEvent.errors))
@@ -188,7 +230,6 @@ def estimate_latest_from_telemetry(
         .order_by(TelemetryEvent.timestamp_utc)
     ).all()
     observations = [observation for event in events for observation in observations_from_event(event)]
-    config, calibration = load_estimator_runtime(config_path, timezone=timezone)
     result = estimate_state(
         observations,
         context=EstimatorContext(node_id=node_id, timezone=timezone),

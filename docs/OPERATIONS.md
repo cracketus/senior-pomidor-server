@@ -329,8 +329,8 @@ http://localhost:3000/alerting/list
 
 The default alert set covers:
 
-- device telemetry stale when `devices.last_payload_at` is older than 10 minutes for 5 minutes
-- pod telemetry stale when the latest pod reading is older than 10 minutes for 5 minutes
+- device telemetry stale when `devices.last_payload_at` is older than 20 minutes for 5 minutes
+- pod telemetry stale when the latest pod reading is older than 20 minutes for 5 minutes
 - pod sensor errors when any pod reports errors in the last 15 minutes
 - system health threshold crossings for CPU temperature, Wi-Fi RSSI, disk usage, I/O wait, pod bus voltage, and pod bus current
 - system health probe errors when `system_health_jsonb.errors` appears in the last 15 minutes

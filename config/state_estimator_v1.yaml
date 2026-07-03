@@ -2,11 +2,11 @@ schema_version: state_estimator_config_v1
 timezone: Europe/Vienna
 
 cadence:
-  sensor_poll_seconds: 30
-  state_period_seconds: 60
-  collection_window_seconds: 90
-  max_sensor_age_seconds: 120
-  max_device_age_seconds: 120
+  sensor_poll_seconds: 600
+  state_period_seconds: 600
+  collection_window_seconds: 900
+  max_sensor_age_seconds: 1200
+  max_device_age_seconds: 1200
   max_vision_age_seconds: 7200
 
 filtering:

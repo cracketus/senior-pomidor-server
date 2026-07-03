@@ -70,6 +70,10 @@ def test_grafana_dashboard_json_covers_issue_15_acceptance_criteria():
         "Average Soil Moisture",
         "Latest Sensor Health Summary",
         "Active Anomalies",
+        "Latest Guardrail Status",
+        "Simulated Actions Over Time",
+        "Blocked Actions By Reason",
+        "Sampling Recommendations",
     }.issubset(panel_titles)
 
     for metric in (
@@ -88,9 +92,12 @@ def test_grafana_dashboard_json_covers_issue_15_acceptance_criteria():
         "state_snapshots",
         "sensor_health_snapshots",
         "anomaly_records",
+        "action_simulations",
         "payload_jsonb #>> '{env,vpd_kpa}'",
         "payload_jsonb #>> '{quality,state_confidence}'",
         "payload_jsonb #>> '{soil,avg_moisture_pct}'",
+        "payload_jsonb #>> '{guardrails,level}'",
+        "payload_jsonb #>> '{sampling_recommendation,recommended_poll_seconds}'",
     ):
         assert metric in queries
 
@@ -158,6 +165,7 @@ def test_grafana_alerting_provisioning_covers_collection_and_health_alerts():
 
     for threshold in (
         "interval '10 minutes'",
+        "interval '20 minutes'",
         "interval '15 minutes'",
         "for: 5m",
         "for: 30m",
@@ -199,6 +207,6 @@ def test_grafana_alerting_provisioning_covers_collection_and_health_alerts():
         "payload_jsonb #>> '{env,vpd_kpa}'",
         "payload_jsonb #>> '{quality,state_confidence}'",
         "status = 'ACTIVE'",
-        "latest_state_ts < now() - interval '5 minutes'",
+        "latest_state_ts < now() - interval '20 minutes'",
     ):
         assert threshold in alerts

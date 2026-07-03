@@ -1559,6 +1559,254 @@
       ],
       "title": "Active Anomalies",
       "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "senior-pomidor-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "pluginVersion": "11.0.0",
+      "type": "table",
+      "id": 19,
+      "title": "Latest Guardrail Status",
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 61
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "senior-pomidor-postgres"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  ts AS time,\n  node_id,\n  payload_jsonb #>> '{guardrails,level}' AS guardrail_level,\n  payload_jsonb #>> '{guardrails,allowed}' AS allowed,\n  payload_jsonb #> '{guardrails,blocking_reasons}' AS blocking_reasons,\n  payload_jsonb #> '{guardrails,caution_reasons}' AS caution_reasons,\n  decision\nFROM (\n  SELECT DISTINCT ON (node_id)\n    node_id,\n    ts,\n    decision,\n    payload_jsonb\n  FROM action_simulations\n  WHERE $__timeFilter(ts)\n    AND ('${device_id:csv}' = 'All' OR node_id IN (${device_id:sqlstring}))\n  ORDER BY node_id, ts DESC\n) latest\nORDER BY node_id",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "senior-pomidor-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "pluginVersion": "11.0.0",
+      "type": "table",
+      "id": 20,
+      "title": "Simulated Actions Over Time",
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 61
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "senior-pomidor-postgres"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  ts AS time,\n  node_id,\n  decision,\n  state_id,\n  payload_jsonb #> '{reasons}' AS reasons\nFROM action_simulations\nWHERE $__timeFilter(ts)\n  AND ('${device_id:csv}' = 'All' OR node_id IN (${device_id:sqlstring}))\nORDER BY ts DESC",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "senior-pomidor-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "pluginVersion": "11.0.0",
+      "type": "table",
+      "id": 21,
+      "title": "Blocked Actions By Reason",
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 68
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "senior-pomidor-postgres"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  ts AS time,\n  node_id,\n  reason #>> '{}' AS blocking_reason,\n  count(*)::double precision AS value\nFROM action_simulations\nCROSS JOIN LATERAL jsonb_array_elements(coalesce(payload_jsonb #> '{guardrails,blocking_reasons}', '[]'::jsonb)) AS reason\nWHERE $__timeFilter(ts)\n  AND decision = 'BLOCKED_BY_GUARDRAIL'\n  AND ('${device_id:csv}' = 'All' OR node_id IN (${device_id:sqlstring}))\nGROUP BY ts, node_id, blocking_reason\nORDER BY ts DESC",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "senior-pomidor-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "pluginVersion": "11.0.0",
+      "type": "table",
+      "id": 22,
+      "title": "Sampling Recommendations",
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 68
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "senior-pomidor-postgres"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  ts AS time,\n  node_id,\n  decision,\n  nullif(payload_jsonb #>> '{sampling_recommendation,recommended_poll_seconds}', '')::double precision AS recommended_poll_seconds,\n  payload_jsonb #>> '{sampling_recommendation,until_ts}' AS until_ts,\n  payload_jsonb #>> '{sampling_recommendation,advisory_only}' AS advisory_only\nFROM action_simulations\nWHERE $__timeFilter(ts)\n  AND ('${device_id:csv}' = 'All' OR node_id IN (${device_id:sqlstring}))\nORDER BY ts DESC",
+          "refId": "A"
+        }
+      ]
     }
   ],
   "refresh": "30s",
@@ -1623,6 +1871,6 @@
   "timezone": "browser",
   "title": "Senior Pomidor Telemetry",
   "uid": "senior-pomidor-telemetry",
-  "version": 2,
+  "version": 3,
   "weekStart": ""
 }

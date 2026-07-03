@@ -91,6 +91,32 @@ def test_sensor_health_and_active_anomalies_read_persisted_outputs(client) -> No
     assert "CRITICAL_HEAT" in {item["type"] for item in anomalies.json()}
 
 
+def test_guardrails_and_action_simulation_read_apis(client) -> None:
+    payload = telemetry_payload()
+    payload["pods"]["pod-1"]["air_temperature_c"] = 33.0
+    payload["pods"]["pod-1"]["air_humidity_percent"] = 35.0
+    assert client.post("/api/v1/edge/telemetry", json=payload).status_code == 202
+    assert client.get("/api/v1/state/latest?node_id=pi-001").status_code == 200
+
+    guardrails = client.get("/api/v1/guardrails/latest?node_id=pi-001")
+    assert guardrails.status_code == 200
+    assert guardrails.json()["schema_version"] == "guardrails_v1"
+    assert guardrails.json()["allowed"] is False
+    assert guardrails.json()["blocking_reasons"]
+
+    latest = client.get("/api/v1/action-simulations/latest?node_id=pi-001")
+    assert latest.status_code == 200
+    body = latest.json()
+    assert body["schema_version"] == "action_simulation_v1"
+    assert body["decision"] == "BLOCKED_BY_GUARDRAIL"
+    assert body["actuation"]["physical_actuation"] is False
+    assert body["actuation"]["watering_proposed"] is False
+
+    history = client.get("/api/v1/action-simulations/range?node_id=pi-001&limit=10")
+    assert history.status_code == 200
+    assert history.json()[0]["simulation_id"] == body["simulation_id"]
+
+
 def test_replay_endpoint_is_disabled_by_default(client) -> None:
     response = client.post("/api/v1/state-estimator/replay", json={"observations": []})
     assert response.status_code == 404
