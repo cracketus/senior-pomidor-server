@@ -1,6 +1,6 @@
 # Changelog
 
-## server-v0.1.0 - 2026-07-02
+## server-v0.1.0 - 2026-07-03
 
 First public server-side release for the Senior Pomidor open embodied AI tomato-growing project.
 
