@@ -88,3 +88,45 @@ class Photo(Base):
     storage_path: Mapped[str] = mapped_column(String(512), nullable=False)
     sha256: Mapped[str] = mapped_column(String(64), nullable=False)
     received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class StateSnapshot(Base):
+    __tablename__ = "state_snapshots"
+
+    state_id: Mapped[str] = mapped_column(String(256), primary_key=True)
+    node_id: Mapped[str] = mapped_column(String(128), index=True)
+    ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    payload_jsonb: Mapped[dict] = mapped_column(JSON_TYPE, nullable=False)
+    generated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class SensorHealthSnapshot(Base):
+    __tablename__ = "sensor_health_snapshots"
+
+    health_id: Mapped[str] = mapped_column(String(256), primary_key=True)
+    node_id: Mapped[str] = mapped_column(String(128), index=True)
+    ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    payload_jsonb: Mapped[dict] = mapped_column(JSON_TYPE, nullable=False)
+
+
+class AnomalyRecord(Base):
+    __tablename__ = "anomaly_records"
+
+    anomaly_id: Mapped[str] = mapped_column(String(256), primary_key=True)
+    node_id: Mapped[str] = mapped_column(String(128), index=True)
+    type: Mapped[str] = mapped_column(String(128), index=True)
+    status: Mapped[str] = mapped_column(String(32), index=True)
+    severity: Mapped[str] = mapped_column(String(32), nullable=False)
+    ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    state_id: Mapped[str | None] = mapped_column(String(256), index=True)
+    payload_jsonb: Mapped[dict] = mapped_column(JSON_TYPE, nullable=False)
+
+
+class EstimatorDiagnostic(Base):
+    __tablename__ = "estimator_diagnostics"
+
+    diagnostic_id: Mapped[str] = mapped_column(String(256), primary_key=True)
+    node_id: Mapped[str] = mapped_column(String(128), index=True)
+    ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    state_id: Mapped[str | None] = mapped_column(String(256), index=True)
+    payload_jsonb: Mapped[dict] = mapped_column(JSON_TYPE, nullable=False)

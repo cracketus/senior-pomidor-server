@@ -176,6 +176,10 @@ Implemented read endpoints:
 - `GET /api/v1/devices/latest`
 - `GET /api/v1/devices/{device_id}/latest`
 - `GET /api/v1/devices/{device_id}/telemetry?from=&to=&since_hours=&pod=&limit=`
+- `GET /api/v1/state/latest?node_id=`
+- `GET /api/v1/state/range?node_id=&from=&to=&limit=`
+- `GET /api/v1/sensor-health/latest?node_id=`
+- `GET /api/v1/anomalies/active?node_id=`
 - `GET /api/v1/devices/{device_id}/photos?from=&to=&limit=`
 - `GET /api/v1/photos/recent?from=&to=&limit=`
 - `GET /api/v1/photos/{photo_id}`
@@ -245,14 +249,37 @@ Invoke-RestMethod "http://localhost:8000/api/v1/devices/pi-001/telemetry?since_h
 
 History responses are arrays of the same event shape used by the latest telemetry endpoint.
 
+## State Estimator v1
+
+The server implements `state_v1`, `sensor_health_v1`, `anomaly_v1`, and estimator diagnostics from current telemetry v1/v2 rows. Edge nodes do not need to send `raw_observation_v1` yet; existing pod metrics are adapted internally:
+
+- `air_temperature_c` and `air_humidity_percent` become `state_v1.env.air_temp_c` and `state_v1.env.rh_pct`
+- `soil_moisture_percent` becomes `state_v1.soil.probes[].moisture_pct`
+- `soil_temperature_c` becomes `state_v1.soil.temp_c`
+- `light_lux` becomes `state_v1.env.lux`
+- `leaf_temp_c` becomes `state_v1.plant.leaf_temp_c`
+
+Incoming legacy `air_vpd_kpa` and `leaf_vpd_kpa` remain telemetry diagnostics only; canonical VPD values are recomputed by the estimator.
+
+State snapshots are persisted in `state_snapshots`, sensor health in `sensor_health_snapshots`, active/cleared anomaly records in `anomaly_records`, and diagnostics in `estimator_diagnostics`. Private JSONL logs are appended under `STATE_ESTIMATOR_PRIVATE_LOG_DIR` when snapshots are generated.
+
+The local replay endpoint is disabled by default:
+
+```text
+POST /api/v1/state-estimator/replay
+```
+
+Set `STATE_ESTIMATOR_REPLAY_ENABLED=true` to enable it for local deterministic replay inputs.
+
 ## Operational Boundaries
 
 Current capabilities include telemetry v1/v2 ingestion, MQTT ingestion, HTTP fallback ingestion, photo upload/list/download, local dashboard, Grafana/PostgreSQL observability, Grafana Cloud public metrics export, public status JSON, and offline AI analysis.
+Current capabilities also include `state_v1`, `sensor_health_v1`, `anomaly_v1`, and private estimator JSONL logs.
 
 Deferred or out of scope for the active contract:
 
 - physical actuation, GPIO control, pump/fan/shade/fertilizer commands
-- prototype-only `state_v1`, `action_v1`, `anomaly_v1`, `forecast_36h_v1`, `targets_v1`, and `sampling_plan_v1`
+- prototype-only `action_v1`, `forecast_36h_v1`, `targets_v1`, and `sampling_plan_v1`
 - weather-adapted targets or control-loop scheduling
 - public dataset publishing APIs
 
