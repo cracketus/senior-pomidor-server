@@ -1,5 +1,43 @@
 apiVersion: 1
 
+deleteRules:
+  - orgId: 1
+    uid: sp_device_telemetry_stale
+  - orgId: 1
+    uid: sp_pod_telemetry_stale
+  - orgId: 1
+    uid: sp_pod_sensor_errors
+  - orgId: 1
+    uid: sp_system_health_threshold
+  - orgId: 1
+    uid: sp_system_probe_errors
+  - orgId: 1
+    uid: sp_critical_dry_soil
+  - orgId: 1
+    uid: sp_vpd_too_low
+  - orgId: 1
+    uid: sp_vpd_condensation_risk
+  - orgId: 1
+    uid: sp_vpd_high
+  - orgId: 1
+    uid: sp_vpd_stress
+  - orgId: 1
+    uid: sp_vpd_critical
+  - orgId: 1
+    uid: sp_vpd_emergency
+  - orgId: 1
+    uid: sp_edge_network_health_failures
+  - orgId: 1
+    uid: sp_state_vpd_guardrail
+  - orgId: 1
+    uid: sp_state_vpd_critical
+  - orgId: 1
+    uid: sp_state_confidence_low
+  - orgId: 1
+    uid: sp_active_high_or_critical_anomaly
+  - orgId: 1
+    uid: sp_state_snapshot_stale
+
 groups:
   - orgId: 1
     name: Senior Pomidor Alerts
@@ -986,3 +1024,361 @@ groups:
         labels:
           severity: warning
           category: network
+
+      - uid: sp_state_vpd_guardrail
+        title: State VPD guardrail crossed
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: senior-pomidor-postgres
+            relativeTimeRange:
+              from: 600
+              to: 0
+            model:
+              datasource:
+                type: postgres
+                uid: senior-pomidor-postgres
+              editorMode: code
+              format: table
+              intervalMs: 1000
+              maxDataPoints: 43200
+              rawQuery: true
+              refId: A
+              rawSql: |
+                SELECT
+                  node_id,
+                  nullif(payload_jsonb #>> '{env,vpd_kpa}', '')::double precision AS observed,
+                  'canonical state env.vpd_kpa outside 0.5-1.6 kPa' AS threshold,
+                  1::double precision AS value
+                FROM (
+                  SELECT DISTINCT ON (node_id)
+                    node_id,
+                    ts,
+                    payload_jsonb
+                  FROM state_snapshots
+                  WHERE ts >= now() - interval '10 minutes'
+                    AND payload_jsonb #>> '{env,vpd_kpa}' IS NOT NULL
+                  ORDER BY node_id, ts DESC
+                ) latest
+                WHERE nullif(payload_jsonb #>> '{env,vpd_kpa}', '')::double precision < 0.5
+                   OR nullif(payload_jsonb #>> '{env,vpd_kpa}', '')::double precision > 1.6
+          - refId: B
+            datasourceUid: __expr__
+            relativeTimeRange:
+              from: 0
+              to: 0
+            model:
+              conditions:
+                - evaluator:
+                    params: [0]
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: B
+              type: threshold
+        dashboardUid: senior-pomidor-telemetry
+        noDataState: OK
+        execErrState: Alerting
+        for: 10m
+        annotations:
+          summary: Canonical state VPD crossed the plant guardrail range.
+          description: Uses state_snapshots.payload_jsonb env.vpd_kpa, not raw telemetry air_vpd_kpa.
+        labels:
+          severity: alert
+          category: plant
+
+      - uid: sp_state_vpd_critical
+        title: State VPD critical
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: senior-pomidor-postgres
+            relativeTimeRange:
+              from: 180
+              to: 0
+            model:
+              datasource:
+                type: postgres
+                uid: senior-pomidor-postgres
+              editorMode: code
+              format: table
+              intervalMs: 1000
+              maxDataPoints: 43200
+              rawQuery: true
+              refId: A
+              rawSql: |
+                SELECT
+                  node_id,
+                  nullif(payload_jsonb #>> '{env,vpd_kpa}', '')::double precision AS observed,
+                  'canonical state env.vpd_kpa > 2.5 kPa' AS threshold,
+                  1::double precision AS value
+                FROM (
+                  SELECT DISTINCT ON (node_id)
+                    node_id,
+                    ts,
+                    payload_jsonb
+                  FROM state_snapshots
+                  WHERE ts >= now() - interval '3 minutes'
+                    AND payload_jsonb #>> '{env,vpd_kpa}' IS NOT NULL
+                  ORDER BY node_id, ts DESC
+                ) latest
+                WHERE nullif(payload_jsonb #>> '{env,vpd_kpa}', '')::double precision > 2.5
+          - refId: B
+            datasourceUid: __expr__
+            relativeTimeRange:
+              from: 0
+              to: 0
+            model:
+              conditions:
+                - evaluator:
+                    params: [0]
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: B
+              type: threshold
+        dashboardUid: senior-pomidor-telemetry
+        noDataState: OK
+        execErrState: Alerting
+        for: 3m
+        annotations:
+          summary: Canonical state VPD is critically high.
+          description: Uses state_snapshots.payload_jsonb env.vpd_kpa, not raw telemetry air_vpd_kpa.
+        labels:
+          severity: critical
+          category: plant
+
+      - uid: sp_state_confidence_low
+        title: State confidence low
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: senior-pomidor-postgres
+            relativeTimeRange:
+              from: 600
+              to: 0
+            model:
+              datasource:
+                type: postgres
+                uid: senior-pomidor-postgres
+              editorMode: code
+              format: table
+              intervalMs: 1000
+              maxDataPoints: 43200
+              rawQuery: true
+              refId: A
+              rawSql: |
+                SELECT
+                  node_id,
+                  nullif(payload_jsonb #>> '{quality,state_confidence}', '')::double precision AS observed,
+                  'state confidence < 0.65' AS threshold,
+                  1::double precision AS value
+                FROM (
+                  SELECT DISTINCT ON (node_id)
+                    node_id,
+                    ts,
+                    payload_jsonb
+                  FROM state_snapshots
+                  WHERE ts >= now() - interval '10 minutes'
+                    AND payload_jsonb #>> '{quality,state_confidence}' IS NOT NULL
+                  ORDER BY node_id, ts DESC
+                ) latest
+                WHERE nullif(payload_jsonb #>> '{quality,state_confidence}', '')::double precision < 0.65
+          - refId: B
+            datasourceUid: __expr__
+            relativeTimeRange:
+              from: 0
+              to: 0
+            model:
+              conditions:
+                - evaluator:
+                    params: [0]
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: B
+              type: threshold
+        dashboardUid: senior-pomidor-telemetry
+        noDataState: OK
+        execErrState: Alerting
+        for: 10m
+        annotations:
+          summary: State estimator confidence is low.
+        labels:
+          severity: warning
+          category: state-estimator
+
+      - uid: sp_active_high_or_critical_anomaly
+        title: Active high or critical anomaly
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: senior-pomidor-postgres
+            relativeTimeRange:
+              from: 600
+              to: 0
+            model:
+              datasource:
+                type: postgres
+                uid: senior-pomidor-postgres
+              editorMode: code
+              format: table
+              intervalMs: 1000
+              maxDataPoints: 43200
+              rawQuery: true
+              refId: A
+              rawSql: |
+                SELECT
+                  node_id,
+                  type,
+                  severity,
+                  payload_jsonb ->> 'last_seen_ts' AS last_seen_ts,
+                  1::double precision AS value
+                FROM anomaly_records
+                WHERE status = 'ACTIVE'
+                  AND severity IN ('HIGH', 'CRITICAL', 'critical', 'emergency')
+                  AND ts >= now() - interval '10 minutes'
+          - refId: B
+            datasourceUid: __expr__
+            relativeTimeRange:
+              from: 0
+              to: 0
+            model:
+              conditions:
+                - evaluator:
+                    params: [0]
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: B
+              type: threshold
+        dashboardUid: senior-pomidor-telemetry
+        noDataState: OK
+        execErrState: Alerting
+        for: 0s
+        annotations:
+          summary: A high-severity state estimator anomaly is active.
+        labels:
+          severity: critical
+          category: state-estimator
+
+      - uid: sp_state_snapshot_stale
+        title: State snapshot stale
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: senior-pomidor-postgres
+            relativeTimeRange:
+              from: 900
+              to: 0
+            model:
+              datasource:
+                type: postgres
+                uid: senior-pomidor-postgres
+              editorMode: code
+              format: table
+              intervalMs: 1000
+              maxDataPoints: 43200
+              rawQuery: true
+              refId: A
+              rawSql: |
+                SELECT
+                  devices.device_id AS node_id,
+                  state_latest.latest_state_ts,
+                  1::double precision AS value
+                FROM devices
+                LEFT JOIN (
+                  SELECT
+                    node_id,
+                    max(ts) AS latest_state_ts
+                  FROM state_snapshots
+                  GROUP BY node_id
+                ) state_latest ON state_latest.node_id = devices.device_id
+                WHERE devices.last_payload_at >= now() - interval '15 minutes'
+                  AND (
+                    state_latest.latest_state_ts IS NULL
+                    OR state_latest.latest_state_ts < now() - interval '5 minutes'
+                  )
+          - refId: B
+            datasourceUid: __expr__
+            relativeTimeRange:
+              from: 0
+              to: 0
+            model:
+              conditions:
+                - evaluator:
+                    params: [0]
+                    type: gt
+                  operator:
+                    type: and
+                  query:
+                    params: [B]
+                  reducer:
+                    params: []
+                    type: last
+                  type: query
+              datasource:
+                type: __expr__
+                uid: __expr__
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: B
+              type: threshold
+        dashboardUid: senior-pomidor-telemetry
+        noDataState: OK
+        execErrState: Alerting
+        for: 5m
+        annotations:
+          summary: Telemetry is current but the canonical state snapshot is stale or missing.
+        labels:
+          severity: warning
+          category: state-estimator

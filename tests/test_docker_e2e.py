@@ -25,6 +25,10 @@ READONLY_TABLES = (
     "pod_errors",
     "photos",
     "telemetry_pod_readings_flat",
+    "state_snapshots",
+    "sensor_health_snapshots",
+    "anomaly_records",
+    "estimator_diagnostics",
 )
 COMPOSE_ENV = {
     "API_PUBLISHED_PORT": "18080",
@@ -162,6 +166,11 @@ def assert_grafana_provisioning() -> None:
             "VPD stress",
             "VPD critical",
             "VPD emergency",
+            "State VPD guardrail crossed",
+            "State VPD critical",
+            "State confidence low",
+            "Active high or critical anomaly",
+            "State snapshot stale",
         }.issubset(alert_titles)
 
 
@@ -224,7 +233,15 @@ def telemetry_payload() -> dict:
         "schema_version": TELEMETRY_SCHEMA,
         "device_id": "pi-001",
         "timestamp_utc": "2026-06-07T12:00:00Z",
-        "pods": [{"pod_key": "pod-1", "soil_moisture_percent": 42.5}],
+        "pods": [
+            {
+                "pod_key": "pod-1",
+                "soil_moisture_percent": 42.5,
+                "soil_temperature_c": 20.0,
+                "air_temperature_c": 24.0,
+                "air_humidity_percent": 60.0,
+            }
+        ],
     }
 
 
@@ -253,6 +270,7 @@ def test_docker_compose_stack_ingests_and_serves_data():
         assert_container_healthy("mosquitto")
         assert_container_healthy("api")
         assert_container_healthy("worker")
+        assert_container_healthy("state-estimator-worker")
         assert_mosquitto_named_volume()
 
         with httpx.Client(base_url=BASE_URL, timeout=10) as client:
@@ -261,6 +279,16 @@ def test_docker_compose_stack_ingests_and_serves_data():
 
             telemetry = client.post("/api/v1/edge/telemetry", json=telemetry_payload())
             assert telemetry.status_code == 202
+
+            state = client.get("/api/v1/state/latest?node_id=pi-001")
+            assert state.status_code == 200
+            assert state.json()["schema_version"] == "state_v1"
+
+            sensor_health = client.get("/api/v1/sensor-health/latest?node_id=pi-001")
+            assert sensor_health.status_code == 200
+
+            active_anomalies = client.get("/api/v1/anomalies/active?node_id=pi-001")
+            assert active_anomalies.status_code == 200
 
             first_photo = upload_photo(client)
             assert first_photo.status_code == 202

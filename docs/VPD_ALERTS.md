@@ -1,7 +1,7 @@
 # VPD Alert Ranges for Tomato Monitoring
 
 Project: **Senior Pomidor**
-Metric: `air_vpd_kpa`
+Metric: `state_snapshots.payload_jsonb #>> '{env,vpd_kpa}'`
 Unit: `kPa`
 Purpose: Grafana alerting and plant stress interpretation
 Status: Implemented v1
@@ -24,13 +24,14 @@ For tomato monitoring in the Senior Pomidor project, VPD is one of the primary c
 
 ## 2. Primary Metric
 
-The main Grafana alert should use:
+The preferred local Grafana alert metric is the canonical state estimator value:
 
 ```text
-air_vpd_kpa
+state_snapshots.payload_jsonb #>> '{env,vpd_kpa}'
 ```
 
-This value represents the VPD calculated from air temperature and relative humidity.
+This value represents VPD recalculated by the state estimator from air temperature and relative humidity, with quality and sensor health context.
+Legacy raw telemetry alerts using `telemetry_pod_readings_flat.air_vpd_kpa` remain provisioned temporarily for debugging and comparison.
 
 Optional supporting metrics:
 
@@ -63,7 +64,7 @@ soil_moisture_pct
 
 ## 4. Default Grafana Alert Rules
 
-Recommended alert rules for `air_vpd_kpa`.
+Recommended alert rules for canonical `env.vpd_kpa`.
 These rules are provisioned in `docker/grafana/provisioning/alerting/senior-pomidor-alerts.yml`.
 
 | Rule name               |           Condition | Severity    | Suggested duration | Notes                                     |
@@ -267,10 +268,11 @@ The air is too humid and transpiration is weak. Check condensation risk, airflow
 
 ## 11. Notes for Senior Pomidor
 
-1. `air_vpd_kpa` should be the primary Grafana alert metric.
-2. `leaf_vpd_kpa` should be used as a plant-level confirmation signal when leaf temperature is available.
-3. `leaf_air_delta_c` helps distinguish between air stress and actual leaf stress.
-4. VPD alerts should be interpreted together with:
+1. Canonical `env.vpd_kpa` from `state_snapshots.payload_jsonb` should be the primary local Grafana alert metric.
+2. Raw telemetry `air_vpd_kpa` should be treated as a temporary debugging/comparison signal.
+3. `leaf_vpd_kpa` should be used as a plant-level confirmation signal when leaf temperature is available.
+4. `leaf_air_delta_c` helps distinguish between air stress and actual leaf stress.
+5. VPD alerts should be interpreted together with:
 
    * soil moisture,
    * air temperature,

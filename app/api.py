@@ -10,8 +10,10 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.config import Settings, get_settings
 from app.db import get_db
-from app.models import Device, Photo, PodReading, TelemetryEvent
+from app.models import AnomalyRecord, Device, Photo, PodReading, SensorHealthSnapshot, StateSnapshot, TelemetryEvent
 from app.services import persist_photo, persist_telemetry, resolve_stored_photo_path
+from app.state_estimator.persistence import latest_state_or_estimate
+from app.state_estimator.replay import replay_observations
 from app.telemetry import health_alerts
 from app.validation import ValidationError, parse_utc_z, validate_device_id, validate_photo_id, validate_pod_key
 
@@ -259,6 +261,90 @@ def telemetry_history(
         event_id_set = set(event_ids)
         events = [event for event in events if event.id in event_id_set]
     return [event_to_dict(event) for event in events]
+
+
+@router.get("/state/latest")
+def latest_state(
+    node_id: str,
+    db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+) -> dict[str, Any]:
+    try:
+        state = latest_state_or_estimate(
+            db,
+            node_id=validate_device_id(node_id),
+            timezone=settings.state_estimator_timezone,
+            private_log_dir=settings.state_estimator_private_log_dir,
+        )
+    except ValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    if state is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="state not found")
+    return state
+
+
+@router.get("/state/range")
+def state_range(
+    node_id: str,
+    from_: str | None = Query(default=None, alias="from"),
+    to: str | None = None,
+    limit: int = Query(default=100, ge=1, le=1000),
+    db: Session = Depends(get_db),
+) -> list[dict[str, Any]]:
+    try:
+        node_id = validate_device_id(node_id)
+        query = select(StateSnapshot).where(StateSnapshot.node_id == node_id).order_by(StateSnapshot.ts).limit(limit)
+        if from_:
+            query = query.where(StateSnapshot.ts >= parse_utc_z(from_))
+        if to:
+            query = query.where(StateSnapshot.ts <= parse_utc_z(to))
+    except ValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return [snapshot.payload_jsonb for snapshot in db.scalars(query).all()]
+
+
+@router.get("/sensor-health/latest")
+def latest_sensor_health(node_id: str, db: Session = Depends(get_db)) -> dict[str, Any]:
+    try:
+        node_id = validate_device_id(node_id)
+    except ValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    snapshot = db.scalar(
+        select(SensorHealthSnapshot)
+        .where(SensorHealthSnapshot.node_id == node_id)
+        .order_by(desc(SensorHealthSnapshot.ts))
+        .limit(1)
+    )
+    if snapshot is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="sensor health not found")
+    return snapshot.payload_jsonb
+
+
+@router.get("/anomalies/active")
+def active_anomalies(node_id: str, db: Session = Depends(get_db)) -> list[dict[str, Any]]:
+    try:
+        node_id = validate_device_id(node_id)
+    except ValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    records = db.scalars(
+        select(AnomalyRecord)
+        .where(AnomalyRecord.node_id == node_id, AnomalyRecord.status == "ACTIVE")
+        .order_by(desc(AnomalyRecord.ts))
+    ).all()
+    latest_by_type: dict[str, dict[str, Any]] = {}
+    for record in records:
+        latest_by_type.setdefault(record.type, record.payload_jsonb)
+    return list(latest_by_type.values())
+
+
+@router.post("/state-estimator/replay")
+def replay_state_estimator(
+    payload: dict[str, Any],
+    settings: Settings = Depends(get_settings),
+) -> dict[str, Any]:
+    if not settings.state_estimator_replay_enabled:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="replay endpoint disabled")
+    return {"states": replay_observations(payload, timezone=settings.state_estimator_timezone)}
 
 
 @router.get("/devices/{device_id}/photos")

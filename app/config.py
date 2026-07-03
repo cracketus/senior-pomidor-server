@@ -29,6 +29,11 @@ class Settings(BaseSettings):
     grafana_cloud_api_token: str | None = Field(default=None)
     grafana_cloud_export_interval_seconds: int = 60
     grafana_cloud_export_lookback_minutes: int = 10
+    state_estimator_enabled: bool = True
+    state_estimator_timezone: str = "Europe/Vienna"
+    state_estimator_private_log_dir: str = "data/private"
+    state_estimator_public_log_dir: str = "data/public"
+    state_estimator_replay_enabled: bool = False
 
 
 @lru_cache

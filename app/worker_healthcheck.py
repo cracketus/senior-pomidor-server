@@ -9,8 +9,9 @@ from app.worker_health import worker_health_path
 MAX_HEALTH_AGE_SECONDS = 90
 
 
-def is_worker_healthy(now: datetime | None = None) -> bool:
+def is_worker_healthy(now: datetime | None = None, healthy_statuses: set[str] | None = None) -> bool:
     now = now or datetime.now(UTC)
+    healthy_statuses = healthy_statuses or {"healthy"}
     path = worker_health_path()
     if not path.is_file():
         return False
@@ -20,11 +21,12 @@ def is_worker_healthy(now: datetime | None = None) -> bool:
     except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError):
         return False
     age_seconds = (now - updated_at).total_seconds()
-    return payload.get("status") == "healthy" and 0 <= age_seconds <= MAX_HEALTH_AGE_SECONDS
+    return payload.get("status") in healthy_statuses and 0 <= age_seconds <= MAX_HEALTH_AGE_SECONDS
 
 
 def main() -> int:
-    return 0 if is_worker_healthy() else 1
+    healthy_statuses = set(sys.argv[1:]) or {"healthy"}
+    return 0 if is_worker_healthy(healthy_statuses=healthy_statuses) else 1
 
 
 if __name__ == "__main__":

@@ -64,6 +64,12 @@ def test_grafana_dashboard_json_covers_issue_15_acceptance_criteria():
         "Latest Telemetry By Pod",
         "Latest Device And Network Status",
         "Recent Photo Metadata",
+        "Latest State Summary",
+        "Canonical Env VPD",
+        "State Confidence",
+        "Average Soil Moisture",
+        "Latest Sensor Health Summary",
+        "Active Anomalies",
     }.issubset(panel_titles)
 
     for metric in (
@@ -79,6 +85,12 @@ def test_grafana_dashboard_json_covers_issue_15_acceptance_criteria():
         "leaf_temp_c",
         "leaf_saturation_vapor_pressure_kpa",
         "leaf_vpd_kpa",
+        "state_snapshots",
+        "sensor_health_snapshots",
+        "anomaly_records",
+        "payload_jsonb #>> '{env,vpd_kpa}'",
+        "payload_jsonb #>> '{quality,state_confidence}'",
+        "payload_jsonb #>> '{soil,avg_moisture_pct}'",
     ):
         assert metric in queries
 
@@ -126,6 +138,11 @@ def test_grafana_alerting_provisioning_covers_collection_and_health_alerts():
         "VPD stress",
         "VPD critical",
         "VPD emergency",
+        "State VPD guardrail crossed",
+        "State VPD critical",
+        "State confidence low",
+        "Active high or critical anomaly",
+        "State snapshot stale",
     ):
         assert f"title: {title}" in alerts
 
@@ -134,6 +151,8 @@ def test_grafana_alerting_provisioning_covers_collection_and_health_alerts():
         "telemetry_pod_readings_flat",
         "pod_errors",
         "telemetry_events",
+        "state_snapshots",
+        "anomaly_records",
     ):
         assert table_or_view in alerts
 
@@ -177,5 +196,9 @@ def test_grafana_alerting_provisioning_covers_collection_and_health_alerts():
         "severity: alert",
         "severity: critical",
         "severity: emergency",
+        "payload_jsonb #>> '{env,vpd_kpa}'",
+        "payload_jsonb #>> '{quality,state_confidence}'",
+        "status = 'ACTIVE'",
+        "latest_state_ts < now() - interval '5 minutes'",
     ):
         assert threshold in alerts

@@ -1109,6 +1109,456 @@
       ],
       "title": "Leaf VPD",
       "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "senior-pomidor-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 24,
+        "x": 0,
+        "y": 40
+      },
+      "id": 13,
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "pluginVersion": "11.0.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "senior-pomidor-postgres"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  ts AS time,\n  node_id,\n  payload_jsonb ->> 'schema_version' AS schema_version,\n  payload_jsonb #>> '{quality,level}' AS quality_level,\n  nullif(payload_jsonb #>> '{quality,state_confidence}', '')::double precision AS state_confidence,\n  nullif(payload_jsonb #>> '{env,vpd_kpa}', '')::double precision AS vpd_kpa,\n  nullif(payload_jsonb #>> '{soil,avg_moisture_pct}', '')::double precision AS avg_moisture_pct,\n  payload_jsonb #>> '{refs,source_event_ids,0}' AS source_event_id\nFROM (\n  SELECT DISTINCT ON (node_id)\n    node_id,\n    ts,\n    payload_jsonb\n  FROM state_snapshots\n  WHERE $__timeFilter(ts)\n    AND ('${device_id:csv}' = 'All' OR node_id IN (${device_id:sqlstring}))\n    AND payload_jsonb ->> 'schema_version' = 'state_v1'\n  ORDER BY node_id, ts DESC\n) latest\nORDER BY node_id",
+          "refId": "A"
+        }
+      ],
+      "title": "Latest State Summary",
+      "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "senior-pomidor-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "barAlignment": 0,
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "spanNulls": false,
+            "insertNulls": false,
+            "showPoints": "never",
+            "pointSize": 5,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "axisPlacement": "auto",
+            "axisLabel": "",
+            "axisColorMode": "text",
+            "axisBorderShow": false,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "axisCenteredZero": false,
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "pressurekpa"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 46
+      },
+      "id": 14,
+      "options": {
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        },
+        "legend": {
+          "showLegend": true,
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        }
+      },
+      "pluginVersion": "11.0.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "senior-pomidor-postgres"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  ts AS time,\n  node_id AS metric,\n  nullif(payload_jsonb #>> '{env,vpd_kpa}', '')::double precision AS value\nFROM state_snapshots\nWHERE $__timeFilter(ts)\n  AND ('${device_id:csv}' = 'All' OR node_id IN (${device_id:sqlstring}))\n  AND payload_jsonb #>> '{env,vpd_kpa}' IS NOT NULL\nORDER BY ts",
+          "refId": "A"
+        }
+      ],
+      "title": "Canonical Env VPD",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "senior-pomidor-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "barAlignment": 0,
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "spanNulls": false,
+            "insertNulls": false,
+            "showPoints": "never",
+            "pointSize": 5,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "axisPlacement": "auto",
+            "axisLabel": "",
+            "axisColorMode": "text",
+            "axisBorderShow": false,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "axisCenteredZero": false,
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 46
+      },
+      "id": 15,
+      "options": {
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        },
+        "legend": {
+          "showLegend": true,
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        }
+      },
+      "pluginVersion": "11.0.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "senior-pomidor-postgres"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  ts AS time,\n  node_id AS metric,\n  nullif(payload_jsonb #>> '{quality,state_confidence}', '')::double precision AS value\nFROM state_snapshots\nWHERE $__timeFilter(ts)\n  AND ('${device_id:csv}' = 'All' OR node_id IN (${device_id:sqlstring}))\n  AND payload_jsonb #>> '{quality,state_confidence}' IS NOT NULL\nORDER BY ts",
+          "refId": "A"
+        }
+      ],
+      "title": "State Confidence",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "senior-pomidor-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "barAlignment": 0,
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "gradientMode": "none",
+            "spanNulls": false,
+            "insertNulls": false,
+            "showPoints": "never",
+            "pointSize": 5,
+            "stacking": {
+              "mode": "none",
+              "group": "A"
+            },
+            "axisPlacement": "auto",
+            "axisLabel": "",
+            "axisColorMode": "text",
+            "axisBorderShow": false,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "axisCenteredZero": false,
+            "hideFrom": {
+              "tooltip": false,
+              "viz": false,
+              "legend": false
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 46
+      },
+      "id": 16,
+      "options": {
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        },
+        "legend": {
+          "showLegend": true,
+          "displayMode": "list",
+          "placement": "bottom",
+          "calcs": []
+        }
+      },
+      "pluginVersion": "11.0.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "senior-pomidor-postgres"
+          },
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  ts AS time,\n  node_id AS metric,\n  nullif(payload_jsonb #>> '{soil,avg_moisture_pct}', '')::double precision AS value\nFROM state_snapshots\nWHERE $__timeFilter(ts)\n  AND ('${device_id:csv}' = 'All' OR node_id IN (${device_id:sqlstring}))\n  AND payload_jsonb #>> '{soil,avg_moisture_pct}' IS NOT NULL\nORDER BY ts",
+          "refId": "A"
+        }
+      ],
+      "title": "Average Soil Moisture",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "senior-pomidor-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 54
+      },
+      "id": 17,
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "pluginVersion": "11.0.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "senior-pomidor-postgres"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "WITH latest AS (\n  SELECT DISTINCT ON (node_id)\n    node_id,\n    ts,\n    payload_jsonb\n  FROM sensor_health_snapshots\n  WHERE $__timeFilter(ts)\n    AND ('${device_id:csv}' = 'All' OR node_id IN (${device_id:sqlstring}))\n  ORDER BY node_id, ts DESC\n)\nSELECT\n  latest.ts AS time,\n  latest.node_id,\n  latest.payload_jsonb ->> 'overall_status' AS overall_status,\n  sensor ->> 'sensor_id' AS sensor_id,\n  sensor ->> 'sensor_type' AS sensor_type,\n  sensor ->> 'status' AS status,\n  nullif(sensor ->> 'confidence', '')::double precision AS confidence,\n  sensor ->> 'reason' AS reason\nFROM latest\nCROSS JOIN LATERAL jsonb_array_elements(coalesce(latest.payload_jsonb -> 'sensors', '[]'::jsonb)) AS sensor\nORDER BY latest.node_id, sensor_id",
+          "refId": "A"
+        }
+      ],
+      "title": "Latest Sensor Health Summary",
+      "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "postgres",
+        "uid": "senior-pomidor-postgres"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 54
+      },
+      "id": 18,
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "countRows": false,
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "showHeader": true
+      },
+      "pluginVersion": "11.0.0",
+      "targets": [
+        {
+          "datasource": {
+            "type": "postgres",
+            "uid": "senior-pomidor-postgres"
+          },
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT\n  ts AS time,\n  node_id,\n  type,\n  severity,\n  status,\n  payload_jsonb #>> '{signals,env.vpd_kpa}' AS vpd_kpa,\n  payload_jsonb #>> '{signals,quality.state_confidence}' AS state_confidence,\n  payload_jsonb ->> 'last_seen_ts' AS last_seen_ts\nFROM anomaly_records\nWHERE $__timeFilter(ts)\n  AND ('${device_id:csv}' = 'All' OR node_id IN (${device_id:sqlstring}))\n  AND status = 'ACTIVE'\nORDER BY ts DESC",
+          "refId": "A"
+        }
+      ],
+      "title": "Active Anomalies",
+      "type": "table"
     }
   ],
   "refresh": "30s",

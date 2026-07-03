@@ -184,3 +184,20 @@ def test_worker_healthcheck_rejects_stale_or_stopped_status(monkeypatch, tmp_pat
         encoding="utf-8",
     )
     assert is_worker_healthy() is False
+
+
+def test_worker_healthcheck_accepts_configured_state_estimator_status(monkeypatch, tmp_path):
+    health_file = tmp_path / "state-estimator-health.json"
+    monkeypatch.setattr(settings, "worker_health_file", str(health_file))
+    health_file.write_text(
+        json.dumps(
+            {
+                "status": "state_estimator_healthy",
+                "updated_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert is_worker_healthy(healthy_statuses={"state_estimator_healthy"}) is True
+    assert is_worker_healthy() is False
