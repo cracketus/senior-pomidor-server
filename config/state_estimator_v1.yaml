@@ -34,7 +34,20 @@ anomalies:
   high_vpd_kpa: 1.6
   low_vpd_kpa: 0.5
   leaf_air_delta_abs_c: 3.0
+  lifecycle:
+    env_warning_trigger_seconds: 60
+    warning_clear_cycles: 2
+    high_clear_seconds: 300
 
 soil:
   minimum_valid_probes: 1
-  prefer_two_zone_model: true
+  prefer_two_zone_model: false
+  probes:
+    pod_1:
+      position: null
+      dry_threshold_pct: 20.0
+      wet_threshold_pct: 75.0
+    pod_2:
+      position: null
+      dry_threshold_pct: 20.0
+      wet_threshold_pct: 75.0

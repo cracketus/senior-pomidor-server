@@ -275,6 +275,7 @@ def latest_state(
             node_id=validate_device_id(node_id),
             timezone=settings.state_estimator_timezone,
             private_log_dir=settings.state_estimator_private_log_dir,
+            config_path=settings.state_estimator_config_path,
         )
     except ValidationError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
@@ -344,7 +345,13 @@ def replay_state_estimator(
 ) -> dict[str, Any]:
     if not settings.state_estimator_replay_enabled:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="replay endpoint disabled")
-    return {"states": replay_observations(payload, timezone=settings.state_estimator_timezone)}
+    return {
+        "states": replay_observations(
+            payload,
+            timezone=settings.state_estimator_timezone,
+            config_path=settings.state_estimator_config_path,
+        )
+    }
 
 
 @router.get("/devices/{device_id}/photos")

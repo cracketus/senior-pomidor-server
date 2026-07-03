@@ -11,12 +11,14 @@ from app.config import settings
 from app.db import SessionLocal
 from app.logging_config import configure_logging
 from app.models import Device
+from app.state_estimator.models import EstimatorHistory
 from app.state_estimator.persistence import estimate_latest_from_telemetry
 from app.worker_health import write_worker_health
 
 configure_logging()
 logger = logging.getLogger(__name__)
 stop_event = Event()
+histories: dict[str, EstimatorHistory] = {}
 
 
 def run_once() -> int:
@@ -28,6 +30,8 @@ def run_once() -> int:
                 node_id=device.device_id,
                 timezone=settings.state_estimator_timezone,
                 private_log_dir=settings.state_estimator_private_log_dir,
+                history=histories.setdefault(device.device_id, EstimatorHistory()),
+                config_path=settings.state_estimator_config_path,
             )
         return len(devices)
 

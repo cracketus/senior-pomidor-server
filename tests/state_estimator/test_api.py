@@ -47,6 +47,13 @@ def test_active_anomaly_is_deduped_and_cleared(client) -> None:
     normal = telemetry_payload()
     normal["timestamp_utc"] = "2026-07-02T08:02:00Z"
     assert client.post("/api/v1/edge/telemetry", json=normal).status_code == 202
+    client.get("/api/v1/state/latest?node_id=pi-001")
+    still_active = client.get("/api/v1/anomalies/active?node_id=pi-001").json()
+    assert "CRITICAL_HEAT" in {item["type"] for item in still_active}
+
+    cleared = telemetry_payload()
+    cleared["timestamp_utc"] = "2026-07-02T08:07:00Z"
+    assert client.post("/api/v1/edge/telemetry", json=cleared).status_code == 202
     cleared_state = client.get("/api/v1/state/latest?node_id=pi-001").json()
     cleared_active = client.get("/api/v1/anomalies/active?node_id=pi-001").json()
     assert "CRITICAL_HEAT" not in {item["type"] for item in cleared_active}
@@ -87,3 +94,26 @@ def test_sensor_health_and_active_anomalies_read_persisted_outputs(client) -> No
 def test_replay_endpoint_is_disabled_by_default(client) -> None:
     response = client.post("/api/v1/state-estimator/replay", json={"observations": []})
     assert response.status_code == 404
+
+
+def test_state_latest_loads_estimator_config(client_factory, tmp_path) -> None:
+    config_path = tmp_path / "state_estimator_v1.yaml"
+    config_path.write_text(
+        """
+schema_version: state_estimator_config_v1
+timezone: Europe/Vienna
+soil:
+  minimum_valid_probes: 1
+  probes:
+    pod-1:
+      position: null
+      dry_threshold_pct: 50.0
+""".strip(),
+        encoding="utf-8",
+    )
+    client = client_factory(state_estimator_config_path=str(config_path))
+    assert client.post("/api/v1/edge/telemetry", json=telemetry_payload()).status_code == 202
+
+    body = client.get("/api/v1/state/latest?node_id=pi-001").json()
+
+    assert body["soil"]["probes"][0]["dry_threshold_pct"] == 50.0

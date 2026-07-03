@@ -9,9 +9,10 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.models import AnomalyRecord, EstimatorDiagnostic, SensorHealthSnapshot, StateSnapshot, TelemetryEvent
 from app.state_estimator.adapters import observations_from_event
+from app.state_estimator.config import load_estimator_runtime
 from app.state_estimator.estimator import estimate_state
 from app.state_estimator.logging import append_jsonl, daily_name, monthly_name
-from app.state_estimator.models import EstimatorConfig, EstimatorContext, EstimatorHistory, EstimatorResult
+from app.state_estimator.models import EstimatorContext, EstimatorHistory, EstimatorResult
 from app.validation import validate_device_id
 
 logger = logging.getLogger(__name__)
@@ -126,6 +127,12 @@ def dedupe_and_clear_anomalies(
     for record in active_records:
         if record.type in current_types:
             continue
+        payload = _active_payload_after_normal(record, state_ts)
+        if payload is not None:
+            record.payload_jsonb = payload
+            record.ts = state_ts
+            persisted.append(payload)
+            continue
         payload = dict(record.payload_jsonb)
         payload["status"] = "CLEARED"
         payload["cleared_ts"] = state_ts.isoformat().replace("+00:00", "Z")
@@ -136,6 +143,24 @@ def dedupe_and_clear_anomalies(
     return persisted
 
 
+def _active_payload_after_normal(record: AnomalyRecord, state_ts: datetime) -> dict[str, Any] | None:
+    if record.type in {"REQUIRED_SENSOR_UNAVAILABLE", "LOW_STATE_CONFIDENCE"}:
+        return None
+    payload = dict(record.payload_jsonb)
+    severity = str(payload.get("severity") or record.severity)
+    if payload.get("normal_since_ts") is None:
+        payload["normal_since_ts"] = state_ts.isoformat().replace("+00:00", "Z")
+        payload["normal_cycle_count"] = 1
+    else:
+        payload["normal_cycle_count"] = int(payload.get("normal_cycle_count") or 0) + 1
+    normal_since = parse_state_ts(payload["normal_since_ts"])
+    normal_seconds = max(0, int((state_ts - normal_since).total_seconds()))
+    payload["normal_duration_seconds"] = normal_seconds
+    if severity == "WARN":
+        return payload if int(payload["normal_cycle_count"]) < 2 else None
+    return payload if normal_seconds < 300 else None
+
+
 def estimate_latest_from_telemetry(
     db: Session,
     *,
@@ -143,6 +168,7 @@ def estimate_latest_from_telemetry(
     timezone: str,
     private_log_dir: str | None = None,
     history: EstimatorHistory | None = None,
+    config_path: str = "config/state_estimator_v1.yaml",
 ) -> EstimatorResult | None:
     node_id = validate_device_id(node_id)
     latest = db.scalar(
@@ -162,10 +188,12 @@ def estimate_latest_from_telemetry(
         .order_by(TelemetryEvent.timestamp_utc)
     ).all()
     observations = [observation for event in events for observation in observations_from_event(event)]
+    config, calibration = load_estimator_runtime(config_path, timezone=timezone)
     result = estimate_state(
         observations,
         context=EstimatorContext(node_id=node_id, timezone=timezone),
-        config=EstimatorConfig(timezone=timezone),
+        config=config,
+        calibration=calibration,
         history=history,
     )
     persist_estimator_result(db, result, private_log_dir=private_log_dir)
@@ -178,6 +206,7 @@ def latest_state_or_estimate(
     node_id: str,
     timezone: str,
     private_log_dir: str | None = None,
+    config_path: str = "config/state_estimator_v1.yaml",
 ) -> dict[str, Any] | None:
     node_id = validate_device_id(node_id)
     snapshot = db.scalar(
@@ -196,5 +225,6 @@ def latest_state_or_estimate(
         node_id=node_id,
         timezone=timezone,
         private_log_dir=private_log_dir,
+        config_path=config_path,
     )
     return result.state if result is not None else None

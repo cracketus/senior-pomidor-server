@@ -6,7 +6,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from app.state_estimator.anomalies import anomaly
-from app.state_estimator.calibration import CalibrationProfile
+from app.state_estimator.calibration import CalibrationProfile, soil_moisture_from_adc
 from app.state_estimator.confidence import quality_level, sensor_confidence
 from app.state_estimator.derived_metrics import (
     absolute_humidity_g_m3,
@@ -68,6 +68,22 @@ def _latest_by_type(observations: list[RawObservation]) -> dict[str, list[RawObs
 def _select_newest(grouped: dict[str, list[RawObservation]], sensor_type: str) -> RawObservation | None:
     values = grouped.get(sensor_type) or []
     return values[-1] if values else None
+
+
+def _condition_duration_seconds(history: EstimatorHistory, type_: str, now: datetime) -> int:
+    active_since = history.anomaly_active_since.get(type_)
+    if active_since is None:
+        history.anomaly_active_since[type_] = now
+        history.anomaly_normal_since.pop(type_, None)
+        history.anomaly_normal_counts.pop(type_, None)
+        return 0
+    history.anomaly_normal_since.pop(type_, None)
+    history.anomaly_normal_counts.pop(type_, None)
+    return max(0, int((now - active_since).total_seconds()))
+
+
+def _reset_condition(history: EstimatorHistory, type_: str) -> None:
+    history.anomaly_active_since.pop(type_, None)
 
 
 def _valid_filtered(
@@ -162,14 +178,22 @@ def estimate_state(
     latest_soil_observations: dict[str, RawObservation] = {}
     for obs in grouped.get("soil_moisture", []):
         latest_soil_observations[obs.sensor_id.split(".")[0]] = obs
-    for obs in latest_soil_observations.values():
-        moisture_pct, health, diag = _valid_filtered(obs, "moisture_pct", now, config, history, required=True)
-        probe_id = obs.sensor_id.split(".")[0]
+    probe_ids = sorted({*calibration.soil_probes.keys(), *latest_soil_observations.keys()})
+    for probe_id in probe_ids:
+        soil_obs = latest_soil_observations.get(probe_id)
         probe_calibration = calibration.soil_probes.get(probe_id)
         position = probe_calibration.position if probe_calibration else None
         dry_threshold = probe_calibration.dry_threshold_pct if probe_calibration else 20.0
-        if moisture_pct is None and _numeric(obs.values.get("adc_raw")) is not None and probe_calibration is None:
-            health = {"status": "UNCALIBRATED", "confidence": 0.3, "flags": ["uncalibrated"]}
+        moisture_pct, health, diag = _valid_filtered(soil_obs, "moisture_pct", now, config, history, required=True)
+        adc_raw = _numeric(soil_obs.values.get("adc_raw")) if soil_obs is not None else None
+        if soil_obs is not None and moisture_pct is None and adc_raw is not None:
+            if probe_calibration is not None:
+                calibrated, _unclamped = soil_moisture_from_adc(adc_raw, probe_calibration)
+                if calibrated is not None:
+                    moisture_pct = calibrated
+                    health = {"status": "OK", "confidence": 1.0, "age_seconds": 0.0, "flags": ["adc_calibrated"]}
+            if moisture_pct is None:
+                health = {"status": "UNCALIBRATED", "confidence": 0.3, "flags": ["uncalibrated"]}
         soil_probes.append(
             {
                 "id": probe_id,
@@ -181,8 +205,8 @@ def estimate_state(
             }
         )
         soil_confidences.append(float(health["confidence"]))
-        if diag:
-            filter_diagnostics[f"{obs.sensor_id}.moisture_pct"] = diag
+        if soil_obs is not None and diag:
+            filter_diagnostics[f"{soil_obs.sensor_id}.moisture_pct"] = diag
 
     if air_temp_diag and air is not None:
         filter_diagnostics[f"{air.sensor_id}.air_temp_c"] = air_temp_diag
@@ -223,7 +247,7 @@ def estimate_state(
         gradient = float(top["moisture_pct"]) - float(bottom["moisture_pct"])
     zone_pattern = "unknown"
     valid_probe_values = [float(probe["moisture_pct"]) for probe in soil_probes if probe["moisture_pct"] is not None]
-    if len(valid_probe_values) >= 2:
+    if len(valid_probe_values) >= 2 and (top or bottom):
         if max(valid_probe_values) - min(valid_probe_values) < 10:
             zone_pattern = "uniform"
         elif top and bottom and top["moisture_pct"] is not None and bottom["moisture_pct"] is not None:
@@ -262,7 +286,8 @@ def estimate_state(
         + 0.10 * plant_confidence
         + 0.05 * budget_confidence
     )
-    if air_temp_c is None or rh_pct is None or not soil_probes:
+    valid_soil_probe_count = sum(1 for probe in soil_probes if probe["moisture_pct"] is not None)
+    if air_temp_c is None or rh_pct is None or valid_soil_probe_count < config.minimum_valid_soil_probes:
         state_confidence = min(state_confidence, config.minimum_for_any_autonomy - 0.01)
     quality_flags = []
     if lux is None:
@@ -417,7 +442,11 @@ def estimate_state(
 
     anomalies: list[dict[str, Any]] = []
 
+    emitted_types: set[str] = set()
+    active_condition_types: set[str] = set()
+
     def emit(type_: str, severity: str, signals: dict[str, Any], confidence: float, responses: list[str]) -> None:
+        emitted_types.add(type_)
         anomalies.append(
             anomaly(
                 node_id=node_id,
@@ -431,11 +460,26 @@ def estimate_state(
             )
         )
 
-    if air_temp_c is None or rh_pct is None or not soil_probes:
+    def emit_env_warning(
+        type_: str,
+        signals: dict[str, Any],
+        confidence: float,
+        responses: list[str],
+    ) -> None:
+        active_condition_types.add(type_)
+        duration_seconds = _condition_duration_seconds(history, type_, now)
+        if duration_seconds >= config.env_warning_trigger_seconds:
+            emit(type_, "WARN", {**signals, "condition_duration_seconds": duration_seconds}, confidence, responses)
+
+    if air_temp_c is None or rh_pct is None or valid_soil_probe_count < config.minimum_valid_soil_probes:
         emit(
             "REQUIRED_SENSOR_UNAVAILABLE",
             "HIGH",
-            {"env.air_temp_c": air_temp_c, "env.rh_pct": rh_pct, "soil.probe_count": len(soil_probes)},
+            {
+                "env.air_temp_c": air_temp_c,
+                "env.rh_pct": rh_pct,
+                "soil.valid_probe_count": valid_soil_probe_count,
+            },
             1.0,
             ["increase_sampling", "notify_if_persistent"],
         )
@@ -449,9 +493,8 @@ def estimate_state(
                 ["notify", "increase_sampling", "guardrails_safe_mode"],
             )
         elif air_temp_c > config.high_temp_warn_c:
-            emit(
+            emit_env_warning(
                 "HIGH_TEMP",
-                "WARN",
                 {"env.air_temp_c": _round(air_temp_c)},
                 env_confidence,
                 ["increase_sampling", "log"],
@@ -465,9 +508,8 @@ def estimate_state(
                 ["notify", "safe_mode"],
             )
         elif air_temp_c < config.low_temp_warn_c:
-            emit(
+            emit_env_warning(
                 "LOW_TEMP",
-                "WARN",
                 {"env.air_temp_c": _round(air_temp_c)},
                 env_confidence,
                 ["notify_if_persistent"],
@@ -482,26 +524,23 @@ def estimate_state(
                 ["notify", "camera_snapshot"],
             )
         elif rh_pct > config.high_rh_pct:
-            emit(
+            emit_env_warning(
                 "HIGH_RH",
-                "WARN",
                 {"env.rh_pct": _round(rh_pct)},
                 env_confidence,
                 ["increase_sampling", "condensation_watch"],
             )
     if air_vpd is not None:
         if air_vpd > config.high_vpd_kpa:
-            emit(
+            emit_env_warning(
                 "HIGH_VPD",
-                "WARN",
                 {"env.vpd_kpa": _round(air_vpd), "env.air_temp_c": _round(air_temp_c), "env.rh_pct": _round(rh_pct)},
                 env_confidence,
                 ["increase_sampling", "capture_image"],
             )
         elif air_vpd < config.low_vpd_kpa:
-            emit(
+            emit_env_warning(
                 "LOW_VPD",
-                "WARN",
                 {"env.vpd_kpa": _round(air_vpd)},
                 env_confidence,
                 ["condensation_watch"],
@@ -559,6 +598,8 @@ def estimate_state(
             1.0,
             ["block_risky_autonomy"],
         )
+    for type_ in {"HIGH_TEMP", "LOW_TEMP", "HIGH_RH", "HIGH_VPD", "LOW_VPD"} - active_condition_types:
+        _reset_condition(history, type_)
     state["refs"]["anomaly_ids"] = [item["anomaly_id"] for item in anomalies]
 
     diagnostics = {

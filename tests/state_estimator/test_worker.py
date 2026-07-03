@@ -45,10 +45,25 @@ def telemetry_payload() -> dict:
 def test_state_estimator_worker_run_once_persists_rows_and_private_jsonl(monkeypatch, tmp_path) -> None:
     TestingSessionLocal = session_factory()
     private_log_dir = tmp_path / "private"
+    config_path = tmp_path / "state_estimator_v1.yaml"
+    config_path.write_text(
+        """
+schema_version: state_estimator_config_v1
+timezone: Europe/Vienna
+soil:
+  minimum_valid_probes: 1
+  probes:
+    pod-1:
+      position: null
+      dry_threshold_pct: 50.0
+""".strip(),
+        encoding="utf-8",
+    )
     try:
         monkeypatch.setattr(state_estimator_worker, "SessionLocal", TestingSessionLocal)
         monkeypatch.setattr(settings, "state_estimator_timezone", "Europe/Vienna")
         monkeypatch.setattr(settings, "state_estimator_private_log_dir", str(private_log_dir))
+        monkeypatch.setattr(settings, "state_estimator_config_path", str(config_path))
 
         with TestingSessionLocal() as db:
             persist_telemetry(db, telemetry_payload(), source="http")
@@ -60,6 +75,8 @@ def test_state_estimator_worker_run_once_persists_rows_and_private_jsonl(monkeyp
             assert db.scalar(select(func.count()).select_from(SensorHealthSnapshot)) == 1
             assert db.scalar(select(func.count()).select_from(AnomalyRecord)) >= 1
             assert db.scalar(select(func.count()).select_from(EstimatorDiagnostic)) == 1
+            snapshot = db.scalar(select(StateSnapshot))
+            assert snapshot.payload_jsonb["soil"]["probes"][0]["dry_threshold_pct"] == 50.0
 
         assert (private_log_dir / "states_2026-07.jsonl").is_file()
         assert (private_log_dir / "sensor_health_2026-07.jsonl").is_file()
