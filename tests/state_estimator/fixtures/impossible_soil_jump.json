@@ -1,0 +1,34 @@
+{
+  "telemetry": [
+    {
+      "schema_version": "senior-pomidor.edge.telemetry.v2",
+      "device_id": "pi-001",
+      "timestamp_utc": "2026-07-02T08:00:00Z",
+      "pods": {
+        "pod_1": {
+          "enabled": true,
+          "metrics": {
+            "air_temperature_c": 24.0,
+            "air_humidity_percent": 60.0,
+            "soil_moisture_percent": 42.0
+          }
+        }
+      }
+    },
+    {
+      "schema_version": "senior-pomidor.edge.telemetry.v2",
+      "device_id": "pi-001",
+      "timestamp_utc": "2026-07-02T08:01:00Z",
+      "pods": {
+        "pod_1": {
+          "enabled": true,
+          "metrics": {
+            "air_temperature_c": 24.0,
+            "air_humidity_percent": 60.0,
+            "soil_moisture_percent": 90.0
+          }
+        }
+      }
+    }
+  ]
+}

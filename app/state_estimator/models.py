@@ -45,6 +45,9 @@ class EstimatorConfig:
     low_vpd_kpa: float = 0.5
     leaf_air_delta_abs_c: float = 3.0
     minimum_valid_soil_probes: int = 1
+    env_warning_trigger_seconds: int = 0
+    warning_clear_cycles: int = 2
+    high_clear_seconds: int = 300
 
 
 @dataclass
@@ -52,6 +55,9 @@ class EstimatorHistory:
     samples: dict[tuple[str, str], list[float]] = field(default_factory=dict)
     ema: dict[tuple[str, str], float] = field(default_factory=dict)
     previous_values: dict[tuple[str, str], float] = field(default_factory=dict)
+    anomaly_active_since: dict[str, datetime] = field(default_factory=dict)
+    anomaly_normal_since: dict[str, datetime] = field(default_factory=dict)
+    anomaly_normal_counts: dict[str, int] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

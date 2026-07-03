@@ -96,6 +96,12 @@ Before tagging or publishing a server release:
    docker compose exec -T state-estimator-worker sh -c "find /app/data/private -maxdepth 1 -type f -name '*.jsonl' -print"
    ```
 
+   Read-only 24h estimator audit:
+
+   ```bash
+   docker compose exec -T api python -m tools.state_estimator_audit --hours 24
+   ```
+
 7. Open the read-only dashboard:
 
    ```text
