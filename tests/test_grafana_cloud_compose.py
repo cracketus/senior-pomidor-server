@@ -31,7 +31,7 @@ def test_compose_services_have_restart_policies_and_healthchecks():
     assert compose.count("restart: unless-stopped") >= 6
     assert "curl" not in compose
     assert "http://127.0.0.1:8000/ready" in compose
-    assert 'pg_isready -U \\\"$$POSTGRES_USER\\\" -d \\\"$$POSTGRES_DB\\\"' in compose
+    assert 'pg_isready -U \\"$$POSTGRES_USER\\" -d \\"$$POSTGRES_DB\\"' in compose
     assert "mosquitto_pub -h 127.0.0.1 -t healthcheck -m ok" in compose
     assert "API_DOCS_ENABLED: ${API_DOCS_ENABLED:-true}" in compose
     assert "TELEMETRY_UPLOAD_TOKEN: ${TELEMETRY_UPLOAD_TOKEN:-}" in compose
