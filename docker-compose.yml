@@ -41,7 +41,7 @@ services:
       mosquitto:
         condition: service_healthy
     ports:
-      - "${API_PUBLISHED_PORT:-8000}:8000"
+      - "${LAN_BIND_ADDRESS:-127.0.0.1}:${API_PUBLISHED_PORT:-8000}:8000"
     volumes:
       - photo_data:/app/data/photos
     healthcheck:
@@ -133,18 +133,18 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_DB: senior_pomidor
-      POSTGRES_USER: senior_pomidor
-      POSTGRES_PASSWORD: senior_pomidor
+      POSTGRES_DB: ${POSTGRES_DB:-senior_pomidor}
+      POSTGRES_USER: ${POSTGRES_USER:-senior_pomidor}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-senior_pomidor}
       GRAFANA_DB_USER: ${GRAFANA_DB_USER:-grafana_reader}
       GRAFANA_DB_PASSWORD: ${GRAFANA_DB_PASSWORD:-grafana_reader}
     ports:
-      - "${POSTGRES_PUBLISHED_PORT:-5432}:5432"
+      - "${POSTGRES_BIND_ADDRESS:-127.0.0.1}:${POSTGRES_PUBLISHED_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./docker/postgres/init-grafana-reader.sh:/docker-entrypoint-initdb.d/20-grafana-reader.sh:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U senior_pomidor -d senior_pomidor"]
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -155,7 +155,7 @@ services:
     image: eclipse-mosquitto:2
     restart: unless-stopped
     ports:
-      - "${MQTT_PUBLISHED_PORT:-1883}:1883"
+      - "${LAN_BIND_ADDRESS:-127.0.0.1}:${MQTT_PUBLISHED_PORT:-1883}:1883"
     volumes:
       - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
       - mosquitto_data:/mosquitto/data
@@ -178,7 +178,7 @@ services:
       GRAFANA_DB_USER: ${GRAFANA_DB_USER:-grafana_reader}
       GRAFANA_DB_PASSWORD: ${GRAFANA_DB_PASSWORD:-grafana_reader}
     ports:
-      - "${GRAFANA_PUBLISHED_PORT:-3000}:3000"
+      - "${LAN_BIND_ADDRESS:-127.0.0.1}:${GRAFANA_PUBLISHED_PORT:-3000}:3000"
     volumes:
       - grafana_data:/var/lib/grafana
       - ./docker/grafana/provisioning:/etc/grafana/provisioning:ro

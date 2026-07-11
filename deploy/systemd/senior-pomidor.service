@@ -1,0 +1,23 @@
+[Unit]
+Description=Senior Pomidor Docker Compose stack
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=senior-pomidor
+Group=senior-pomidor
+WorkingDirectory=/opt/senior-pomidor-server
+Environment=COMPOSE_PROJECT_NAME=senior-pomidor
+EnvironmentFile=/opt/senior-pomidor-server/.env
+ExecStart=/usr/bin/docker compose up -d --remove-orphans
+ExecStartPost=/bin/sh -c 'for i in $$(seq 1 60); do /usr/bin/curl -fsS http://$${LAN_BIND_ADDRESS}:$${API_PUBLISHED_PORT}/ready && exit 0; sleep 2; done; exit 1'
+ExecReload=/usr/bin/docker compose up -d --remove-orphans
+ExecStop=/usr/bin/docker compose stop
+RemainAfterExit=yes
+TimeoutStartSec=180
+TimeoutStopSec=120
+
+[Install]
+WantedBy=multi-user.target

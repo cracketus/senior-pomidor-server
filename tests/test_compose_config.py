@@ -3,6 +3,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 COMPOSE_PATH = ROOT / "docker-compose.yml"
 GRAFANA_READER_INIT_PATH = ROOT / "docker/postgres/init-grafana-reader.sh"
+SYSTEMD_PATH = ROOT / "deploy/systemd/senior-pomidor.service"
+ENV_EXAMPLE_PATH = ROOT / ".env.example"
 
 
 def test_compose_runs_state_estimator_worker_with_private_log_volume() -> None:
@@ -32,3 +34,30 @@ def test_grafana_reader_grants_include_estimator_tables() -> None:
         "estimator_diagnostics",
     ):
         assert f"('{table}')" in init_script
+
+
+def test_production_network_and_database_configuration_is_parameterized() -> None:
+    compose = COMPOSE_PATH.read_text(encoding="utf-8")
+    example = ENV_EXAMPLE_PATH.read_text(encoding="utf-8")
+
+    assert "${LAN_BIND_ADDRESS:-127.0.0.1}:${API_PUBLISHED_PORT:-8000}:8000" in compose
+    assert "${LAN_BIND_ADDRESS:-127.0.0.1}:${MQTT_PUBLISHED_PORT:-1883}:1883" in compose
+    assert "${POSTGRES_BIND_ADDRESS:-127.0.0.1}:${POSTGRES_PUBLISHED_PORT:-5432}:5432" in compose
+    assert "POSTGRES_DB: ${POSTGRES_DB:-senior_pomidor}" in compose
+    assert "POSTGRES_USER: ${POSTGRES_USER:-senior_pomidor}" in compose
+    assert "POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-senior_pomidor}" in compose
+    assert "POSTGRES_PASSWORD=CHANGE_ME_DATABASE_PASSWORD" in example
+    assert "POSTGRES_BIND_ADDRESS=127.0.0.1" in example
+
+
+def test_systemd_unit_waits_for_docker_and_readiness() -> None:
+    unit = SYSTEMD_PATH.read_text(encoding="utf-8")
+
+    assert "Requires=docker.service" in unit
+    assert "After=docker.service network-online.target" in unit
+    assert "WorkingDirectory=/opt/senior-pomidor-server" in unit
+    assert "EnvironmentFile=/opt/senior-pomidor-server/.env" in unit
+    assert "docker compose up -d --remove-orphans" in unit
+    assert "/ready" in unit
+    assert "ExecStop=/usr/bin/docker compose stop" in unit
+    assert "WantedBy=multi-user.target" in unit

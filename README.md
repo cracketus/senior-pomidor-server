@@ -66,8 +66,8 @@ docker compose up -d --build
 
 The API is available at `http://localhost:8000`, and the MQTT broker listens on `localhost:1883`.
 The state estimator runs continuously in Compose by default. It writes canonical `state_v1` snapshots, sensor health, anomalies, diagnostics, and private JSONL logs under the `estimator_private_data` Docker volume.
-Host port mappings can be changed with `API_PUBLISHED_PORT`, `POSTGRES_PUBLISHED_PORT`, `MQTT_PUBLISHED_PORT`, and `GRAFANA_PUBLISHED_PORT` in `.env`.
-Published API, PostgreSQL, MQTT, and Grafana ports are intended for trusted LAN use only. Do not expose them directly to the public internet; put remote access behind a VPN or a hardened reverse proxy/firewall.
+Host port mappings can be changed with `API_PUBLISHED_PORT`, `POSTGRES_PUBLISHED_PORT`, `MQTT_PUBLISHED_PORT`, and `GRAFANA_PUBLISHED_PORT` in `.env`. `LAN_BIND_ADDRESS` limits API, MQTT, and Grafana to one trusted interface; PostgreSQL defaults to host-only through `POSTGRES_BIND_ADDRESS=127.0.0.1`.
+Published API, MQTT, and optional Grafana ports are intended for trusted LAN use only. Do not expose them directly to the public internet; put remote access behind a VPN or a hardened reverse proxy/firewall.
 For appliance-like deployments, set non-default PostgreSQL and Grafana credentials, configure `TELEMETRY_UPLOAD_TOKEN` and `PHOTO_UPLOAD_TOKEN`, and set `API_DOCS_ENABLED=false`.
 Use `GET /health` for shallow liveness and `GET /ready` for database plus migration readiness.
 
