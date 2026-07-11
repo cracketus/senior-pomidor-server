@@ -244,6 +244,8 @@ The lifecycle tool is intentionally dry-run only. Create a fresh backup before a
 
 ## Host Startup And Docker Recovery
 
+For the production Ubuntu mini-PC baseline, use [UBUNTU_HOST.md](UBUNTU_HOST.md) and the checked-in `deploy/systemd/senior-pomidor.service` unit.
+
 Keep service policies at `restart: unless-stopped`, then make the host start Docker and this Compose project after boot.
 
 Windows Task Scheduler example:
