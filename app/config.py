@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     state_estimator_public_log_dir: str = "data/public"
     state_estimator_replay_enabled: bool = False
     state_estimator_config_path: str = "config/state_estimator_v1.yaml"
+    assistant_provider: str | None = None
 
 
 @lru_cache
