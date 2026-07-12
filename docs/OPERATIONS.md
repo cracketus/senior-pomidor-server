@@ -10,11 +10,15 @@ Raspberry Pi edge nodes
                                                    `--> photo volume
 
 FastAPI API --> /dashboard and /api/v1 read APIs
+FastAPI API --> bounded selected-node context --> OpenAI Realtime client-secret API
+WebRTC client --> OpenAI Realtime; tool calls --> FastAPI assistant API --> PostgreSQL
 PostgreSQL --> Grafana local dashboard and alerts using raw telemetry and canonical state
 PostgreSQL --> optional Grafana Cloud exporter with sanitized low-cardinality raw telemetry metrics
 ```
 
 The API, MQTT broker, PostgreSQL port, dashboard, and Grafana UI are intended for trusted LAN use. For any remote access, put the service behind a VPN, firewall allow-list, or reverse proxy with authentication and TLS.
+
+The assistant is optional. Only the API service receives `OPENAI_API_KEY`; MQTT, state-estimator, and observability services do not. The server sends bounded selected-node context to OpenAI when minting a Realtime session, but does not send photo image bytes or persist conversation transcripts locally. See [ASSISTANT.md](ASSISTANT.md) for the complete data boundary.
 
 ## Release Checklist
 
@@ -148,6 +152,41 @@ Before tagging or publishing a server release:
    ```
 
    Each mutation command should fail with a permission error.
+
+## Assistant Operations
+
+Enable the assistant in `.env` only after the normal API, database, and selected node are healthy:
+
+```dotenv
+ASSISTANT_PROVIDER=planttalk_openai
+OPENAI_API_KEY=<server-side-openai-api-key>
+ASSISTANT_BEARER_TOKEN=<strong-random-lan-token>
+```
+
+Recreate only the API container, then verify capabilities without printing either credential:
+
+```powershell
+docker compose up -d --build api
+$assistantToken = '<same-token-configured-as-ASSISTANT_BEARER_TOKEN>'
+$headers = @{ Authorization = "Bearer $assistantToken" }
+Invoke-RestMethod http://localhost:8000/api/v1/assistant/capabilities -Headers $headers
+docker compose logs --tail 100 api
+```
+
+An unavailable or disabled assistant does not make `/health` or `/ready` fail. Operational verification should therefore check `/api/v1/assistant/capabilities` separately when the feature is expected to be enabled.
+
+Session metadata is held in API process memory. Recreating or restarting the API invalidates local assistant session IDs; clients must create a new session and WebRTC connection. Session expiry is also bounded by `ASSISTANT_SESSION_TTL_SECONDS`.
+
+For key rotation:
+
+1. Replace the OpenAI API key and/or assistant bearer token in the deployment secret source.
+2. Recreate the API service with `docker compose up -d --force-recreate api`.
+3. Verify capabilities using the replacement bearer token.
+4. Treat every previously issued local session ID and Realtime client secret as invalid.
+
+For configuration-only rollback, clear `ASSISTANT_PROVIDER` and recreate the API service. No database rollback or migration is required, and telemetry ingestion, state estimation, photos, and other read APIs continue normally.
+
+Do not log assistant request bodies, session responses, bearer tokens, Realtime client secrets, or provider payloads. Public exposure is unsupported. Detailed setup, manual API calls, stable errors, and WebRTC client guidance are in [ASSISTANT.md](ASSISTANT.md).
 
 ## Raspberry Pi Edge Configuration
 
