@@ -277,6 +277,8 @@ The assistant API is optional and intended only for a trusted LAN. Set
 `ASSISTANT_PROVIDER=planttalk_openai` and provide `OPENAI_API_KEY` to enable
 OpenAI Realtime session creation. The permanent key is used only by the server
 to mint a short-lived client secret and is never returned by the API.
+Procedural setup, usage, WebRTC integration, and troubleshooting are documented
+in [ASSISTANT.md](ASSISTANT.md).
 
 Implemented endpoints:
 
@@ -300,6 +302,27 @@ Successful session responses contain an opaque local `session_id`, expiry,
 Realtime client secret, Realtime call URL, and configured model. Each local
 session is bound to the validated node selected at creation.
 
+Session response:
+
+```json
+{
+  "session_id": "opaque-local-session-id",
+  "provider": "planttalk_openai",
+  "expires_at": "2026-07-12T16:00:00Z",
+  "transport": "webrtc",
+  "bootstrap": {
+    "client_secret": "ek_short_lived_secret",
+    "realtime_url": "https://api.openai.com/v1/realtime/calls",
+    "model": "gpt-realtime"
+  }
+}
+```
+
+The session response is a WebRTC bootstrap, not an assistant answer. The local
+`session_id` is used only for Senior Pomidor tool calls; the short-lived
+`bootstrap.client_secret` is used by a Realtime WebRTC client and must not be
+logged or persisted.
+
 Tool request:
 
 ```json
@@ -314,6 +337,22 @@ Allowed tools are `get_current_state`, `get_recent_history`,
 arguments cannot override the node bound to the session. All tools are
 read-only and return bounded projections; photo storage paths and credentials
 are excluded.
+
+Tool response:
+
+```json
+{
+  "session_id": "opaque-local-session-id",
+  "tool_name": "get_sensor_health",
+  "data": {
+    "node_id": "pi-001",
+    "result": {
+      "schema_version": "sensor_health_v1",
+      "node_id": "pi-001"
+    }
+  }
+}
+```
 
 Assistant failures use one stable envelope:
 
@@ -331,7 +370,10 @@ Stable codes include `invalid_node`, `node_not_found`, `unauthorized`,
 `session_not_found`, `expired_session`, `tool_not_allowed`, `configuration`,
 `unavailable`, `timeout`, and `rate_limited`. Provider error bodies are never
 forwarded to callers. Conversation transcripts are not stored in the database,
-files, logs, metrics, or the assistant session store.
+files, logs, metrics, or the assistant session store. The selected bounded
+context is sent to OpenAI as part of Realtime session configuration; recent
+photo context contains metadata only, not image bytes. A bundled browser client
+is deferred to #103.
 
 ## Operational Boundaries
 
