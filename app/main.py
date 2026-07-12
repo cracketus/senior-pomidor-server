@@ -6,6 +6,8 @@ from sqlalchemy.exc import SQLAlchemyError
 from starlette import status
 
 from app.api import router
+from app.assistant.api import AssistantAPIError
+from app.assistant.api import router as assistant_router
 from app.config import settings
 from app.db import engine
 from app.logging_config import configure_logging
@@ -26,6 +28,15 @@ app = FastAPI(
     openapi_url=openapi_url,
 )
 app.include_router(router)
+app.include_router(assistant_router)
+
+
+@app.exception_handler(AssistantAPIError)
+async def assistant_api_exception_handler(_request: Request, exc: AssistantAPIError) -> JSONResponse:
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"error": {"code": exc.code, "message": str(exc), "retryable": exc.retryable}},
+    )
 
 
 @app.exception_handler(SQLAlchemyError)

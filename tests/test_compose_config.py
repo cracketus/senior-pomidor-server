@@ -50,6 +50,26 @@ def test_production_network_and_database_configuration_is_parameterized() -> Non
     assert "POSTGRES_BIND_ADDRESS=127.0.0.1" in example
 
 
+def test_assistant_provider_configuration_is_forwarded_only_to_api() -> None:
+    compose = COMPOSE_PATH.read_text(encoding="utf-8")
+    example = ENV_EXAMPLE_PATH.read_text(encoding="utf-8")
+    api_environment = compose.split("  api:", 1)[1].split("  worker:", 1)[0]
+    worker_environment = compose.split("  worker:", 1)[1].split("  state-estimator-worker:", 1)[0]
+
+    for setting in (
+        "ASSISTANT_PROVIDER",
+        "OPENAI_API_KEY",
+        "ASSISTANT_REALTIME_MODEL",
+        "ASSISTANT_REALTIME_VOICE",
+        "ASSISTANT_SESSION_TTL_SECONDS",
+        "ASSISTANT_BEARER_TOKEN",
+        "ASSISTANT_RATE_LIMIT_REQUESTS",
+    ):
+        assert setting in api_environment
+        assert setting in example
+        assert setting not in worker_environment
+
+
 def test_systemd_unit_waits_for_docker_and_readiness() -> None:
     unit = SYSTEMD_PATH.read_text(encoding="utf-8")
 
