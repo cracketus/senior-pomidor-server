@@ -5,7 +5,6 @@ Server implementation for the Senior Pomidor project.
 ## What It Runs
 
 - `api`: FastAPI HTTP server on port `8000`.
-- optional provider-neutral PlantTalk assistant API backed initially by OpenAI Realtime.
 - `worker`: MQTT subscriber for `senior-pomidor/+/telemetry`.
 - `state-estimator-worker`: recurring canonical state, sensor health, anomaly, diagnostic, and private JSONL writer.
 - `postgres`: persistent telemetry/photo metadata storage.
@@ -72,29 +71,6 @@ Published API, MQTT, and optional Grafana ports are intended for trusted LAN use
 For appliance-like deployments, set non-default PostgreSQL and Grafana credentials, configure `TELEMETRY_UPLOAD_TOKEN` and `PHOTO_UPLOAD_TOKEN`, and set `API_DOCS_ENABLED=false`.
 Use `GET /health` for shallow liveness and `GET /ready` for database plus migration readiness.
 
-## Conversational Assistant Quickstart
-
-The optional assistant backend is grounded in stored canonical state, recent telemetry, active anomalies, sensor health, and photo metadata for one selected node. It exposes read-only tools and OpenAI Realtime WebRTC session bootstrap credentials; no conversation transcript is persisted locally.
-
-Add these values to `.env` and recreate the API service:
-
-```dotenv
-ASSISTANT_PROVIDER=planttalk_openai
-OPENAI_API_KEY=<server-side-openai-api-key>
-ASSISTANT_BEARER_TOKEN=<strong-random-lan-token>
-```
-
-```powershell
-docker compose up -d --build api
-$assistantToken = '<same-token-configured-in-.env>'
-$headers = @{ Authorization = "Bearer $assistantToken" }
-Invoke-RestMethod http://localhost:8000/api/v1/assistant/capabilities -Headers $headers
-```
-
-An enabled provider reports `available: true`. Use `POST /api/v1/assistant/sessions` with a node returned by `GET /api/v1/devices`, then use the returned local `session_id` for read-only tool calls.
-
-Issues #101 and #102 deliver the assistant architecture and backend APIs only. The `/assistant` browser voice/text experience belongs to #103 and is not bundled yet. See [docs/ASSISTANT.md](docs/ASSISTANT.md) for configuration, complete PowerShell examples, WebRTC integration, security boundaries, and troubleshooting.
-
 Start optional Grafana for local observability:
 
 ```powershell
@@ -126,7 +102,6 @@ docker compose --profile cloud-export up -d grafana-cloud-exporter
 Only low-cardinality raw telemetry plant metrics are exported, using metric names prefixed with `senior_pomidor_` and labels limited to `device_id` and `pod_key`. Canonical state estimator metrics are not exported to Grafana Cloud in this iteration. Photos, raw payload JSON, system health, sensor error text, host/network details, database credentials, file paths, and MQTT topics are not exported. Grafana Cloud is a public read-only projection; PostgreSQL remains the local source of truth.
 
 For active API/edge contracts and example requests/responses, see [docs/CONTRACTS.md](docs/CONTRACTS.md).
-For assistant configuration, session creation, tools, and Realtime client integration, see [docs/ASSISTANT.md](docs/ASSISTANT.md).
 For deployment checks, backups, restore, and Raspberry Pi configuration examples, see [docs/OPERATIONS.md](docs/OPERATIONS.md).
 For step-by-step Raspberry Pi integration, see [docs/PI_INTEGRATION_RUNBOOK.md](docs/PI_INTEGRATION_RUNBOOK.md).
 For 3/6/12 month hardware, storage, power, and 4/8/16 pod expansion estimates, see [docs/CAPACITY_PLANNING.md](docs/CAPACITY_PLANNING.md).
@@ -169,9 +144,6 @@ HTTP telemetry ingestion and photo upload remain unauthenticated by default unle
 - `GET /api/v1/state/latest?node_id=`
 - `GET /api/v1/sensor-health/latest?node_id=`
 - `GET /api/v1/anomalies/active?node_id=`
-- `GET /api/v1/assistant/capabilities`
-- `POST /api/v1/assistant/sessions`
-- `POST /api/v1/assistant/tools/{tool_name}`
 - `GET /health`
 - `GET /ready`
 - `GET /dashboard`
