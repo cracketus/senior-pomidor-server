@@ -271,68 +271,6 @@ POST /api/v1/state-estimator/replay
 
 Set `STATE_ESTIMATOR_REPLAY_ENABLED=true` to enable it for local deterministic replay inputs.
 
-## Conversational Assistant v1
-
-The assistant API is optional and intended only for a trusted LAN. Set
-`ASSISTANT_PROVIDER=planttalk_openai` and provide `OPENAI_API_KEY` to enable
-OpenAI Realtime session creation. The permanent key is used only by the server
-to mint a short-lived client secret and is never returned by the API.
-
-Implemented endpoints:
-
-- `GET /api/v1/assistant/capabilities`
-- `POST /api/v1/assistant/sessions`
-- `POST /api/v1/assistant/tools/{tool_name}`
-
-When `ASSISTANT_BEARER_TOKEN` is set, every assistant endpoint requires
-`Authorization: Bearer <token>`. Assistant-specific fixed-window rate limits
-are configured with `ASSISTANT_RATE_LIMIT_REQUESTS` and
-`ASSISTANT_RATE_LIMIT_WINDOW_SECONDS`.
-
-Session request:
-
-```json
-{"node_id": "pi-001"}
-```
-
-Successful session responses contain an opaque local `session_id`, expiry,
-`webrtc` transport, and a provider bootstrap containing only the short-lived
-Realtime client secret, Realtime call URL, and configured model. Each local
-session is bound to the validated node selected at creation.
-
-Tool request:
-
-```json
-{
-  "session_id": "opaque-local-session-id",
-  "arguments": {}
-}
-```
-
-Allowed tools are `get_current_state`, `get_recent_history`,
-`get_active_anomalies`, `get_sensor_health`, and `get_recent_photos`. Tool
-arguments cannot override the node bound to the session. All tools are
-read-only and return bounded projections; photo storage paths and credentials
-are excluded.
-
-Assistant failures use one stable envelope:
-
-```json
-{
-  "error": {
-    "code": "expired_session",
-    "message": "assistant session expired",
-    "retryable": false
-  }
-}
-```
-
-Stable codes include `invalid_node`, `node_not_found`, `unauthorized`,
-`session_not_found`, `expired_session`, `tool_not_allowed`, `configuration`,
-`unavailable`, `timeout`, and `rate_limited`. Provider error bodies are never
-forwarded to callers. Conversation transcripts are not stored in the database,
-files, logs, metrics, or the assistant session store.
-
 ## Operational Boundaries
 
 Current capabilities include telemetry v1/v2 ingestion, MQTT ingestion, HTTP fallback ingestion, photo upload/list/download, local dashboard, Grafana/PostgreSQL observability, Grafana Cloud public metrics export, public status JSON, and offline AI analysis.

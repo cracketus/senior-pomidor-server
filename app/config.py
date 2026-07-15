@@ -36,14 +36,6 @@ class Settings(BaseSettings):
     state_estimator_replay_enabled: bool = False
     state_estimator_config_path: str = "config/state_estimator_v1.yaml"
     assistant_provider: str | None = None
-    openai_api_key: str | None = Field(default=None)
-    assistant_realtime_model: str = "gpt-realtime"
-    assistant_realtime_voice: str = "marin"
-    assistant_session_ttl_seconds: int = Field(default=600, ge=10, le=7200)
-    assistant_provider_timeout_seconds: float = Field(default=15.0, gt=0, le=120)
-    assistant_bearer_token: str | None = Field(default=None)
-    assistant_rate_limit_requests: int = Field(default=60, ge=1, le=10_000)
-    assistant_rate_limit_window_seconds: int = Field(default=60, ge=1, le=3600)
 
 
 @lru_cache
