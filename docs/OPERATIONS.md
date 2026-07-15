@@ -346,6 +346,117 @@ The default alert set covers:
 
 VPD threshold ranges and operational interpretation are documented in [VPD_ALERTS.md](VPD_ALERTS.md).
 
+## Mandatory Daily Story Manual Acceptance Test
+
+This test is mandatory before the `llm` profile is enabled in a deployment or after changing the Ollama image,
+model, prompts, generation options, scheduler, or daily-story schema. It is deliberately manual because it verifies
+the real CPU/model bootstrap and generation path. Automated tests use deterministic fakes and do not replace this
+acceptance gate.
+
+Prerequisites:
+
+- Docker Engine has enough disk space for `ollama/ollama:0.31.1` and the `llama3.2:3b` model.
+- The selected API, PostgreSQL, MQTT, and Ollama ports are free.
+- The host clock and `DAILY_STORY_TIMEZONE` are correct.
+- If upload authentication is configured, include the deployment's telemetry bearer token in the seed request.
+
+### 1. Configure a one-time due schedule
+
+Choose a local schedule two or more minutes in the future. Model bootstrap may finish after that time; today's run
+will still be picked up without backfilling an older date.
+
+```powershell
+$env:DAILY_STORY_NODE_ID='manual-story-node'
+$env:DAILY_STORY_TIMEZONE='Europe/Vienna'
+$env:DAILY_STORY_SCHEDULE_TIME=(Get-Date).AddMinutes(2).ToString('HH:mm')
+$env:DAILY_STORY_OLLAMA_MODEL='llama3.2:3b'
+$env:DAILY_STORY_OLLAMA_OPTIONS_JSON='{"temperature":0.4,"top_p":0.9,"top_k":40,"num_ctx":4096,"num_predict":120,"repeat_penalty":1.1,"seed":42}'
+docker compose --profile llm up -d --build
+```
+
+The first model pull can take several minutes. Confirm PostgreSQL, API, and Ollama become healthy and model bootstrap
+finishes successfully:
+
+```powershell
+docker compose --profile llm ps
+docker compose --profile llm logs ollama-model-pull
+```
+
+Do not continue if `ollama-model-pull` exits non-zero or the pinned image/model cannot be fetched.
+
+### 2. Seed one telemetry event before the scheduled minute
+
+```powershell
+$timestamp=[DateTimeOffset]::UtcNow.ToString('yyyy-MM-ddTHH:mm:ssZ')
+$payload=@{
+  schema_version='senior-pomidor.edge.telemetry.v2'
+  device_id=$env:DAILY_STORY_NODE_ID
+  timestamp_utc=$timestamp
+  pods=@{
+    'pod-1'=@{
+      enabled=$true
+      soil_moisture_percent=43.5
+      air_temperature_c=23.0
+      air_humidity_percent=64.0
+      light_lux=12500
+      errors=@()
+    }
+  }
+  system_health=@{
+    rpi_core=@{cpu_temp_c=52.0; wifi_rssi_dbm=-58.0; disk_usage_percent=31.0; io_wait_percent=1.0}
+    errors=@()
+  }
+} | ConvertTo-Json -Depth 8
+Invoke-RestMethod -Method Post -Uri 'http://127.0.0.1:8000/api/v1/edge/telemetry' -ContentType 'application/json' -Body $payload
+```
+
+If `TELEMETRY_UPLOAD_TOKEN` is set, add
+`-Headers @{Authorization="Bearer $env:TELEMETRY_UPLOAD_TOKEN"}` to `Invoke-RestMethod`.
+
+### 3. Wait for the run and retrieve it through the public API
+
+After the scheduled minute and successful model bootstrap, inspect worker health and logs:
+
+```powershell
+docker compose --profile llm ps daily-story-worker
+docker compose --profile llm logs --tail 100 daily-story-worker
+$story=Invoke-RestMethod "http://127.0.0.1:8000/api/v1/daily-stories/latest?node_id=$env:DAILY_STORY_NODE_ID"
+$story | ConvertTo-Json -Depth 5
+```
+
+The test passes only when all of the following are true:
+
+- `daily-story-worker` is healthy and the returned status is `succeeded`.
+- `story_date` is today's date in `DAILY_STORY_TIMEZONE`; no record was created for an older date.
+- `story` is non-empty, first-person, grounded in the seeded data, and no longer than 280 characters.
+- `node_id`, model, UTC window, and generation timestamp are present and correct.
+- A range request returns the same run:
+
+  ```powershell
+  Invoke-RestMethod "http://127.0.0.1:8000/api/v1/daily-stories/range?node_id=$env:DAILY_STORY_NODE_ID&limit=30"
+  ```
+
+- The API object contains only `run_id`, `node_id`, `story_date`, `window_start_utc`, `window_end_utc`, `status`,
+  `story`, `model`, and `generated_at_utc`. It must not expose prompts, input summaries, Ollama options, runtime
+  internals, or error details.
+- Restarting the worker does not create a second `(node_id, story_date)` record:
+
+  ```powershell
+  docker compose restart daily-story-worker
+  Invoke-RestMethod "http://127.0.0.1:8000/api/v1/daily-stories/range?node_id=$env:DAILY_STORY_NODE_ID&limit=30"
+  ```
+
+Record the deployment identifier, image/model digest, test date, returned run ID, result, and operator name in the
+deployment change record. A `failed`, `skipped_no_data`, duplicate, oversized, ungrounded, or private-field-leaking
+result fails acceptance and must be resolved before enabling the profile for scheduled use.
+
+For a disposable test project, stop it after recording evidence. Add `--volumes` only when the PostgreSQL and Ollama
+volumes are explicitly disposable:
+
+```powershell
+docker compose --profile llm down
+```
+
 ## Useful Read API Calls
 
 ```powershell

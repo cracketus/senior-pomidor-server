@@ -1,0 +1,4 @@
+Write today's first-person tomato story for node {{NODE_ID}} using telemetry from {{WINDOW_START_UTC}} through {{WINDOW_END_UTC}} (end exclusive).
+
+Deterministic context JSON:
+{{CONTEXT_JSON}}

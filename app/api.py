@@ -1,6 +1,6 @@
 import hmac
 import logging
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, Response, UploadFile, status
@@ -13,6 +13,7 @@ from app.db import get_db
 from app.models import (
     ActionSimulation,
     AnomalyRecord,
+    DailyStoryRun,
     Device,
     Photo,
     PodReading,
@@ -96,6 +97,27 @@ def photo_to_dict(photo: Photo) -> dict[str, Any]:
         "sha256": photo.sha256,
         "received_at": format_utc(photo.received_at),
     }
+
+
+def daily_story_to_dict(run: DailyStoryRun) -> dict[str, Any]:
+    return {
+        "run_id": run.id,
+        "node_id": run.node_id,
+        "story_date": run.story_date.isoformat(),
+        "window_start_utc": format_utc(run.window_start_utc),
+        "window_end_utc": format_utc(run.window_end_utc),
+        "status": run.status,
+        "story": run.story,
+        "model": run.model,
+        "generated_at_utc": format_utc(run.completed_at_utc) if run.completed_at_utc is not None else None,
+    }
+
+
+def parse_story_date(value: str, field: str) -> date:
+    try:
+        return date.fromisoformat(value)
+    except ValueError as exc:
+        raise ValidationError(f"{field} must be an ISO date (YYYY-MM-DD)") from exc
 
 
 def apply_event_filters(
@@ -412,6 +434,47 @@ def action_simulation_range(
     except ValidationError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     return [simulation.payload_jsonb for simulation in db.scalars(query).all()]
+
+
+@router.get("/daily-stories/latest")
+def latest_daily_story(node_id: str, db: Session = Depends(get_db)) -> dict[str, Any]:
+    try:
+        node_id = validate_device_id(node_id)
+    except ValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    run = db.scalar(
+        select(DailyStoryRun)
+        .where(DailyStoryRun.node_id == node_id)
+        .order_by(desc(DailyStoryRun.story_date), desc(DailyStoryRun.id))
+        .limit(1)
+    )
+    if run is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="daily story not found")
+    return daily_story_to_dict(run)
+
+
+@router.get("/daily-stories/range")
+def daily_story_range(
+    node_id: str,
+    from_: str | None = Query(default=None, alias="from"),
+    to: str | None = None,
+    limit: int = Query(default=30, ge=1, le=100),
+    db: Session = Depends(get_db),
+) -> list[dict[str, Any]]:
+    try:
+        node_id = validate_device_id(node_id)
+        query = select(DailyStoryRun).where(DailyStoryRun.node_id == node_id).order_by(DailyStoryRun.story_date)
+        if from_:
+            query = query.where(DailyStoryRun.story_date >= parse_story_date(from_, "from"))
+        if to:
+            query = query.where(DailyStoryRun.story_date <= parse_story_date(to, "to"))
+        query = query.limit(limit)
+    except ValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    runs = list(db.scalars(query).all())
+    if not runs:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="daily stories not found")
+    return [daily_story_to_dict(run) for run in runs]
 
 
 @router.post("/state-estimator/replay")

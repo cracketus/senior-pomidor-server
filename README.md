@@ -111,6 +111,39 @@ The offline AI analysis prototype for stored photos and telemetry is documented 
 [docs/OPERATIONS.md](docs/OPERATIONS.md#offline-ai-analysis-prototype). It runs as a separate
 CLI consumer and does not participate in API or MQTT ingestion.
 
+## Optional Daily Tomato Story
+
+The `llm` Compose profile runs a local CPU-only Ollama service, pulls the configured model into the persistent
+`ollama_models` volume, and starts a daily story worker after migrations and model bootstrap complete:
+
+```powershell
+docker compose --profile llm up -d
+```
+
+The normal Compose stack is unchanged when the profile is not selected. Ollama is published only on
+`127.0.0.1:11434` by default. Override `OLLAMA_IMAGE` through a deployment-specific Compose override if GPU support
+is required; application code uses the same HTTP API.
+
+The worker generates at most one story for `DAILY_STORY_NODE_ID` per local calendar date. It uses the configured
+`DAILY_STORY_SCHEDULE_TIME` and `DAILY_STORY_TIMEZONE`, summarizes the preceding
+`DAILY_STORY_LOOKBACK_HOURS` without sending raw database rows, and never backfills an older local date. A restart
+after today's due time resumes only today's record. No telemetry produces a persisted `skipped_no_data` result and
+does not call Ollama.
+
+Defaults and the complete configuration contract are in [.env.example](.env.example). Important settings include
+poll/retry/stale limits, prompt paths, context size, Ollama host/model/timeout/keep-alive, and the seeded bounded
+`DAILY_STORY_OLLAMA_OPTIONS_JSON`. Default prompt files are in `config/daily_story/`; the worker fails startup if
+either file is missing or the user template omits any required token: `{{NODE_ID}}`, `{{WINDOW_START_UTC}}`,
+`{{WINDOW_END_UTC}}`, or `{{CONTEXT_JSON}}`. `DAILY_STORY_OLLAMA_KEEP_ALIVE=0` releases model memory after generation.
+
+Worker health is written to its container health file. Waiting, succeeded, and skipped states are healthy; a failed
+state makes the container health check fail while the worker retains the bounded error privately for retry and
+operations review.
+
+Before enabling this profile in a deployment, complete the mandatory seeded generation and API retrieval procedure
+in [docs/OPERATIONS.md](docs/OPERATIONS.md#mandatory-daily-story-manual-acceptance-test). This real-model test is an
+operator acceptance gate and is intentionally not part of the automated test suite.
+
 ## Edge Configuration
 
 Use the server LAN IP for the Raspberry Pi:
@@ -144,6 +177,8 @@ HTTP telemetry ingestion and photo upload remain unauthenticated by default unle
 - `GET /api/v1/state/latest?node_id=`
 - `GET /api/v1/sensor-health/latest?node_id=`
 - `GET /api/v1/anomalies/active?node_id=`
+- `GET /api/v1/daily-stories/latest?node_id=`
+- `GET /api/v1/daily-stories/range?node_id=&from=&to=&limit=`
 - `GET /health`
 - `GET /ready`
 - `GET /dashboard`

@@ -1,6 +1,18 @@
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    CheckConstraint,
+    Date,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -141,3 +153,38 @@ class ActionSimulation(Base):
     state_id: Mapped[str | None] = mapped_column(String(256), index=True)
     decision: Mapped[str] = mapped_column(String(64), index=True)
     payload_jsonb: Mapped[dict] = mapped_column(JSON_TYPE, nullable=False)
+
+
+class DailyStoryRun(Base):
+    __tablename__ = "daily_story_runs"
+    __table_args__ = (
+        UniqueConstraint("node_id", "story_date", name="uq_daily_story_run_node_date"),
+        CheckConstraint(
+            "status IN ('running', 'succeeded', 'skipped_no_data', 'failed')",
+            name="ck_daily_story_run_status",
+        ),
+        CheckConstraint("attempt_count >= 1", name="ck_daily_story_run_attempt_count"),
+        CheckConstraint(
+            "(status = 'succeeded' AND story IS NOT NULL) OR (status <> 'succeeded' AND story IS NULL)",
+            name="ck_daily_story_run_story_status",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    node_id: Mapped[str] = mapped_column(String(128), index=True)
+    story_date: Mapped[date] = mapped_column(Date, index=True)
+    window_start_utc: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    window_end_utc: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    scheduled_at_utc: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    started_at_utc: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    completed_at_utc: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    status: Mapped[str] = mapped_column(String(32), index=True)
+    attempt_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    story: Mapped[str | None] = mapped_column(String(280))
+    model: Mapped[str] = mapped_column(String(128), nullable=False)
+    ollama_options_jsonb: Mapped[dict] = mapped_column(JSON_TYPE, nullable=False, default=dict)
+    system_prompt: Mapped[str | None] = mapped_column(Text)
+    user_prompt: Mapped[str | None] = mapped_column(Text)
+    input_summary_jsonb: Mapped[dict | None] = mapped_column(JSON_TYPE)
+    runtime_metrics_jsonb: Mapped[dict | None] = mapped_column(JSON_TYPE)
+    error_details: Mapped[str | None] = mapped_column(Text)
