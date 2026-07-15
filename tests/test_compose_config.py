@@ -50,6 +50,24 @@ def test_production_network_and_database_configuration_is_parameterized() -> Non
     assert "POSTGRES_BIND_ADDRESS=127.0.0.1" in example
 
 
+def test_optional_llm_profile_is_local_pinned_and_bootstrapped() -> None:
+    compose = COMPOSE_PATH.read_text(encoding="utf-8")
+    example = ENV_EXAMPLE_PATH.read_text(encoding="utf-8")
+
+    assert "image: ${OLLAMA_IMAGE:-ollama/ollama:0.31.1}" in compose
+    assert '"127.0.0.1:${OLLAMA_PUBLISHED_PORT:-11434}:11434"' in compose
+    assert "ollama_models:/root/.ollama" in compose
+    assert "ollama-model-pull:" in compose
+    assert 'command: ["pull", "${DAILY_STORY_OLLAMA_MODEL:-llama3.2:3b}"]' in compose
+    assert "daily-story-worker:" in compose
+    assert "command: python -m app.daily_story_worker" in compose
+    assert compose.count("- llm") == 3
+    assert "daily_story_skipped_no_data" in compose
+    assert "DAILY_STORY_OLLAMA_KEEP_ALIVE=0" in example
+    assert "DAILY_STORY_MAX_ATTEMPTS=3" in example
+    assert "DAILY_STORY_RETRY_DELAY_MINUTES=15" in example
+
+
 def test_systemd_unit_waits_for_docker_and_readiness() -> None:
     unit = SYSTEMD_PATH.read_text(encoding="utf-8")
 

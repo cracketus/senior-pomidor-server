@@ -1,6 +1,7 @@
 import tempfile
 from functools import lru_cache
 from pathlib import Path
+from typing import Any
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -36,6 +37,33 @@ class Settings(BaseSettings):
     state_estimator_replay_enabled: bool = False
     state_estimator_config_path: str = "config/state_estimator_v1.yaml"
     assistant_provider: str | None = None
+    daily_story_node_id: str = "pi-001"
+    daily_story_schedule_time: str = "09:00"
+    daily_story_timezone: str = "Europe/Vienna"
+    daily_story_lookback_hours: float = 24.0
+    daily_story_poll_interval_seconds: int = 60
+    daily_story_max_attempts: int = 3
+    daily_story_retry_delay_minutes: int = 15
+    daily_story_stale_after_minutes: int = 15
+    daily_story_system_prompt_path: str = "config/daily_story/system.txt"
+    daily_story_user_prompt_path: str = "config/daily_story/user.txt"
+    daily_story_max_context_chars: int = 16_000
+    daily_story_ollama_host: str = "http://localhost:11434"
+    daily_story_ollama_model: str = "llama3.2:3b"
+    daily_story_ollama_timeout_seconds: float = 120.0
+    daily_story_ollama_keep_alive: str = "0"
+    daily_story_ollama_request_retries: int = 3
+    daily_story_ollama_options_json: dict[str, Any] = Field(
+        default_factory=lambda: {
+            "temperature": 0.4,
+            "top_p": 0.9,
+            "top_k": 40,
+            "num_ctx": 4096,
+            "num_predict": 120,
+            "repeat_penalty": 1.1,
+            "seed": 42,
+        }
+    )
 
 
 @lru_cache

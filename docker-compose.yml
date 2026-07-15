@@ -129,6 +129,92 @@ services:
         condition: service_healthy
     logging: *default-logging
 
+  ollama:
+    image: ${OLLAMA_IMAGE:-ollama/ollama:0.31.1}
+    restart: unless-stopped
+    profiles:
+      - llm
+    ports:
+      - "127.0.0.1:${OLLAMA_PUBLISHED_PORT:-11434}:11434"
+    volumes:
+      - ollama_models:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    logging: *default-logging
+
+  ollama-model-pull:
+    image: ${OLLAMA_IMAGE:-ollama/ollama:0.31.1}
+    restart: "no"
+    profiles:
+      - llm
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    command: ["pull", "${DAILY_STORY_OLLAMA_MODEL:-llama3.2:3b}"]
+    depends_on:
+      ollama:
+        condition: service_healthy
+    volumes:
+      - ollama_models:/root/.ollama
+    logging: *default-logging
+
+  daily-story-worker:
+    build: .
+    command: python -m app.daily_story_worker
+    restart: unless-stopped
+    profiles:
+      - llm
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://senior_pomidor:senior_pomidor@postgres:5432/senior_pomidor}
+      DAILY_STORY_NODE_ID: ${DAILY_STORY_NODE_ID:-pi-001}
+      DAILY_STORY_SCHEDULE_TIME: ${DAILY_STORY_SCHEDULE_TIME:-09:00}
+      DAILY_STORY_TIMEZONE: ${DAILY_STORY_TIMEZONE:-Europe/Vienna}
+      DAILY_STORY_LOOKBACK_HOURS: ${DAILY_STORY_LOOKBACK_HOURS:-24}
+      DAILY_STORY_POLL_INTERVAL_SECONDS: ${DAILY_STORY_POLL_INTERVAL_SECONDS:-60}
+      DAILY_STORY_MAX_ATTEMPTS: ${DAILY_STORY_MAX_ATTEMPTS:-3}
+      DAILY_STORY_RETRY_DELAY_MINUTES: ${DAILY_STORY_RETRY_DELAY_MINUTES:-15}
+      DAILY_STORY_STALE_AFTER_MINUTES: ${DAILY_STORY_STALE_AFTER_MINUTES:-15}
+      DAILY_STORY_SYSTEM_PROMPT_PATH: /app/config/daily_story/system.txt
+      DAILY_STORY_USER_PROMPT_PATH: /app/config/daily_story/user.txt
+      DAILY_STORY_MAX_CONTEXT_CHARS: ${DAILY_STORY_MAX_CONTEXT_CHARS:-16000}
+      DAILY_STORY_OLLAMA_HOST: http://ollama:11434
+      DAILY_STORY_OLLAMA_MODEL: ${DAILY_STORY_OLLAMA_MODEL:-llama3.2:3b}
+      DAILY_STORY_OLLAMA_TIMEOUT_SECONDS: ${DAILY_STORY_OLLAMA_TIMEOUT_SECONDS:-120}
+      DAILY_STORY_OLLAMA_KEEP_ALIVE: ${DAILY_STORY_OLLAMA_KEEP_ALIVE:-0}
+      DAILY_STORY_OLLAMA_REQUEST_RETRIES: ${DAILY_STORY_OLLAMA_REQUEST_RETRIES:-3}
+      DAILY_STORY_OLLAMA_OPTIONS_JSON: ${DAILY_STORY_OLLAMA_OPTIONS_JSON:-'{"temperature":0.4,"top_p":0.9,"top_k":40,"num_ctx":4096,"num_predict":120,"repeat_penalty":1.1,"seed":42}'}
+      WORKER_HEALTH_FILE: /tmp/senior-pomidor-daily-story-health.json
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+      ollama-model-pull:
+        condition: service_completed_successfully
+    volumes:
+      - ./config/daily_story:/app/config/daily_story:ro
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-m",
+          "app.worker_healthcheck",
+          "daily_story_waiting",
+          "daily_story_succeeded",
+          "daily_story_skipped_no_data",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    logging: *default-logging
+
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
@@ -196,3 +282,4 @@ volumes:
   estimator_private_data:
   grafana_data:
   mosquitto_data:
+  ollama_models:

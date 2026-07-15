@@ -2,9 +2,6 @@ from __future__ import annotations
 
 import base64
 import json
-import urllib.error
-import urllib.parse
-import urllib.request
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -15,6 +12,7 @@ from sqlalchemy import desc, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.models import Photo, PodReading, TelemetryEvent
+from app.ollama import OllamaClient, OllamaError
 from app.telemetry import health_alerts
 
 DEFAULT_AI_ANALYSIS_MODEL = "llama3.2-vision"
@@ -174,41 +172,24 @@ class OllamaVisionAnalyzer:
         self.model = model
         self.host = host.rstrip("/")
         self.timeout_seconds = timeout_seconds
-        parsed_host = urllib.parse.urlparse(self.host)
-        if parsed_host.scheme not in {"http", "https"} or not parsed_host.netloc:
-            raise AnalysisError("Ollama host must be an HTTP or HTTPS URL")
+        try:
+            self.client = OllamaClient(host=self.host, timeout_seconds=timeout_seconds)
+        except OllamaError as exc:
+            raise AnalysisError(str(exc)) from exc
 
     def analyze(self, image_path: Path, prompt: str) -> str:
         if not self.host:
             raise AnalysisError("Ollama host is required")
         image_bytes = image_path.read_bytes()
-        payload = {
-            "model": self.model,
-            "prompt": prompt,
-            "images": [base64.b64encode(image_bytes).decode("ascii")],
-            "stream": False,
-        }
-        request = urllib.request.Request(  # noqa: S310
-            f"{self.host}/api/generate",
-            data=json.dumps(payload).encode("utf-8"),
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
         try:
-            with urllib.request.urlopen(request, timeout=self.timeout_seconds) as response:  # noqa: S310  # nosec B310
-                response_payload = json.loads(response.read().decode("utf-8"))
-        except urllib.error.HTTPError as exc:
-            body = exc.read().decode("utf-8", errors="replace")[:500]
-            raise AnalysisError(f"Ollama HTTP {exc.code}: {body}") from exc
-        except urllib.error.URLError as exc:
-            raise AnalysisError(f"Ollama request failed: {exc.reason}") from exc
-        except TimeoutError as exc:
-            raise AnalysisError("Ollama request timed out") from exc
-
-        analysis = response_payload.get("response")
-        if not isinstance(analysis, str):
-            raise AnalysisError("Ollama response did not include a text response")
-        return analysis
+            response = self.client.generate(
+                model=self.model,
+                prompt=prompt,
+                images=[base64.b64encode(image_bytes).decode("ascii")],
+            )
+        except OllamaError as exc:
+            raise AnalysisError(str(exc)) from exc
+        return response.text
 
 
 def analyze_context(

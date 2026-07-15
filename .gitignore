@@ -14,3 +14,4 @@ backups/
 *.db
 .codex-known-hosts
 .codex-pi-key*
+docs/ai-harness-plan.md
