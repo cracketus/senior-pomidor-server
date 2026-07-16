@@ -4,7 +4,7 @@ import json
 from collections import Counter, defaultdict
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from itertools import pairwise
 from pathlib import Path
 from statistics import median
@@ -14,7 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.ai_analysis import ensure_utc, format_utc, reading_metrics
-from app.models import AnomalyRecord, SensorHealthSnapshot, TelemetryEvent
+from app.models import AnomalyRecord, DailyStoryRun, SensorHealthSnapshot, TelemetryEvent
 from app.ollama import OllamaClient, OllamaError
 from app.telemetry import health_alerts
 
@@ -22,11 +22,17 @@ REQUIRED_TEMPLATE_TOKENS = (
     "{{NODE_ID}}",
     "{{WINDOW_START_UTC}}",
     "{{WINDOW_END_UTC}}",
+    "{{ENVIRONMENT_CONTEXT_JSON}}",
     "{{CONTEXT_JSON}}",
 )
+STORY_MIN_CHARS = 280 * 6
+STORY_MAX_CHARS = 32768
+STORY_END_MARKER = "#SeniorPomidor"
 STORY_JSON_SCHEMA: dict[str, Any] = {
     "type": "object",
-    "properties": {"story": {"type": "string", "minLength": 1, "maxLength": 280}},
+    # Large grammar-enforced lengths make reasoning models pad the story with
+    # internal analysis. Enforce the publication bounds in _parse_story.
+    "properties": {"story": {"type": "string", "minLength": 1}},
     "required": ["story"],
     "additionalProperties": False,
 }
@@ -310,13 +316,81 @@ def load_prompts(system_path: str, user_path: str) -> tuple[str, str]:
     return system_prompt, user_template
 
 
+def load_environment_context(path: str, max_chars: int) -> dict[str, Any]:
+    try:
+        raw = Path(path).read_text(encoding="utf-8")
+        context = json.loads(raw)
+    except OSError as exc:
+        raise DailyStoryError(f"Unable to read daily story environment context: {exc}") from exc
+    except json.JSONDecodeError as exc:
+        raise DailyStoryError(f"Daily story environment context is invalid JSON: {exc}") from exc
+    if not isinstance(context, dict):
+        raise DailyStoryError("Daily story environment context must be a JSON object")
+    if len(json.dumps(context, ensure_ascii=False, sort_keys=True, separators=(",", ":"))) > max_chars:
+        raise DailyStoryError("Daily story environment context exceeds its configured size limit")
+    return context
+
+
+def build_environment_context(
+    db: Session,
+    *,
+    node_id: str,
+    story_date: date,
+    base_context: dict[str, Any],
+    memory_entries: int,
+    max_chars: int,
+) -> dict[str, Any]:
+    context = json.loads(json.dumps(base_context, ensure_ascii=False))
+    configured_memories = context.get("running_memories")
+    if isinstance(configured_memories, dict):
+        memories = configured_memories
+    elif isinstance(configured_memories, list):
+        memories = {"notes": configured_memories}
+    else:
+        memories = {"notes": []}
+    previous_runs = list(
+        db.scalars(
+            select(DailyStoryRun)
+            .where(
+                DailyStoryRun.node_id == node_id,
+                DailyStoryRun.story_date < story_date,
+                DailyStoryRun.status == "succeeded",
+                DailyStoryRun.story.is_not(None),
+            )
+            .order_by(DailyStoryRun.story_date.desc(), DailyStoryRun.id.desc())
+            .limit(memory_entries)
+        ).all()
+    )
+    memories["previous_diary_entries"] = [
+        {"story_date": run.story_date.isoformat(), "story": run.story} for run in reversed(previous_runs)
+    ]
+    context["running_memories"] = memories
+    serialized = lambda: json.dumps(  # noqa: E731
+        context, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    )
+    while memories["previous_diary_entries"] and len(serialized()) > max_chars:
+        memories["previous_diary_entries"].pop(0)
+    if len(serialized()) > max_chars:
+        raise DailyStoryError("Daily story environment context exceeds its configured size limit")
+    return context
+
+
 def render_user_prompt(
-    template: str, *, node_id: str, window_start: datetime, window_end: datetime, summary: dict[str, Any]
+    template: str,
+    *,
+    node_id: str,
+    window_start: datetime,
+    window_end: datetime,
+    environment_context: dict[str, Any],
+    summary: dict[str, Any],
 ) -> str:
     replacements = {
         "{{NODE_ID}}": node_id,
         "{{WINDOW_START_UTC}}": format_utc(window_start),
         "{{WINDOW_END_UTC}}": format_utc(window_end),
+        "{{ENVIRONMENT_CONTEXT_JSON}}": json.dumps(
+            environment_context, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+        ),
         "{{CONTEXT_JSON}}": json.dumps(summary, ensure_ascii=False, sort_keys=True, separators=(",", ":")),
     }
     rendered = template
@@ -336,8 +410,12 @@ def _parse_story(text: str) -> str:
     if not isinstance(story, str) or not story.strip():
         raise DailyStoryError("Ollama returned an empty story")
     story = story.strip()
-    if len(story) > 280:
-        raise DailyStoryError("Ollama returned a story longer than 280 characters")
+    if len(story) < STORY_MIN_CHARS:
+        raise DailyStoryError(f"Ollama returned a story shorter than {STORY_MIN_CHARS} characters (got {len(story)})")
+    if len(story) > STORY_MAX_CHARS:
+        raise DailyStoryError(f"Ollama returned a story longer than {STORY_MAX_CHARS} characters")
+    if not story.endswith(STORY_END_MARKER):
+        raise DailyStoryError(f"Ollama story must end with {STORY_END_MARKER} and contain no trailing analysis")
     return story
 
 
@@ -354,19 +432,47 @@ def generate_story(
     if retry_attempts < 1:
         raise ValueError("retry_attempts must be at least 1")
     last_error: Exception | None = None
+    request_prompt = user_prompt
     for attempt in range(1, retry_attempts + 1):
+        response = None
         try:
             response = client.generate(
                 model=model,
                 system=system_prompt,
-                prompt=user_prompt,
+                prompt=request_prompt,
                 format_schema=STORY_JSON_SCHEMA,
                 options=options,
                 keep_alive=keep_alive,
+                think=False,
             )
             return GeneratedStory(story=_parse_story(response.text), metrics=response.metrics, request_attempts=attempt)
         except (DailyStoryError, OllamaError) as exc:
             last_error = exc
             if isinstance(exc, OllamaError) and not exc.retryable:
                 break
+            if isinstance(exc, DailyStoryError):
+                short_draft = ""
+                if response is not None:
+                    try:
+                        previous_payload = json.loads(response.text)
+                        previous_story = previous_payload.get("story") if isinstance(previous_payload, dict) else None
+                    except json.JSONDecodeError:
+                        previous_story = None
+                    if isinstance(previous_story, str) and 0 < len(previous_story.strip()) < STORY_MIN_CHARS:
+                        short_draft = (
+                            "\n\nPrevious short draft to rewrite and expand:\n"
+                            "<draft>\n"
+                            f"{previous_story.strip()}\n"
+                            "</draft>"
+                        )
+                request_prompt = (
+                    f"{user_prompt}\n\n"
+                    f"Correction for generation attempt {attempt + 1}: the previous response was invalid because "
+                    f"{exc}. Return one complete JSON story of at least {STORY_MIN_CHARS} characters. "
+                    "Rewrite the whole diary as 7-10 clearly separated thread posts of 240-280 characters each. "
+                    "Expand the observations and biological interpretation without inventing facts; do not merely "
+                    "continue after the existing ending. Return only the publishable diary, with no planning, "
+                    "reasoning, prompt discussion, or commentary."
+                    f"{short_draft}"
+                )
     raise DailyStoryError(str(last_error or "Daily story generation failed")) from last_error

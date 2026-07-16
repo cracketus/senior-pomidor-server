@@ -9,7 +9,15 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.config import Settings
-from app.daily_story import DailyStoryError, build_daily_story_context, generate_story, load_prompts, render_user_prompt
+from app.daily_story import (
+    DailyStoryError,
+    build_daily_story_context,
+    build_environment_context,
+    generate_story,
+    load_environment_context,
+    load_prompts,
+    render_user_prompt,
+)
 from app.daily_story_worker import claim_due_run, process_run, scheduled_utc
 from app.db import get_db
 from app.main import app
@@ -205,11 +213,13 @@ class FakeClient:
 
 
 def test_generation_retries_validation_and_sends_schema_options_and_keep_alive() -> None:
+    valid_story = f"{('I am thriving today! ' * 100).strip()}\n\n#SeniorPomidor"
     client = FakeClient(
         [
             "not-json",
-            json.dumps({"story": "x" * 281}),
-            json.dumps({"story": "I am thriving today!"}),
+            json.dumps({"story": "Too short."}),
+            json.dumps({"story": "x" * (32768 + 1)}),
+            json.dumps({"story": valid_story}),
         ]
     )
     result = generate_story(
@@ -219,13 +229,23 @@ def test_generation_retries_validation_and_sends_schema_options_and_keep_alive()
         user_prompt="user",
         options={"seed": 42},
         keep_alive="0",
-        retry_attempts=3,
+        retry_attempts=4,
     )
-    assert result.story == "I am thriving today!"
-    assert result.request_attempts == 3
-    assert client.calls[0]["format_schema"]["properties"]["story"]["maxLength"] == 280
+    assert result.story == valid_story
+    assert result.request_attempts == 4
+    assert client.calls[0]["format_schema"]["properties"]["story"] == {
+        "type": "string",
+        "minLength": 1,
+    }
     assert client.calls[0]["options"] == {"seed": 42}
     assert client.calls[0]["keep_alive"] == "0"
+    assert client.calls[0]["think"] is False
+    assert client.calls[0]["prompt"] == "user"
+    assert "at least 1680 characters" in client.calls[1]["prompt"]
+    assert "generation attempt 4" in client.calls[3]["prompt"]
+    assert "no planning, reasoning" in client.calls[1]["prompt"]
+    assert "Previous short draft" in client.calls[2]["prompt"]
+    assert "Too short." in client.calls[2]["prompt"]
 
 
 def test_generation_does_not_retry_permanent_http_error() -> None:
@@ -243,17 +263,42 @@ def test_generation_does_not_retry_permanent_http_error() -> None:
     assert len(client.calls) == 1
 
 
+def test_generation_retries_story_with_analysis_after_required_ending() -> None:
+    diary = ("I noticed a steady and biologically plausible day. " * 40).strip()
+    valid_story = f"{diary}\n\n#SeniorPomidor"
+    leaked_story = f"{valid_story} The user wants me to analyze the prompt and prepare another response."
+    client = FakeClient([json.dumps({"story": leaked_story}), json.dumps({"story": valid_story})])
+
+    result = generate_story(
+        client,
+        model="deepseek-r1:14b",
+        system_prompt="system",
+        user_prompt="user",
+        options={},
+        keep_alive="5m",
+        retry_attempts=2,
+    )
+
+    assert result.story == valid_story
+    assert result.request_attempts == 2
+    assert "contain no trailing analysis" in client.calls[1]["prompt"]
+
+
 def test_prompt_files_require_tokens_and_render_deterministically(tmp_path) -> None:
     system_path = tmp_path / "system.txt"
     user_path = tmp_path / "user.txt"
     system_path.write_text("system", encoding="utf-8")
-    user_path.write_text("{{NODE_ID}} {{WINDOW_START_UTC}} {{WINDOW_END_UTC}} {{CONTEXT_JSON}}", encoding="utf-8")
+    user_path.write_text(
+        "{{NODE_ID}} {{WINDOW_START_UTC}} {{WINDOW_END_UTC}} {{ENVIRONMENT_CONTEXT_JSON}} {{CONTEXT_JSON}}",
+        encoding="utf-8",
+    )
     system_prompt, template = load_prompts(str(system_path), str(user_path))
     rendered = render_user_prompt(
         template,
         node_id="pi-001",
         window_start=datetime(2026, 7, 14, tzinfo=UTC),
         window_end=datetime(2026, 7, 15, tzinfo=UTC),
+        environment_context={"name": "Senior Pomidor"},
         summary={"b": 2, "a": 1},
     )
     assert system_prompt == "system"
@@ -261,6 +306,71 @@ def test_prompt_files_require_tokens_and_render_deterministically(tmp_path) -> N
     user_path.write_text("missing tokens", encoding="utf-8")
     with pytest.raises(DailyStoryError, match="missing required tokens"):
         load_prompts(str(system_path), str(user_path))
+
+
+def test_environment_context_loads_static_facts_and_previous_diary_memories(db_session, tmp_path) -> None:
+    path = tmp_path / "environment.json"
+    path.write_text(
+        json.dumps(
+            {
+                "name": "Senior Pomidor",
+                "species": "Tomato",
+                "running_memories": {"notes": ["Transplanted in May"]},
+            }
+        ),
+        encoding="utf-8",
+    )
+    base_context = load_environment_context(str(path), 2_000)
+    now = datetime(2026, 7, 14, 7, 0, tzinfo=UTC)
+    db_session.add_all(
+        [
+            DailyStoryRun(
+                node_id="pi-001",
+                story_date=date(2026, 7, 14),
+                window_start_utc=now - timedelta(days=1),
+                window_end_utc=now,
+                scheduled_at_utc=now,
+                started_at_utc=now,
+                completed_at_utc=now,
+                status="succeeded",
+                attempt_count=1,
+                story="Yesterday I opened my first flower.",
+                model="test",
+                ollama_options_jsonb={},
+            ),
+            DailyStoryRun(
+                node_id="pi-002",
+                story_date=date(2026, 7, 14),
+                window_start_utc=now - timedelta(days=1),
+                window_end_utc=now,
+                scheduled_at_utc=now,
+                started_at_utc=now,
+                completed_at_utc=now,
+                status="succeeded",
+                attempt_count=1,
+                story="Other node memory.",
+                model="test",
+                ollama_options_jsonb={},
+            ),
+        ]
+    )
+    db_session.commit()
+
+    context = build_environment_context(
+        db_session,
+        node_id="pi-001",
+        story_date=date(2026, 7, 15),
+        base_context=base_context,
+        memory_entries=7,
+        max_chars=2_000,
+    )
+
+    assert context["name"] == "Senior Pomidor"
+    assert context["running_memories"]["notes"] == ["Transplanted in May"]
+    assert context["running_memories"]["previous_diary_entries"] == [
+        {"story_date": "2026-07-14", "story": "Yesterday I opened my first flower."}
+    ]
+    assert "Other node" not in json.dumps(context)
 
 
 def test_scheduler_runs_today_only_skips_no_data_and_prevents_duplicate(db_session) -> None:
@@ -277,11 +387,18 @@ def test_scheduler_runs_today_only_skips_no_data_and_prevents_duplicate(db_sessi
         config,
         client=client,
         system_prompt="system",
-        user_template="{{NODE_ID}} {{WINDOW_START_UTC}} {{WINDOW_END_UTC}} {{CONTEXT_JSON}}",
+        user_template=(
+            "{{NODE_ID}} {{WINDOW_START_UTC}} {{WINDOW_END_UTC}} {{ENVIRONMENT_CONTEXT_JSON}} {{CONTEXT_JSON}}"
+        ),
+        base_environment_context={"name": "Senior Pomidor"},
         now=now,
     )
     assert processed.status == "skipped_no_data"
     assert processed.story is None
+    assert processed.environment_context_jsonb == {
+        "name": "Senior Pomidor",
+        "running_memories": {"notes": [], "previous_diary_entries": []},
+    }
     assert client.calls == []
     assert claim_due_run(db_session, config, now=now + timedelta(hours=1)) is None
     assert len(db_session.scalars(select(DailyStoryRun)).all()) == 1
@@ -328,6 +445,7 @@ def test_daily_story_api_filters_and_excludes_private_fields(client) -> None:
                     ollama_options_jsonb={"seed": 1},
                     system_prompt="private",
                     user_prompt="private",
+                    environment_context_jsonb={"private": True},
                     input_summary_jsonb={"private": True},
                     error_details=None,
                 )
