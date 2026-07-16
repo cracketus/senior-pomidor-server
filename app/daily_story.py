@@ -411,15 +411,11 @@ def _parse_story(text: str) -> str:
         raise DailyStoryError("Ollama returned an empty story")
     story = story.strip()
     if len(story) < STORY_MIN_CHARS:
-        raise DailyStoryError(
-            f"Ollama returned a story shorter than {STORY_MIN_CHARS} characters (got {len(story)})"
-        )
+        raise DailyStoryError(f"Ollama returned a story shorter than {STORY_MIN_CHARS} characters (got {len(story)})")
     if len(story) > STORY_MAX_CHARS:
         raise DailyStoryError(f"Ollama returned a story longer than {STORY_MAX_CHARS} characters")
     if not story.endswith(STORY_END_MARKER):
-        raise DailyStoryError(
-            f"Ollama story must end with {STORY_END_MARKER} and contain no trailing analysis"
-        )
+        raise DailyStoryError(f"Ollama story must end with {STORY_END_MARKER} and contain no trailing analysis")
     return story
 
 

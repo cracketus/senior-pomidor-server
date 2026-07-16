@@ -53,9 +53,7 @@ def test_gemma4_runner_crash_retries_once_on_cpu_without_mutating_options() -> N
     client = OllamaClient(host="http://ollama.test")
     options = {"num_ctx": 8192}
 
-    with patch(
-        "app.ollama.urllib.request.urlopen", side_effect=[runner_crash(), FakeResponse()]
-    ) as open_request:
+    with patch("app.ollama.urllib.request.urlopen", side_effect=[runner_crash(), FakeResponse()]) as open_request:
         response = client.generate(model="gemma4:latest", prompt="prompt", options=options)
 
     assert open_request.call_count == 2

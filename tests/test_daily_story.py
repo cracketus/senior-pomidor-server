@@ -213,7 +213,7 @@ class FakeClient:
 
 
 def test_generation_retries_validation_and_sends_schema_options_and_keep_alive() -> None:
-    valid_story = f'{("I am thriving today! " * 100).strip()}\n\n#SeniorPomidor'
+    valid_story = f"{('I am thriving today! ' * 100).strip()}\n\n#SeniorPomidor"
     client = FakeClient(
         [
             "not-json",
