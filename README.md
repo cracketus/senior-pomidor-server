@@ -131,10 +131,17 @@ after today's due time resumes only today's record. No telemetry produces a pers
 does not call Ollama.
 
 Defaults and the complete configuration contract are in [.env.example](.env.example). Important settings include
-poll/retry/stale limits, prompt paths, context size, Ollama host/model/timeout/keep-alive, and the seeded bounded
+poll/retry/stale limits, prompt paths, context sizes, memory depth, Ollama host/model/timeout/keep-alive, and the seeded bounded
 `DAILY_STORY_OLLAMA_OPTIONS_JSON`. Default prompt files are in `config/daily_story/`; the worker fails startup if
 either file is missing or the user template omits any required token: `{{NODE_ID}}`, `{{WINDOW_START_UTC}}`,
-`{{WINDOW_END_UTC}}`, or `{{CONTEXT_JSON}}`. `DAILY_STORY_OLLAMA_KEEP_ALIVE=0` releases model memory after generation.
+`{{WINDOW_END_UTC}}`, `{{ENVIRONMENT_CONTEXT_JSON}}`, or `{{CONTEXT_JSON}}`.
+
+`config/daily_story/environment.json` supplies non-telemetry facts such as identity, species, location, germination,
+pot and soil details, growth stage, flowers, fruits, neighboring plants, life events, and writing preferences. Its
+`running_memories.notes` are operator-maintained. For each run, the worker also adds up to
+`DAILY_STORY_MEMORY_ENTRIES` previous successful diary entries for the same node. This environment layer is bounded,
+stored privately with the run, and excluded from the public API. `DAILY_STORY_OLLAMA_KEEP_ALIVE=0` releases model
+memory after generation.
 
 Worker health is written to its container health file. Waiting, succeeded, and skipped states are healthy; a failed
 state makes the container health check fail while the worker retains the bounded error privately for retry and

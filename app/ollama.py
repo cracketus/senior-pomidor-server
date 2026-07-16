@@ -22,6 +22,22 @@ class OllamaResponse:
     metrics: dict[str, Any]
 
 
+def _should_retry_gemma4_on_cpu(
+    *, model: str, options: dict[str, Any] | None, status_code: int, response_body: str
+) -> bool:
+    model_name = model.rsplit("/", 1)[-1].lower()
+    if not model_name.startswith("gemma4") or status_code < 500 or (options is not None and "num_gpu" in options):
+        return False
+    return any(
+        marker in response_body
+        for marker in (
+            "GGML_SCHED_MAX_SPLIT_INPUTS",
+            "GGML_ASSERT",
+            "llama-server process has terminated",
+        )
+    )
+
+
 class OllamaClient:
     def __init__(self, *, host: str, timeout_seconds: float = 120.0) -> None:
         self.host = host.rstrip("/")
@@ -42,6 +58,7 @@ class OllamaClient:
         options: dict[str, Any] | None = None,
         keep_alive: str | int | None = None,
         images: list[str] | None = None,
+        think: bool | str | None = None,
     ) -> OllamaResponse:
         payload: dict[str, Any] = {"model": model, "prompt": prompt, "stream": False}
         if system is not None:
@@ -54,26 +71,46 @@ class OllamaClient:
             payload["keep_alive"] = keep_alive
         if images is not None:
             payload["images"] = images
-        request = urllib.request.Request(  # noqa: S310
-            f"{self.host}/api/generate",
-            data=json.dumps(payload).encode("utf-8"),
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        try:
-            with urllib.request.urlopen(request, timeout=self.timeout_seconds) as response:  # noqa: S310  # nosec B310
-                decoded = json.loads(response.read().decode("utf-8"))
-        except urllib.error.HTTPError as exc:
-            body = exc.read().decode("utf-8", errors="replace")[:500]
-            raise OllamaError(
-                f"Ollama HTTP {exc.code}: {body}", retryable=exc.code in {408, 409, 425, 429} or exc.code >= 500
-            ) from exc
-        except urllib.error.URLError as exc:
-            raise OllamaError(f"Ollama request failed: {exc.reason}", retryable=True) from exc
-        except TimeoutError as exc:
-            raise OllamaError("Ollama request timed out", retryable=True) from exc
-        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-            raise OllamaError("Ollama returned malformed JSON", retryable=True) from exc
+        if think is not None:
+            payload["think"] = think
+        request_payload = payload
+        used_cpu_fallback = False
+        while True:
+            request = urllib.request.Request(  # noqa: S310
+                f"{self.host}/api/generate",
+                data=json.dumps(request_payload).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            try:
+                with urllib.request.urlopen(  # noqa: S310  # nosec B310
+                    request, timeout=self.timeout_seconds
+                ) as response:
+                    decoded = json.loads(response.read().decode("utf-8"))
+                break
+            except urllib.error.HTTPError as exc:
+                body = exc.read().decode("utf-8", errors="replace")[:500]
+                if not used_cpu_fallback and _should_retry_gemma4_on_cpu(
+                    model=model,
+                    options=options,
+                    status_code=exc.code,
+                    response_body=body,
+                ):
+                    fallback_options = dict(options or {})
+                    fallback_options["num_gpu"] = 0
+                    request_payload = {**payload, "options": fallback_options}
+                    used_cpu_fallback = True
+                    continue
+                raise OllamaError(
+                    f"Ollama HTTP {exc.code}: {body}",
+                    retryable=exc.code in {408, 409, 425, 429} or exc.code >= 500,
+                ) from exc
+            except urllib.error.URLError as exc:
+                raise OllamaError(f"Ollama request failed: {exc.reason}", retryable=True) from exc
+            except TimeoutError as exc:
+                raise OllamaError("Ollama request timed out", retryable=True) from exc
+            except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+                raise OllamaError("Ollama returned malformed JSON", retryable=True) from exc
         if not isinstance(decoded, dict):
             raise OllamaError("Ollama returned an invalid response", retryable=True)
         text = decoded.get("response")
@@ -93,4 +130,6 @@ class OllamaClient:
             )
             if key in decoded
         }
+        if used_cpu_fallback:
+            metrics["cpu_fallback"] = True
         return OllamaResponse(text=text, metrics=metrics)

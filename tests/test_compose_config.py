@@ -66,6 +66,9 @@ def test_optional_llm_profile_is_local_pinned_and_bootstrapped() -> None:
     assert "DAILY_STORY_OLLAMA_KEEP_ALIVE=0" in example
     assert "DAILY_STORY_MAX_ATTEMPTS=3" in example
     assert "DAILY_STORY_RETRY_DELAY_MINUTES=15" in example
+    assert "DAILY_STORY_ENVIRONMENT_CONTEXT_PATH: /app/config/daily_story/environment.json" in compose
+    assert "DAILY_STORY_MEMORY_ENTRIES: ${DAILY_STORY_MEMORY_ENTRIES:-7}" in compose
+    assert "DAILY_STORY_MAX_ENVIRONMENT_CONTEXT_CHARS=8000" in example
 
 
 def test_systemd_unit_waits_for_docker_and_readiness() -> None:

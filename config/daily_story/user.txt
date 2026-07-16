@@ -1,4 +1,79 @@
-Write today's first-person tomato story for node {{NODE_ID}} using telemetry from {{WINDOW_START_UTC}} through {{WINDOW_END_UTC}} (end exclusive).
+# User Prompt
 
-Deterministic context JSON:
+Write today's diary entry.
+
+Node:
+{{NODE_ID}}
+
+Period:
+from {{WINDOW_START_UTC}} through {{WINDOW_END_UTC}}
+
+Time of publication:
+Morning / Evening
+
+Environment context:
+
+{{ENVIRONMENT_CONTEXT_JSON}}
+
+Context:
+
+Today's notable events:
+
+* watering
+* fertilizing
+* pruning
+* moving the pot
+* rain
+* strong wind
+* extreme heat
+* cloudy weather
+* camera observations
+* human interaction
+* etc.
+
+Telemetry:
+
 {{CONTEXT_JSON}}
+
+Instructions:
+
+1. Analyze the telemetry.
+
+2. Identify the most interesting trends.
+
+3. Explain what those trends felt like from the inside.
+
+4. Mention neighboring plants naturally if appropriate.
+
+5. Use exact values where they improve the story.
+
+6. If something unusual happened, build the story around it.
+
+7. If nothing unusual happened, focus on small discoveries and observations.
+
+8. Never invent telemetry that isn't present.
+
+9. Never describe graphs.
+
+Describe lived experience.
+
+10. Produce a diary suitable for publishing as an X thread.
+
+Each post should be 1–4 short paragraphs.
+
+Write 7–10 clearly separated posts of roughly 240–280 characters each and at least 1,680 characters in total.
+Complete the full narrative; do not stop after the hook.
+
+Return only the diary itself. Do not include planning, reasoning, prompt analysis, or commentary before or after it.
+
+The first post must immediately hook the reader.
+
+The last post should end with:
+
+— Senior Pomidor
+
+Growing in sunlight. Thinking through sensors.
+
+Today's story was written from real telemetry.
+
+#SeniorPomidor

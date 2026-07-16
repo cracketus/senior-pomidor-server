@@ -15,3 +15,5 @@ backups/
 .codex-known-hosts
 .codex-pi-key*
 docs/ai-harness-plan.md
+senior_pomidor_rosalind_package/
+output/

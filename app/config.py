@@ -47,7 +47,10 @@ class Settings(BaseSettings):
     daily_story_stale_after_minutes: int = 15
     daily_story_system_prompt_path: str = "config/daily_story/system.txt"
     daily_story_user_prompt_path: str = "config/daily_story/user.txt"
+    daily_story_environment_context_path: str = "config/daily_story/environment.json"
     daily_story_max_context_chars: int = 16_000
+    daily_story_max_environment_context_chars: int = 8_000
+    daily_story_memory_entries: int = 7
     daily_story_ollama_host: str = "http://localhost:11434"
     daily_story_ollama_model: str = "llama3.2:3b"
     daily_story_ollama_timeout_seconds: float = 120.0
@@ -59,7 +62,7 @@ class Settings(BaseSettings):
             "top_p": 0.9,
             "top_k": 40,
             "num_ctx": 4096,
-            "num_predict": 120,
+            "num_predict": 2048,
             "repeat_penalty": 1.1,
             "seed": 42,
         }

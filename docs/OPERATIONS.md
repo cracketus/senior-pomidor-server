@@ -353,6 +353,10 @@ model, prompts, generation options, scheduler, or daily-story schema. It is deli
 the real CPU/model bootstrap and generation path. Automated tests use deterministic fakes and do not replace this
 acceptance gate.
 
+Before the test, fill in `config/daily_story/environment.json` with known non-telemetry facts. Leave unknown values
+as `null` rather than guessing. `running_memories.notes` may contain durable operator-curated memories; the worker
+adds recent successful stories for the same node under `running_memories.previous_diary_entries` automatically.
+
 Prerequisites:
 
 - Docker Engine has enough disk space for `ollama/ollama:0.31.1` and the `llama3.2:3b` model.
@@ -370,7 +374,7 @@ $env:DAILY_STORY_NODE_ID='manual-story-node'
 $env:DAILY_STORY_TIMEZONE='Europe/Vienna'
 $env:DAILY_STORY_SCHEDULE_TIME=(Get-Date).AddMinutes(2).ToString('HH:mm')
 $env:DAILY_STORY_OLLAMA_MODEL='llama3.2:3b'
-$env:DAILY_STORY_OLLAMA_OPTIONS_JSON='{"temperature":0.4,"top_p":0.9,"top_k":40,"num_ctx":4096,"num_predict":120,"repeat_penalty":1.1,"seed":42}'
+$env:DAILY_STORY_OLLAMA_OPTIONS_JSON='{"temperature":0.4,"top_p":0.9,"top_k":40,"num_ctx":4096,"num_predict":2048,"repeat_penalty":1.1,"seed":42}'
 docker compose --profile llm up -d --build
 ```
 
@@ -428,7 +432,7 @@ The test passes only when all of the following are true:
 
 - `daily-story-worker` is healthy and the returned status is `succeeded`.
 - `story_date` is today's date in `DAILY_STORY_TIMEZONE`; no record was created for an older date.
-- `story` is non-empty, first-person, grounded in the seeded data, and no longer than 280 characters.
+- `story` is at least 1680 characters, first-person, grounded in the seeded data, and no longer than 32768 characters.
 - `node_id`, model, UTC window, and generation timestamp are present and correct.
 - A range request returns the same run:
 
@@ -437,8 +441,8 @@ The test passes only when all of the following are true:
   ```
 
 - The API object contains only `run_id`, `node_id`, `story_date`, `window_start_utc`, `window_end_utc`, `status`,
-  `story`, `model`, and `generated_at_utc`. It must not expose prompts, input summaries, Ollama options, runtime
-  internals, or error details.
+  `story`, `model`, and `generated_at_utc`. It must not expose prompts, environment context, input summaries, Ollama
+  options, runtime internals, or error details.
 - Restarting the worker does not create a second `(node_id, story_date)` record:
 
   ```powershell

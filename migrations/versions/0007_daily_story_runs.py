@@ -31,7 +31,7 @@ def upgrade() -> None:
         sa.Column("completed_at_utc", sa.DateTime(timezone=True), nullable=True),
         sa.Column("status", sa.String(length=32), nullable=False),
         sa.Column("attempt_count", sa.Integer(), nullable=False),
-        sa.Column("story", sa.String(length=280), nullable=True),
+        sa.Column("story", sa.String(length=32768), nullable=True),
         sa.Column("model", sa.String(length=128), nullable=False),
         sa.Column("ollama_options_jsonb", JSON_TYPE, nullable=False),
         sa.Column("system_prompt", sa.Text(), nullable=True),

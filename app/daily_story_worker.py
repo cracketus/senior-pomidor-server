@@ -19,7 +19,9 @@ from app.config import Settings, settings
 from app.daily_story import (
     DailyStoryError,
     build_daily_story_context,
+    build_environment_context,
     generate_story,
+    load_environment_context,
     load_prompts,
     render_user_prompt,
 )
@@ -57,6 +59,10 @@ def validate_runtime_settings(config: Settings) -> tuple[time, ZoneInfo]:
         raise DailyStoryError("Daily story retry limits must be at least one")
     if config.daily_story_retry_delay_minutes < 0 or config.daily_story_stale_after_minutes < 1:
         raise DailyStoryError("Daily story retry/stale intervals are invalid")
+    if config.daily_story_memory_entries < 0:
+        raise DailyStoryError("DAILY_STORY_MEMORY_ENTRIES must not be negative")
+    if config.daily_story_max_environment_context_chars < 512:
+        raise DailyStoryError("DAILY_STORY_MAX_ENVIRONMENT_CONTEXT_CHARS must be at least 512")
     hour, minute = (int(part) for part in config.daily_story_schedule_time.split(":"))
     return time(hour=hour, minute=minute), timezone
 
@@ -113,6 +119,7 @@ def claim_due_run(db: Session, config: Settings, *, now: datetime | None = None)
         "ollama_options_jsonb": config.daily_story_ollama_options_json,
         "system_prompt": None,
         "user_prompt": None,
+        "environment_context_jsonb": None,
         "input_summary_jsonb": None,
         "runtime_metrics_jsonb": None,
         "error_details": None,
@@ -173,6 +180,7 @@ def process_run(
     client: OllamaClient,
     system_prompt: str,
     user_template: str,
+    base_environment_context: dict[str, Any],
     now: datetime | None = None,
 ) -> DailyStoryRun:
     started = perf_counter()
@@ -188,15 +196,25 @@ def process_run(
             window_end=run.window_end_utc,
             max_chars=config.daily_story_max_context_chars,
         )
+        environment_context = build_environment_context(
+            db,
+            node_id=run.node_id,
+            story_date=run.story_date,
+            base_context=base_environment_context,
+            memory_entries=config.daily_story_memory_entries,
+            max_chars=config.daily_story_max_environment_context_chars,
+        )
         user_prompt = render_user_prompt(
             user_template,
             node_id=run.node_id,
             window_start=run.window_start_utc,
             window_end=run.window_end_utc,
+            environment_context=environment_context,
             summary=context.summary,
         )
         run.system_prompt = system_prompt
         run.user_prompt = user_prompt
+        run.environment_context_jsonb = environment_context
         run.input_summary_jsonb = context.summary
         run.ollama_options_jsonb = config.daily_story_ollama_options_json
         if context.telemetry_event_count == 0:
@@ -243,6 +261,7 @@ def run_cycle(
     client: OllamaClient,
     system_prompt: str,
     user_template: str,
+    base_environment_context: dict[str, Any],
     now: datetime | None = None,
 ) -> DailyStoryRun | None:
     run = claim_due_run(db, config, now=now)
@@ -255,6 +274,7 @@ def run_cycle(
         client=client,
         system_prompt=system_prompt,
         user_template=user_template,
+        base_environment_context=base_environment_context,
         now=now,
     )
 
@@ -269,6 +289,10 @@ def main() -> int:
         validate_runtime_settings(settings)
         system_prompt, user_template = load_prompts(
             settings.daily_story_system_prompt_path, settings.daily_story_user_prompt_path
+        )
+        base_environment_context = load_environment_context(
+            settings.daily_story_environment_context_path,
+            settings.daily_story_max_environment_context_chars,
         )
         client = OllamaClient(
             host=settings.daily_story_ollama_host,
@@ -289,6 +313,7 @@ def main() -> int:
                     client=client,
                     system_prompt=system_prompt,
                     user_template=user_template,
+                    base_environment_context=base_environment_context,
                 )
             if run is None:
                 write_worker_health("daily_story_waiting")
