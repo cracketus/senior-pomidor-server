@@ -8,11 +8,14 @@ Wants=network-online.target
 Type=oneshot
 User=senior-pomidor
 Group=senior-pomidor
-WorkingDirectory=/opt/senior-pomidor-server
+WorkingDirectory=/srv/apps/senior-pomidor/current
 Environment=COMPOSE_PROJECT_NAME=senior-pomidor
-EnvironmentFile=/opt/senior-pomidor-server/.env
+Environment=COMPOSE_PROFILES=observability,cloud-export
+EnvironmentFile=/srv/secret/senior-pomidor.env
+ExecStartPre=/usr/bin/docker compose config --quiet
 ExecStart=/usr/bin/docker compose up -d --remove-orphans
 ExecStartPost=/bin/sh -c 'for i in $$(seq 1 60); do /usr/bin/curl -fsS http://$${LAN_BIND_ADDRESS}:$${API_PUBLISHED_PORT}/ready && exit 0; sleep 2; done; exit 1'
+ExecReload=/usr/bin/docker compose config --quiet
 ExecReload=/usr/bin/docker compose up -d --remove-orphans
 ExecStop=/usr/bin/docker compose stop
 RemainAfterExit=yes

@@ -1,0 +1,10 @@
+[Unit]
+Description=Weekly Senior Pomidor full backup
+
+[Timer]
+OnCalendar=Sun *-*-* 03:15:00
+Persistent=true
+Unit=senior-pomidor-backup@weekly.service
+
+[Install]
+WantedBy=timers.target

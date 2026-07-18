@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily Senior Pomidor database backup
+
+[Timer]
+OnCalendar=*-*-* 02:15:00
+Persistent=true
+Unit=senior-pomidor-backup@daily.service
+
+[Install]
+WantedBy=timers.target

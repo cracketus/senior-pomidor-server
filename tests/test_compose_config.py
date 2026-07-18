@@ -18,8 +18,7 @@ def test_compose_runs_state_estimator_worker_with_private_log_volume() -> None:
     assert "STATE_ESTIMATOR_PRIVATE_LOG_DIR: /app/data/private" in compose
     assert "WORKER_HEALTH_FILE: /tmp/senior-pomidor-state-estimator-health.json" in compose
     assert 'test: ["CMD", "python", "-m", "app.worker_healthcheck", "state_estimator_healthy"]' in compose
-    assert "estimator_private_data:/app/data/private" in compose
-    assert "estimator_private_data:" in compose
+    assert "${ESTIMATOR_PRIVATE_DATA_DIR:-/srv/logs/senior-pomidor/estimator-private}:/app/data/private" in compose
     assert "condition: service_completed_successfully" in compose
     assert "condition: service_healthy" in compose
 
@@ -48,6 +47,16 @@ def test_production_network_and_database_configuration_is_parameterized() -> Non
     assert "POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-senior_pomidor}" in compose
     assert "POSTGRES_PASSWORD=CHANGE_ME_DATABASE_PASSWORD" in example
     assert "POSTGRES_BIND_ADDRESS=127.0.0.1" in example
+    assert "build: ." not in compose
+    assert compose.count("image: ${APP_IMAGE:?APP_IMAGE must reference an immutable release image}") == 6
+    for path in (
+        "/srv/data/postgres",
+        "/srv/data/grafana",
+        "/srv/data/mosquitto",
+        "/srv/media/photos/senior-pomidor",
+        "/srv/logs/senior-pomidor/estimator-private",
+    ):
+        assert path in compose
 
 
 def test_optional_llm_profile_is_local_pinned_and_bootstrapped() -> None:
@@ -76,8 +85,10 @@ def test_systemd_unit_waits_for_docker_and_readiness() -> None:
 
     assert "Requires=docker.service" in unit
     assert "After=docker.service network-online.target" in unit
-    assert "WorkingDirectory=/opt/senior-pomidor-server" in unit
-    assert "EnvironmentFile=/opt/senior-pomidor-server/.env" in unit
+    assert "WorkingDirectory=/srv/apps/senior-pomidor/current" in unit
+    assert "EnvironmentFile=/srv/secret/senior-pomidor.env" in unit
+    assert "Environment=COMPOSE_PROFILES=observability,cloud-export" in unit
+    assert "ExecStartPre=/usr/bin/docker compose config --quiet" in unit
     assert "docker compose up -d --remove-orphans" in unit
     assert "/ready" in unit
     assert "ExecStop=/usr/bin/docker compose stop" in unit
