@@ -1,6 +1,8 @@
 import json
 import os
+import shutil
 import subprocess
+import tempfile
 import time
 from pathlib import Path
 
@@ -31,18 +33,40 @@ READONLY_TABLES = (
     "estimator_diagnostics",
 )
 COMPOSE_ENV = {
+    "APP_IMAGE": "senior-pomidor-server:e2e",
     "API_PUBLISHED_PORT": "18080",
     "GRAFANA_PUBLISHED_PORT": "13000",
     "POSTGRES_PUBLISHED_PORT": "15432",
     "MQTT_PUBLISHED_PORT": "11883",
 }
+E2E_DATA_ROOT = Path(tempfile.gettempdir()) / PROJECT_NAME
+COMPOSE_ENV.update(
+    {
+        "POSTGRES_DATA_DIR": (E2E_DATA_ROOT / "postgres").as_posix(),
+        "GRAFANA_DATA_DIR": (E2E_DATA_ROOT / "grafana").as_posix(),
+        "MOSQUITTO_DATA_DIR": (E2E_DATA_ROOT / "mosquitto").as_posix(),
+        "PHOTO_DATA_DIR": (E2E_DATA_ROOT / "photos").as_posix(),
+        "ESTIMATOR_PRIVATE_DATA_DIR": (E2E_DATA_ROOT / "estimator-private").as_posix(),
+        "OLLAMA_DATA_DIR": (E2E_DATA_ROOT / "ollama").as_posix(),
+    }
+)
 
 
 def compose(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
     env = os.environ.copy()
     env.update(COMPOSE_ENV)
     return subprocess.run(
-        ["docker", "compose", "-p", PROJECT_NAME, *args],
+        [
+            "docker",
+            "compose",
+            "-f",
+            "docker-compose.yml",
+            "-f",
+            "docker-compose.dev.yml",
+            "-p",
+            PROJECT_NAME,
+            *args,
+        ],
         cwd=ROOT,
         env=env,
         text=True,
@@ -217,15 +241,16 @@ def assert_migration_completed() -> None:
     assert inspect.stdout.strip() == "0"
 
 
-def assert_mosquitto_named_volume() -> None:
+def assert_mosquitto_bind_mount() -> None:
     result = compose("config", "--format", "json")
     config = json.loads(result.stdout)
     mosquitto_volumes = config["services"]["mosquitto"]["volumes"]
     assert any(
-        volume["type"] == "volume" and volume["source"] == "mosquitto_data" and volume["target"] == "/mosquitto/data"
+        volume["type"] == "bind"
+        and volume["source"] == COMPOSE_ENV["MOSQUITTO_DATA_DIR"]
+        and volume["target"] == "/mosquitto/data"
         for volume in mosquitto_volumes
     )
-    assert config["volumes"]["mosquitto_data"]["name"] == f"{PROJECT_NAME}_mosquitto_data"
 
 
 def telemetry_payload() -> dict:
@@ -260,6 +285,18 @@ def upload_photo(client: httpx.Client) -> httpx.Response:
 
 
 def test_docker_compose_stack_ingests_and_serves_data():
+    shutil.rmtree(E2E_DATA_ROOT, ignore_errors=True)
+    for key in (
+        "POSTGRES_DATA_DIR",
+        "GRAFANA_DATA_DIR",
+        "MOSQUITTO_DATA_DIR",
+        "PHOTO_DATA_DIR",
+        "ESTIMATOR_PRIVATE_DATA_DIR",
+        "OLLAMA_DATA_DIR",
+    ):
+        data_dir = Path(COMPOSE_ENV[key])
+        data_dir.mkdir(parents=True, exist_ok=True)
+        data_dir.chmod(0o777)
     try:
         compose("up", "-d", "--build")
         assert_migration_completed()
@@ -271,7 +308,7 @@ def test_docker_compose_stack_ingests_and_serves_data():
         assert_container_healthy("api")
         assert_container_healthy("worker")
         assert_container_healthy("state-estimator-worker")
-        assert_mosquitto_named_volume()
+        assert_mosquitto_bind_mount()
 
         with httpx.Client(base_url=BASE_URL, timeout=10) as client:
             health = client.get("/health")
@@ -309,3 +346,4 @@ def test_docker_compose_stack_ingests_and_serves_data():
         assert_grafana_provisioning()
     finally:
         compose("down", "-v", "--remove-orphans", check=False)
+        shutil.rmtree(E2E_DATA_ROOT, ignore_errors=True)

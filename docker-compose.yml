@@ -7,7 +7,7 @@ x-default-logging: &default-logging
 
 services:
   migrate:
-    build: .
+    image: ${APP_IMAGE:?APP_IMAGE must reference an immutable release image}
     command: alembic upgrade head
     restart: "no"
     environment:
@@ -18,7 +18,7 @@ services:
     logging: *default-logging
 
   api:
-    build: .
+    image: ${APP_IMAGE:?APP_IMAGE must reference an immutable release image}
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000
     restart: unless-stopped
     environment:
@@ -43,7 +43,7 @@ services:
     ports:
       - "${LAN_BIND_ADDRESS:-127.0.0.1}:${API_PUBLISHED_PORT:-8000}:8000"
     volumes:
-      - photo_data:/app/data/photos
+      - ${PHOTO_DATA_DIR:-/srv/media/photos/senior-pomidor}:/app/data/photos
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=5).read()\""]
       interval: 30s
@@ -53,7 +53,7 @@ services:
     logging: *default-logging
 
   worker:
-    build: .
+    image: ${APP_IMAGE:?APP_IMAGE must reference an immutable release image}
     command: python -m app.mqtt_worker
     restart: unless-stopped
     environment:
@@ -76,7 +76,7 @@ services:
       mosquitto:
         condition: service_healthy
     volumes:
-      - photo_data:/app/data/photos
+      - ${PHOTO_DATA_DIR:-/srv/media/photos/senior-pomidor}:/app/data/photos
     healthcheck:
       test: ["CMD", "python", "-m", "app.worker_healthcheck"]
       interval: 30s
@@ -86,7 +86,7 @@ services:
     logging: *default-logging
 
   state-estimator-worker:
-    build: .
+    image: ${APP_IMAGE:?APP_IMAGE must reference an immutable release image}
     command: python -m app.state_estimator_worker
     restart: unless-stopped
     environment:
@@ -101,7 +101,7 @@ services:
       postgres:
         condition: service_healthy
     volumes:
-      - estimator_private_data:/app/data/private
+      - ${ESTIMATOR_PRIVATE_DATA_DIR:-/srv/logs/senior-pomidor/estimator-private}:/app/data/private
     healthcheck:
       test: ["CMD", "python", "-m", "app.worker_healthcheck", "state_estimator_healthy"]
       interval: 30s
@@ -111,7 +111,7 @@ services:
     logging: *default-logging
 
   grafana-cloud-exporter:
-    build: .
+    image: ${APP_IMAGE:?APP_IMAGE must reference an immutable release image}
     command: python -m app.grafana_cloud_exporter
     restart: unless-stopped
     profiles:
@@ -162,7 +162,7 @@ services:
     logging: *default-logging
 
   daily-story-worker:
-    build: .
+    image: ${APP_IMAGE:?APP_IMAGE must reference an immutable release image}
     command: python -m app.daily_story_worker
     restart: unless-stopped
     profiles:
@@ -230,7 +230,7 @@ services:
     ports:
       - "${POSTGRES_BIND_ADDRESS:-127.0.0.1}:${POSTGRES_PUBLISHED_PORT:-5432}:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - ${POSTGRES_DATA_DIR:-/srv/data/postgres}:/var/lib/postgresql/data
       - ./docker/postgres/init-grafana-reader.sh:/docker-entrypoint-initdb.d/20-grafana-reader.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
@@ -247,7 +247,7 @@ services:
       - "${LAN_BIND_ADDRESS:-127.0.0.1}:${MQTT_PUBLISHED_PORT:-1883}:1883"
     volumes:
       - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
-      - mosquitto_data:/mosquitto/data
+      - ${MOSQUITTO_DATA_DIR:-/srv/data/mosquitto}:/mosquitto/data
     healthcheck:
       test: ["CMD-SHELL", "mosquitto_pub -h 127.0.0.1 -t healthcheck -m ok"]
       interval: 30s
@@ -269,7 +269,7 @@ services:
     ports:
       - "${LAN_BIND_ADDRESS:-127.0.0.1}:${GRAFANA_PUBLISHED_PORT:-3000}:3000"
     volumes:
-      - grafana_data:/var/lib/grafana
+      - ${GRAFANA_DATA_DIR:-/srv/data/grafana}:/var/lib/grafana
       - ./docker/grafana/provisioning:/etc/grafana/provisioning:ro
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O- http://127.0.0.1:3000/api/health >/dev/null"]
@@ -280,9 +280,8 @@ services:
     logging: *default-logging
 
 volumes:
-  postgres_data:
-  photo_data:
-  estimator_private_data:
-  grafana_data:
-  mosquitto_data:
   ollama_models:
+    driver_opts:
+      type: none
+      o: bind
+      device: ${OLLAMA_DATA_DIR:-/srv/data/ollama}

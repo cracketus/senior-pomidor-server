@@ -1,0 +1,12 @@
+---
+# Local development overlay. Production and runtime bundles use docker-compose.yml alone.
+x-app-build: &app-build
+  build: .
+
+services:
+  migrate: *app-build
+  api: *app-build
+  worker: *app-build
+  state-estimator-worker: *app-build
+  grafana-cloud-exporter: *app-build
+  daily-story-worker: *app-build

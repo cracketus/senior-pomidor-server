@@ -24,7 +24,7 @@ Before tagging or publishing a server release:
 - Run `nox -s lint format_check types security`.
 - Run `nox -s deps_audit`.
 - Run `$env:RUN_DOCKER_E2E='1'; python -m pytest -q tests/test_docker_e2e.py` when Docker is available.
-- Verify `GET /health` and `GET /ready` after `docker compose up -d --build`.
+- Verify `GET /health` and `GET /ready` after a local development-overlay build or tagged production deployment.
 - Confirm there are no local `.env`, private key, known-hosts, `.db`, `data/`, or `backups/` files in the release checkout.
 - Confirm `.env.example` still uses local bootstrap defaults only, and document any required production overrides.
 - Verify `python -m tools.edge_readiness --api-base-url http://127.0.0.1:8000 --mqtt-host 127.0.0.1 --photo-storage-dir data/photos`.
@@ -60,7 +60,7 @@ Before tagging or publishing a server release:
 5. Start the stack. The one-shot `migrate` service applies Alembic migrations before the API, MQTT worker, and state estimator worker start:
 
    ```powershell
-   docker compose up -d --build
+   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
    ```
 
 6. Verify service health:
@@ -81,7 +81,7 @@ Before tagging or publishing a server release:
    Recreate containers after Compose healthcheck or dependency changes so Docker health metadata is active:
 
    ```powershell
-   docker compose up -d --build --force-recreate
+   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build --force-recreate
    ```
 
    Normal state estimator operation is worker-driven. The `GET /api/v1/state/latest` endpoint can still lazily create a snapshot for compatibility, but the Compose service should continuously refresh canonical state during normal operation.
@@ -195,7 +195,7 @@ docker compose exec -T postgres pg_dump -U senior_pomidor senior_pomidor > backu
 Manual uploaded photo backup:
 
 ```powershell
-docker run --rm -v senior-pomidor-server_photo_data:/data -v ${PWD}\backups:/backup alpine tar czf /backup/photo_data.tgz -C /data .
+tar.exe -czf backups/photo_data.tgz -C $env:PHOTO_DATA_DIR .
 ```
 
 Restore PostgreSQL into an empty database:
@@ -207,7 +207,7 @@ Get-Content backups\senior_pomidor.sql | docker compose exec -T postgres psql -U
 Restore uploaded photos:
 
 ```powershell
-docker run --rm -v senior-pomidor-server_photo_data:/data -v ${PWD}\backups:/backup alpine sh -c "cd /data && tar xzf /backup/photo_data.tgz"
+tar.exe -xzf backups/photo_data.tgz -C $env:PHOTO_DATA_DIR
 ```
 
 Verify photo metadata and files agree:
@@ -220,11 +220,11 @@ Restore drill:
 
 1. Create a disposable Compose project name and empty volumes.
 2. Restore the latest SQL dump and photo archive into that project.
-3. Run `docker compose -p <temporary-project> up -d --build`.
+3. Set all bind-mount paths to disposable directories and run Compose with `docker-compose.dev.yml`.
 4. Confirm `/ready`, `/api/v1/devices`, and representative photo downloads work.
-5. Remove the disposable project with `docker compose -p <temporary-project> down -v`.
+5. Stop the disposable project and remove only its explicitly verified disposable directories.
 
-Mosquitto persistence is mounted at `mosquitto_data:/mosquitto/data`. Broker persistence only protects queued QoS messages when clients use durable sessions; telemetry idempotency and long-term durability remain database responsibilities.
+Mosquitto persistence is bind-mounted from `MOSQUITTO_DATA_DIR`. Broker persistence only protects queued QoS messages when clients use durable sessions; telemetry idempotency and long-term durability remain database responsibilities.
 
 ## Data Lifecycle Dry Run
 
@@ -254,24 +254,7 @@ Windows Task Scheduler example:
 powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Set-Location 'E:\MyProjects\senior-pomidor-server'; docker compose up -d"
 ```
 
-Linux systemd example:
-
-```ini
-[Unit]
-Description=Senior Pomidor Compose stack
-Requires=docker.service
-After=docker.service
-
-[Service]
-Type=oneshot
-WorkingDirectory=/opt/senior-pomidor-server
-ExecStart=/usr/bin/docker compose up -d
-ExecStop=/usr/bin/docker compose down
-RemainAfterExit=yes
-
-[Install]
-WantedBy=multi-user.target
-```
+Ubuntu production uses the checked-in unit and immutable runtime layout described in [UBUNTU_HOST.md](UBUNTU_HOST.md).
 
 Docker Desktop does not enable Docker daemon live-restore in the current local setup. Enable live-restore only on target hosts and Docker editions that explicitly support it, then test host reboot and daemon restart behavior before relying on it.
 
@@ -375,7 +358,7 @@ $env:DAILY_STORY_TIMEZONE='Europe/Vienna'
 $env:DAILY_STORY_SCHEDULE_TIME=(Get-Date).AddMinutes(2).ToString('HH:mm')
 $env:DAILY_STORY_OLLAMA_MODEL='llama3.2:3b'
 $env:DAILY_STORY_OLLAMA_OPTIONS_JSON='{"temperature":0.4,"top_p":0.9,"top_k":40,"num_ctx":4096,"num_predict":2048,"repeat_penalty":1.1,"seed":42}'
-docker compose --profile llm up -d --build
+docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile llm up -d --build
 ```
 
 The first model pull can take several minutes. Confirm PostgreSQL, API, and Ollama become healthy and model bootstrap
