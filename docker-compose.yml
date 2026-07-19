@@ -1,20 +1,21 @@
 ---
+# Application-only Compose base. Local infrastructure is in docker-compose.dev.yml;
+# production network attachment is in docker-compose.prod.yml.
 x-default-logging: &default-logging
   driver: json-file
   options:
     max-size: "10m"
     max-file: "3"
 
+x-app-environment: &app-environment
+  DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://senior_pomidor:senior_pomidor@postgres:5432/senior_pomidor}
+
 services:
   migrate:
     image: ${APP_IMAGE:?APP_IMAGE must reference an immutable release image}
     command: alembic upgrade head
     restart: "no"
-    environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://senior_pomidor:senior_pomidor@postgres:5432/senior_pomidor}
-    depends_on:
-      postgres:
-        condition: service_healthy
+    environment: *app-environment
     logging: *default-logging
 
   api:
@@ -22,7 +23,7 @@ services:
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000
     restart: unless-stopped
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://senior_pomidor:senior_pomidor@postgres:5432/senior_pomidor}
+      <<: *app-environment
       MQTT_HOST: ${MQTT_HOST:-mosquitto}
       MQTT_PORT: ${MQTT_PORT:-1883}
       MQTT_TOPIC_PREFIX: ${MQTT_TOPIC_PREFIX:-senior-pomidor}
@@ -36,14 +37,12 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
-      postgres:
-        condition: service_healthy
       mosquitto:
         condition: service_healthy
     ports:
       - "${LAN_BIND_ADDRESS:-127.0.0.1}:${API_PUBLISHED_PORT:-8000}:8000"
     volumes:
-      - ${PHOTO_DATA_DIR:-/srv/media/photos/senior-pomidor}:/app/data/photos
+      - ${PHOTO_DATA_DIR:-/srv/apps/senior-pomidor/data/public/photos}:/app/data/photos
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=5).read()\""]
       interval: 30s
@@ -57,7 +56,7 @@ services:
     command: python -m app.mqtt_worker
     restart: unless-stopped
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://senior_pomidor:senior_pomidor@postgres:5432/senior_pomidor}
+      <<: *app-environment
       MQTT_HOST: ${MQTT_HOST:-mosquitto}
       MQTT_PORT: ${MQTT_PORT:-1883}
       MQTT_TOPIC_PREFIX: ${MQTT_TOPIC_PREFIX:-senior-pomidor}
@@ -71,12 +70,10 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
-      postgres:
-        condition: service_healthy
       mosquitto:
         condition: service_healthy
     volumes:
-      - ${PHOTO_DATA_DIR:-/srv/media/photos/senior-pomidor}:/app/data/photos
+      - ${PHOTO_DATA_DIR:-/srv/apps/senior-pomidor/data/public/photos}:/app/data/photos
     healthcheck:
       test: ["CMD", "python", "-m", "app.worker_healthcheck"]
       interval: 30s
@@ -90,7 +87,7 @@ services:
     command: python -m app.state_estimator_worker
     restart: unless-stopped
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://senior_pomidor:senior_pomidor@postgres:5432/senior_pomidor}
+      <<: *app-environment
       STATE_ESTIMATOR_ENABLED: ${STATE_ESTIMATOR_ENABLED:-true}
       STATE_ESTIMATOR_TIMEZONE: ${STATE_ESTIMATOR_TIMEZONE:-Europe/Vienna}
       STATE_ESTIMATOR_PRIVATE_LOG_DIR: /app/data/private
@@ -98,8 +95,6 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
-      postgres:
-        condition: service_healthy
     volumes:
       - ${ESTIMATOR_PRIVATE_DATA_DIR:-/srv/logs/senior-pomidor/estimator-private}:/app/data/private
     healthcheck:
@@ -117,7 +112,7 @@ services:
     profiles:
       - cloud-export
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://senior_pomidor:senior_pomidor@postgres:5432/senior_pomidor}
+      <<: *app-environment
       GRAFANA_CLOUD_EXPORT_ENABLED: ${GRAFANA_CLOUD_EXPORT_ENABLED:-false}
       GRAFANA_CLOUD_REMOTE_WRITE_URL: ${GRAFANA_CLOUD_REMOTE_WRITE_URL:-}
       GRAFANA_CLOUD_INSTANCE_ID: ${GRAFANA_CLOUD_INSTANCE_ID:-}
@@ -125,40 +120,8 @@ services:
       GRAFANA_CLOUD_EXPORT_INTERVAL_SECONDS: ${GRAFANA_CLOUD_EXPORT_INTERVAL_SECONDS:-60}
       GRAFANA_CLOUD_EXPORT_LOOKBACK_MINUTES: ${GRAFANA_CLOUD_EXPORT_LOOKBACK_MINUTES:-10}
     depends_on:
-      postgres:
-        condition: service_healthy
-    logging: *default-logging
-
-  ollama:
-    image: ${OLLAMA_IMAGE:-ollama/ollama:0.31.1}
-    restart: unless-stopped
-    profiles:
-      - llm
-    ports:
-      - "127.0.0.1:${OLLAMA_PUBLISHED_PORT:-11434}:11434"
-    volumes:
-      - ollama_models:/root/.ollama
-    healthcheck:
-      test: ["CMD", "ollama", "list"]
-      interval: 10s
-      timeout: 5s
-      retries: 12
-      start_period: 20s
-    logging: *default-logging
-
-  ollama-model-pull:
-    image: ${OLLAMA_IMAGE:-ollama/ollama:0.31.1}
-    restart: "no"
-    profiles:
-      - llm
-    environment:
-      OLLAMA_HOST: http://ollama:11434
-    command: ["pull", "${DAILY_STORY_OLLAMA_MODEL:-llama3.2:3b}"]
-    depends_on:
-      ollama:
-        condition: service_healthy
-    volumes:
-      - ollama_models:/root/.ollama
+      migrate:
+        condition: service_completed_successfully
     logging: *default-logging
 
   daily-story-worker:
@@ -166,9 +129,9 @@ services:
     command: python -m app.daily_story_worker
     restart: unless-stopped
     profiles:
-      - llm
+      - daily-story
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://senior_pomidor:senior_pomidor@postgres:5432/senior_pomidor}
+      <<: *app-environment
       DAILY_STORY_NODE_ID: ${DAILY_STORY_NODE_ID:-pi-001}
       DAILY_STORY_SCHEDULE_TIME: ${DAILY_STORY_SCHEDULE_TIME:-09:00}
       DAILY_STORY_TIMEZONE: ${DAILY_STORY_TIMEZONE:-Europe/Vienna}
@@ -183,7 +146,7 @@ services:
       DAILY_STORY_MAX_CONTEXT_CHARS: ${DAILY_STORY_MAX_CONTEXT_CHARS:-16000}
       DAILY_STORY_MAX_ENVIRONMENT_CONTEXT_CHARS: ${DAILY_STORY_MAX_ENVIRONMENT_CONTEXT_CHARS:-8000}
       DAILY_STORY_MEMORY_ENTRIES: ${DAILY_STORY_MEMORY_ENTRIES:-7}
-      DAILY_STORY_OLLAMA_HOST: http://ollama:11434
+      DAILY_STORY_OLLAMA_HOST: ${DAILY_STORY_OLLAMA_HOST:-http://ollama:11434}
       DAILY_STORY_OLLAMA_MODEL: ${DAILY_STORY_OLLAMA_MODEL:-llama3.2:3b}
       DAILY_STORY_OLLAMA_TIMEOUT_SECONDS: ${DAILY_STORY_OLLAMA_TIMEOUT_SECONDS:-120}
       DAILY_STORY_OLLAMA_KEEP_ALIVE: ${DAILY_STORY_OLLAMA_KEEP_ALIVE:-0}
@@ -193,51 +156,14 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
-      postgres:
-        condition: service_healthy
-      ollama:
-        condition: service_healthy
-      ollama-model-pull:
-        condition: service_completed_successfully
     volumes:
       - ./config/daily_story:/app/config/daily_story:ro
     healthcheck:
-      test:
-        [
-          "CMD",
-          "python",
-          "-m",
-          "app.worker_healthcheck",
-          "daily_story_waiting",
-          "daily_story_succeeded",
-          "daily_story_skipped_no_data",
-        ]
+      test: ["CMD", "python", "-m", "app.worker_healthcheck", "daily_story_waiting", "daily_story_succeeded", "daily_story_skipped_no_data"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 30s
-    logging: *default-logging
-
-  postgres:
-    image: postgres:16-alpine
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB:-senior_pomidor}
-      POSTGRES_USER: ${POSTGRES_USER:-senior_pomidor}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-senior_pomidor}
-      GRAFANA_DB_USER: ${GRAFANA_DB_USER:-grafana_reader}
-      GRAFANA_DB_PASSWORD: ${GRAFANA_DB_PASSWORD:-grafana_reader}
-    ports:
-      - "${POSTGRES_BIND_ADDRESS:-127.0.0.1}:${POSTGRES_PUBLISHED_PORT:-5432}:5432"
-    volumes:
-      - ${POSTGRES_DATA_DIR:-/srv/data/postgres}:/var/lib/postgresql/data
-      - ./docker/postgres/init-grafana-reader.sh:/docker-entrypoint-initdb.d/20-grafana-reader.sh:ro
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
     logging: *default-logging
 
   mosquitto:
@@ -247,7 +173,7 @@ services:
       - "${LAN_BIND_ADDRESS:-127.0.0.1}:${MQTT_PUBLISHED_PORT:-1883}:1883"
     volumes:
       - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
-      - ${MOSQUITTO_DATA_DIR:-/srv/data/mosquitto}:/mosquitto/data
+      - ${MOSQUITTO_DATA_DIR:-/srv/apps/senior-pomidor/data/private/mosquitto}:/mosquitto/data
     healthcheck:
       test: ["CMD-SHELL", "mosquitto_pub -h 127.0.0.1 -t healthcheck -m ok"]
       interval: 30s
@@ -255,33 +181,3 @@ services:
       retries: 3
       start_period: 10s
     logging: *default-logging
-
-  grafana:
-    image: grafana/grafana-oss:11.5.0
-    restart: unless-stopped
-    profiles:
-      - observability
-    environment:
-      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
-      GRAFANA_DB_USER: ${GRAFANA_DB_USER:-grafana_reader}
-      GRAFANA_DB_PASSWORD: ${GRAFANA_DB_PASSWORD:-grafana_reader}
-    ports:
-      - "${LAN_BIND_ADDRESS:-127.0.0.1}:${GRAFANA_PUBLISHED_PORT:-3000}:3000"
-    volumes:
-      - ${GRAFANA_DATA_DIR:-/srv/data/grafana}:/var/lib/grafana
-      - ./docker/grafana/provisioning:/etc/grafana/provisioning:ro
-    healthcheck:
-      test: ["CMD-SHELL", "wget -q -O- http://127.0.0.1:3000/api/health >/dev/null"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 30s
-    logging: *default-logging
-
-volumes:
-  ollama_models:
-    driver_opts:
-      type: none
-      o: bind
-      device: ${OLLAMA_DATA_DIR:-/srv/data/ollama}

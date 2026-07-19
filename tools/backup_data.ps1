@@ -57,7 +57,6 @@ function Export-DockerVolume {
 if ($Mode -eq "migration") {
     Export-DockerVolume "${ProjectName}_photo_data" "photos.tar.gz"
     Export-DockerVolume "${ProjectName}_estimator_private_data" "estimator-private.tar.gz"
-    Export-DockerVolume "${ProjectName}_grafana_data" "grafana.tar.gz"
     Export-DockerVolume "${ProjectName}_mosquitto_data" "mosquitto.tar.gz"
 
     docker run --rm `

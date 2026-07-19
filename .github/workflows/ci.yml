@@ -27,6 +27,11 @@ jobs:
       - name: Run tests
         run: nox -s tests
 
+      - name: Validate self-contained local Compose configuration
+        env:
+          APP_IMAGE: senior-pomidor-server:ci
+        run: docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile observability --profile daily-story config --quiet
+
   quality:
     runs-on: ubuntu-latest
     steps:

@@ -1,12 +1,120 @@
 ---
-# Local development overlay. Production and runtime bundles use docker-compose.yml alone.
+# Local development infrastructure overlay. Always combine it with docker-compose.yml.
 x-app-build: &app-build
   build: .
 
 services:
-  migrate: *app-build
-  api: *app-build
-  worker: *app-build
-  state-estimator-worker: *app-build
-  grafana-cloud-exporter: *app-build
-  daily-story-worker: *app-build
+  migrate:
+    <<: *app-build
+    depends_on:
+      postgres:
+        condition: service_healthy
+  api:
+    <<: *app-build
+    depends_on:
+      postgres:
+        condition: service_healthy
+  worker:
+    <<: *app-build
+    depends_on:
+      postgres:
+        condition: service_healthy
+  state-estimator-worker:
+    <<: *app-build
+    depends_on:
+      postgres:
+        condition: service_healthy
+  grafana-cloud-exporter:
+    <<: *app-build
+    depends_on:
+      postgres:
+        condition: service_healthy
+  daily-story-worker:
+    <<: *app-build
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+      ollama-model-pull:
+        condition: service_completed_successfully
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-senior_pomidor}
+      POSTGRES_USER: ${POSTGRES_USER:-senior_pomidor}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-senior_pomidor}
+      GRAFANA_DB_USER: ${GRAFANA_DB_USER:-grafana_reader}
+      GRAFANA_DB_PASSWORD: ${GRAFANA_DB_PASSWORD:-grafana_reader}
+    ports:
+      - "${POSTGRES_BIND_ADDRESS:-127.0.0.1}:${POSTGRES_PUBLISHED_PORT:-5432}:5432"
+    volumes:
+      - ${POSTGRES_DATA_DIR:-./data/postgres}:/var/lib/postgresql/data
+      - ./docker/postgres/init-grafana-reader.sh:/docker-entrypoint-initdb.d/20-grafana-reader.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  grafana:
+    image: grafana/grafana-oss:11.5.0
+    restart: unless-stopped
+    profiles: [observability]
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GRAFANA_DB_USER: ${GRAFANA_DB_USER:-grafana_reader}
+      GRAFANA_DB_PASSWORD: ${GRAFANA_DB_PASSWORD:-grafana_reader}
+    ports:
+      - "${LAN_BIND_ADDRESS:-127.0.0.1}:${GRAFANA_PUBLISHED_PORT:-3000}:3000"
+    volumes:
+      - ${GRAFANA_DATA_DIR:-./data/grafana}:/var/lib/grafana
+      - ./docker/grafana/provisioning:/etc/grafana/provisioning:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://127.0.0.1:3000/api/health >/dev/null"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  ollama:
+    image: ${OLLAMA_IMAGE:-ollama/ollama:0.31.1}
+    restart: unless-stopped
+    profiles: [daily-story]
+    ports:
+      - "127.0.0.1:${OLLAMA_PUBLISHED_PORT:-11434}:11434"
+    volumes:
+      - ollama_models:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  ollama-model-pull:
+    image: ${OLLAMA_IMAGE:-ollama/ollama:0.31.1}
+    restart: "no"
+    profiles: [daily-story]
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    command: ["pull", "${DAILY_STORY_OLLAMA_MODEL:-llama3.2:3b}"]
+    depends_on:
+      ollama:
+        condition: service_healthy
+    volumes:
+      - ollama_models:/root/.ollama
+
+volumes:
+  ollama_models:
+    driver_opts:
+      type: none
+      o: bind
+      device: ${OLLAMA_DATA_DIR:-./data/ollama}

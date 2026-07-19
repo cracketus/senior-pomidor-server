@@ -18,7 +18,9 @@ checksum="$(readlink -f "$checksum")"
   sha256sum --check "$checksum"
 )
 
-stage="$(mktemp -d /srv/apps/senior-pomidor/.install.XXXXXX)"
+app_root=/srv/apps/senior-pomidor
+active_link="$app_root/app"
+stage="$(mktemp -d "$app_root/releases/.incoming/install.XXXXXX")"
 trap 'rm -rf "$stage"' EXIT
 tar -xzf "$archive" -C "$stage"
 version="$(tr -d '\r\n' < "$stage/VERSION")"
@@ -28,14 +30,18 @@ if find "$stage" -type f -name '*.py' -print -quit | grep -q .; then
   exit 1
 fi
 
-release_dir="/srv/apps/senior-pomidor/releases/$version"
+release_dir="$app_root/releases/$version"
 [[ ! -e "$release_dir" ]] || { echo "$release_dir already exists" >&2; exit 1; }
-previous_release="$(readlink -f /srv/apps/senior-pomidor/current 2>/dev/null || true)"
-install -d -o senior-pomidor -g senior-pomidor -m 0750 "$release_dir"
+previous_release="$(readlink -f "$active_link" 2>/dev/null || true)"
+install -d -o root -g root -m 0755 "$release_dir"
 cp -a "$stage/." "$release_dir/"
-chown -R senior-pomidor:senior-pomidor "$release_dir"
+chown -R root:root "$release_dir"
+find "$release_dir" -type d -exec chmod 0755 {} +
+find "$release_dir" -type f -exec chmod 0644 {} +
+find "$release_dir/scripts" -type f -name '*.sh' -exec chmod 0755 {} +
 
-env_file=/srv/secret/senior-pomidor.env
+env_file=/srv/secrets/senior-pomidor/runtime.env
+[[ -f "$env_file" ]] || { echo "missing environment file: $env_file" >&2; exit 1; }
 app_image="$(sed -n 's/^APP_IMAGE=//p' "$env_file" | tail -n 1)"
 case "$app_image" in
   ghcr.io/cracketus/senior-pomidor-server:"$version"|ghcr.io/cracketus/senior-pomidor-server@sha256:*) ;;
@@ -43,13 +49,14 @@ case "$app_image" in
 esac
 
 docker pull "$app_image"
-(cd "$release_dir" && docker compose --env-file "$env_file" config --quiet)
-ln -s "$release_dir" /srv/apps/senior-pomidor/.current-new
-mv -Tf /srv/apps/senior-pomidor/.current-new /srv/apps/senior-pomidor/current
+(cd "$release_dir" && docker compose --env-file "$env_file" \
+  -f docker-compose.yml -f docker-compose.prod.yml config --quiet)
+ln -s "$release_dir" "$app_root/.app-new"
+mv -Tf "$app_root/.app-new" "$active_link"
 if [[ -n "$previous_release" && "$previous_release" != "$release_dir" \
-  && "$previous_release" == /srv/apps/senior-pomidor/releases/* ]]; then
+  && "$previous_release" == "$app_root"/releases/* ]]; then
   archive_dir=/srv/apps/archive/senior-pomidor
-  install -d -o senior-pomidor -g senior-pomidor -m 0750 "$archive_dir"
+  install -d -o root -g root -m 0755 "$archive_dir"
   [[ ! -e "$archive_dir/$(basename "$previous_release")" ]] || {
     echo "active release changed, but archive target already exists: $previous_release" >&2
     exit 1

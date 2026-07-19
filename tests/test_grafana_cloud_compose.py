@@ -7,11 +7,13 @@ from app.grafana_cloud_exporter import ExporterConfigError, validate_export_sett
 
 ROOT = Path(__file__).resolve().parents[1]
 COMPOSE_PATH = ROOT / "docker-compose.yml"
+DEV_COMPOSE_PATH = ROOT / "docker-compose.dev.yml"
 ENV_EXAMPLE_PATH = ROOT / ".env.example"
 
 
 def test_grafana_cloud_exporter_compose_service_is_optional():
     compose = COMPOSE_PATH.read_text(encoding="utf-8")
+    development = DEV_COMPOSE_PATH.read_text(encoding="utf-8")
 
     assert "grafana-cloud-exporter:" in compose
     assert "command: python -m app.grafana_cloud_exporter" in compose
@@ -21,17 +23,19 @@ def test_grafana_cloud_exporter_compose_service_is_optional():
     assert "condition: service_healthy" in compose
     assert "api:" in compose
     assert "worker:" in compose
-    assert "grafana:" in compose
-    assert "- observability" in compose
+    assert "grafana:" not in compose
+    assert "grafana:" in development
+    assert "observability" in development
 
 
 def test_compose_services_have_restart_policies_and_healthchecks():
     compose = COMPOSE_PATH.read_text(encoding="utf-8")
+    development = DEV_COMPOSE_PATH.read_text(encoding="utf-8")
 
     assert compose.count("restart: unless-stopped") >= 6
     assert "curl" not in compose
     assert "http://127.0.0.1:8000/ready" in compose
-    assert 'pg_isready -U \\"$$POSTGRES_USER\\" -d \\"$$POSTGRES_DB\\"' in compose
+    assert 'pg_isready -U \\"$$POSTGRES_USER\\" -d \\"$$POSTGRES_DB\\"' in development
     assert "mosquitto_pub -h 127.0.0.1 -t healthcheck -m ok" in compose
     assert "API_DOCS_ENABLED: ${API_DOCS_ENABLED:-true}" in compose
     assert "TELEMETRY_UPLOAD_TOKEN: ${TELEMETRY_UPLOAD_TOKEN:-}" in compose
