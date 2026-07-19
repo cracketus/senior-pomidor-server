@@ -28,10 +28,9 @@ def test_runtime_bundle_builder_includes_operations_assets_without_source() -> N
 
     for runtime_asset in (
         "docker-compose.yml",
+        "docker-compose.prod.yml",
         "mosquitto.conf",
         "config/daily_story",
-        "docker/grafana",
-        "docker/postgres",
         "deploy/apt",
         "deploy/systemd",
         "deploy/scripts",
@@ -41,13 +40,14 @@ def test_runtime_bundle_builder_includes_operations_assets_without_source() -> N
     assert "sha256sum" in builder
 
 
-def test_production_environment_template_disables_docs_and_ollama_profile() -> None:
+def test_production_environment_template_disables_docs_and_shared_service_profiles() -> None:
     environment = (ROOT / "deploy/senior-pomidor.env.example").read_text(encoding="utf-8")
 
-    assert "COMPOSE_PROFILES=observability,cloud-export" in environment
+    assert "COMPOSE_PROFILES=cloud-export" in environment
     assert "API_DOCS_ENABLED=false" in environment
     assert "APP_IMAGE=ghcr.io/cracketus/senior-pomidor-server:vX.Y.Z" in environment
-    assert "llm" not in environment
+    assert "observability" not in environment
+    assert "OLLAMA_IMAGE" not in environment
 
 
 def test_backup_audit_dumps_exclude_role_password_verifiers() -> None:

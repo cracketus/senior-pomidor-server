@@ -1,0 +1,7 @@
+---
+# Production overlay. The platform administrator owns this external network and
+# the PostgreSQL, Grafana, and Ollama services attached to it.
+networks:
+  default:
+    external: true
+    name: ${PLATFORM_DOCKER_NETWORK:-srv-platform}

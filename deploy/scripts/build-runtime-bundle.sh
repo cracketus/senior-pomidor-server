@@ -17,14 +17,13 @@ stage="$(mktemp -d)"
 trap 'rm -rf "$stage"' EXIT
 
 install -m 0644 "$repo_root/docker-compose.yml" "$stage/docker-compose.yml"
+install -m 0644 "$repo_root/docker-compose.prod.yml" "$stage/docker-compose.prod.yml"
 install -m 0644 "$repo_root/mosquitto.conf" "$stage/mosquitto.conf"
 install -m 0644 "$repo_root/deploy/senior-pomidor.env.example" "$stage/senior-pomidor.env.example"
 printf '%s\n' "$version" > "$stage/VERSION"
 
-install -d "$stage/config" "$stage/docker" "$stage/deploy/apt" "$stage/deploy/systemd" "$stage/scripts"
+install -d "$stage/config" "$stage/deploy/apt" "$stage/deploy/systemd" "$stage/scripts"
 cp -a "$repo_root/config/daily_story" "$stage/config/"
-cp -a "$repo_root/docker/grafana" "$stage/docker/"
-cp -a "$repo_root/docker/postgres" "$stage/docker/"
 cp -a "$repo_root/deploy/apt/." "$stage/deploy/apt/"
 for unit in "$repo_root"/deploy/systemd/*; do
   install -m 0644 "$unit" "$stage/deploy/systemd/$(basename "$unit")"

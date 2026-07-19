@@ -7,7 +7,7 @@ Server implementation for the Senior Pomidor project.
 - `api`: FastAPI HTTP server on port `8000`.
 - `worker`: MQTT subscriber for `senior-pomidor/+/telemetry`.
 - `state-estimator-worker`: recurring canonical state, sensor health, anomaly, diagnostic, and private JSONL writer.
-- `postgres`: persistent telemetry/photo metadata storage.
+- `postgres`: local-development telemetry/photo metadata storage (platform-managed in production).
 - `mosquitto`: local MQTT broker exposed on port `1883`.
 - `grafana`: optional local observability UI exposed on port `3000`.
 
@@ -52,8 +52,10 @@ uvicorn app.main:app --reload
 
 ## Docker Compose
 
-Production Compose consumes an immutable application image. Local development adds the build overlay. Copy the
-local environment template first:
+The base Compose file contains only application-owned services. Local development adds PostgreSQL,
+Grafana, Ollama, and build configuration with `docker-compose.dev.yml`; production instead uses
+`docker-compose.prod.yml` to join independently managed platform services. Copy the local environment
+template first:
 
 ```powershell
 Copy-Item .env.example .env
@@ -85,7 +87,7 @@ The `Senior Pomidor Alerts` rule group is provisioned automatically and surfaces
 On a fresh PostgreSQL data directory this role is initialized automatically. On an existing directory, re-apply the readonly grants after migrations:
 
 ```powershell
-docker compose exec -T postgres sh /docker-entrypoint-initdb.d/20-grafana-reader.sh
+docker compose -f docker-compose.yml -f docker-compose.dev.yml exec -T postgres sh /docker-entrypoint-initdb.d/20-grafana-reader.sh
 ```
 
 ## Grafana Cloud Public Metrics Export
@@ -115,11 +117,11 @@ CLI consumer and does not participate in API or MQTT ingestion.
 
 ## Optional Daily Tomato Story
 
-The `llm` Compose profile runs a local CPU-only Ollama service, pulls the configured model into the persistent
+The `daily-story` Compose profile runs a local CPU-only Ollama service, pulls the configured model into the persistent
 `ollama_models` volume, and starts a daily story worker after migrations and model bootstrap complete:
 
 ```powershell
-docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile llm up -d
+docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile daily-story up -d
 ```
 
 The normal Compose stack is unchanged when the profile is not selected. Ollama is published only on

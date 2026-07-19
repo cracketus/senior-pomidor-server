@@ -6,18 +6,17 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
-User=senior-pomidor
-Group=senior-pomidor
-WorkingDirectory=/srv/apps/senior-pomidor/current
+WorkingDirectory=/srv/apps/senior-pomidor/app
 Environment=COMPOSE_PROJECT_NAME=senior-pomidor
-Environment=COMPOSE_PROFILES=observability,cloud-export
-EnvironmentFile=/srv/secret/senior-pomidor.env
-ExecStartPre=/usr/bin/docker compose config --quiet
-ExecStart=/usr/bin/docker compose up -d --remove-orphans
+Environment=COMPOSE_PROFILES=cloud-export
+EnvironmentFile=/srv/secrets/senior-pomidor/runtime.env
+ExecStartPre=/srv/automation/scripts/senior-pomidor/database-preflight.sh
+ExecStartPre=/usr/bin/docker compose -f docker-compose.yml -f docker-compose.prod.yml config --quiet
+ExecStart=/usr/bin/docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --remove-orphans
 ExecStartPost=/bin/sh -c 'for i in $$(seq 1 60); do /usr/bin/curl -fsS http://$${LAN_BIND_ADDRESS}:$${API_PUBLISHED_PORT}/ready && exit 0; sleep 2; done; exit 1'
-ExecReload=/usr/bin/docker compose config --quiet
-ExecReload=/usr/bin/docker compose up -d --remove-orphans
-ExecStop=/usr/bin/docker compose stop
+ExecReload=/usr/bin/docker compose -f docker-compose.yml -f docker-compose.prod.yml config --quiet
+ExecReload=/usr/bin/docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --remove-orphans
+ExecStop=/usr/bin/docker compose -f docker-compose.yml -f docker-compose.prod.yml stop
 RemainAfterExit=yes
 TimeoutStartSec=180
 TimeoutStopSec=120
