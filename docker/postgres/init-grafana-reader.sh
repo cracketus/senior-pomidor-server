@@ -4,10 +4,21 @@ set -eu
 : "${POSTGRES_DB:?POSTGRES_DB is required}"
 : "${POSTGRES_USER:?POSTGRES_USER is required}"
 
+POSTGRES_HOST="${POSTGRES_HOST:-postgres}"
+POSTGRES_PORT="${POSTGRES_PORT:-5432}"
+export PGPASSWORD="${PGPASSWORD:-${POSTGRES_PASSWORD:-}}"
+
+if [ -z "$PGPASSWORD" ]; then
+  echo 'POSTGRES_PASSWORD or PGPASSWORD is required' >&2
+  exit 1
+fi
+
 GRAFANA_DB_USER="${GRAFANA_DB_USER:-grafana_reader}"
 GRAFANA_DB_PASSWORD="${GRAFANA_DB_PASSWORD:-grafana_reader}"
 
 psql -v ON_ERROR_STOP=1 \
+  --host "$POSTGRES_HOST" \
+  --port "$POSTGRES_PORT" \
   --username "$POSTGRES_USER" \
   --dbname "$POSTGRES_DB" \
   -v postgres_db="$POSTGRES_DB" \
@@ -38,7 +49,8 @@ WITH required_tables(table_name) AS (
         ('state_snapshots'),
         ('sensor_health_snapshots'),
         ('anomaly_records'),
-        ('estimator_diagnostics')
+        ('estimator_diagnostics'),
+        ('action_simulations')
 )
 SELECT format('GRANT SELECT ON TABLE public.%I TO %I', table_name, :'grafana_user')
 FROM required_tables
