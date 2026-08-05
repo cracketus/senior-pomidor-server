@@ -26,6 +26,50 @@ PostgreSQL must expose DNS name `postgres` on that network and have a `senior_po
 dedicated application role. Ollama must expose DNS name `ollama`; provision the configured story
 model before enabling the optional `daily-story` application profile.
 
+Use explicit network naming in the platform Compose file:
+
+```yaml
+services:
+  postgres:
+    networks:
+      srv-platform:
+        aliases: [postgres]
+  grafana:
+    networks: [srv-platform]
+  ollama:
+    networks:
+      srv-platform:
+        aliases: [ollama]
+
+networks:
+  srv-platform:
+    external: true
+    name: srv-platform
+```
+
+Do not publish PostgreSQL or Ollama with `ports`. Mount platform data at
+`/srv/data/postgres`, `/srv/data/grafana`, and `/srv/data/ollama`. Grafana runs as UID/GID `472`;
+before starting it, ensure `/srv/data/grafana` is writable by that UID:
+
+```bash
+sudo chown -R 472:472 /srv/data/grafana
+sudo chmod 0750 /srv/data/grafana
+```
+
+An empty `srv-platform` network is not a completed onboarding. Verify running containers with:
+
+```bash
+sudo docker network inspect srv-platform \
+  --format '{{range .Containers}}{{println .Name}}{{end}}'
+```
+
+If Grafana is not listed, inspect stopped containers and logs:
+
+```bash
+sudo docker ps -a --filter name=srv-platform-grafana
+sudo docker logs --tail=200 srv-platform-grafana
+```
+
 Create Grafana's read-only role/grants using `docker/postgres/init-grafana-reader.sh` as platform
 onboarding, not during application startup or restore. Store its credential in
 `/srv/secrets/grafana/senior-pomidor.env` (root-owned mode `0600`) and configure the platform Grafana

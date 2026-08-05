@@ -1,43 +1,5 @@
 apiVersion: 1
 
-deleteRules:
-  - orgId: 1
-    uid: sp_device_telemetry_stale
-  - orgId: 1
-    uid: sp_pod_telemetry_stale
-  - orgId: 1
-    uid: sp_pod_sensor_errors
-  - orgId: 1
-    uid: sp_system_health_threshold
-  - orgId: 1
-    uid: sp_system_probe_errors
-  - orgId: 1
-    uid: sp_critical_dry_soil
-  - orgId: 1
-    uid: sp_vpd_too_low
-  - orgId: 1
-    uid: sp_vpd_condensation_risk
-  - orgId: 1
-    uid: sp_vpd_high
-  - orgId: 1
-    uid: sp_vpd_stress
-  - orgId: 1
-    uid: sp_vpd_critical
-  - orgId: 1
-    uid: sp_vpd_emergency
-  - orgId: 1
-    uid: sp_edge_network_health_failures
-  - orgId: 1
-    uid: sp_state_vpd_guardrail
-  - orgId: 1
-    uid: sp_state_vpd_critical
-  - orgId: 1
-    uid: sp_state_confidence_low
-  - orgId: 1
-    uid: sp_active_high_or_critical_anomaly
-  - orgId: 1
-    uid: sp_state_snapshot_stale
-
 groups:
   - orgId: 1
     name: Senior Pomidor Alerts

@@ -49,7 +49,9 @@ for target in "$photo_dir" "$estimator_dir" "$mosquitto_dir"; do
   }
 done
 
-pg_client=(docker run --rm --network "$platform_network" -e PGPASSWORD="$postgres_password" postgres:16-alpine)
+# pg_restore reads database.dump from stdin. Keep stdin attached to docker run;
+# without -i Docker closes the pipe and pg_restore receives an empty input file.
+pg_client=(docker run --rm -i --network "$platform_network" -e PGPASSWORD="$postgres_password" postgres:16-alpine)
 for _ in $(seq 1 60); do
   "${pg_client[@]}" pg_isready -h "$postgres_host" -p "$postgres_port" \
     -U "$postgres_user" -d "$postgres_db" && break

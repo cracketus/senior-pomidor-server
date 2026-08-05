@@ -38,7 +38,7 @@ UNION ALL SELECT 'estimator_diagnostics', count(*) FROM estimator_diagnostics
 ORDER BY 1;
 "@
 docker exec $postgresId psql --username $postgresUser --dbname $postgresDb `
-    --tuples-only --no-align --field-separator=, --command $countSql `
+    --tuples-only --no-align --field-separator ',' --command $countSql `
     | Set-Content -Encoding utf8 (Join-Path $backupDir "baseline-counts.csv")
 
 docker compose ps --format json | Set-Content -Encoding utf8 (Join-Path $backupDir "compose-services.jsonl")

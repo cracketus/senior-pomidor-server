@@ -56,3 +56,10 @@ def test_backup_audit_dumps_exclude_role_password_verifiers() -> None:
 
     assert "pg_dumpall --globals-only --no-role-passwords" in linux_backup
     assert "pg_dumpall --globals-only --no-role-passwords" in windows_backup
+
+
+def test_windows_backup_quotes_csv_field_separator_for_powershell() -> None:
+    windows_backup = (ROOT / "tools/backup_data.ps1").read_text(encoding="utf-8")
+
+    assert "--field-separator ','" in windows_backup
+    assert "--field-separator=," not in windows_backup

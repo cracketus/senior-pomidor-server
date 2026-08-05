@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import signal
 import sys
+import time
 from threading import Event
 
 from sqlalchemy import select
@@ -20,6 +21,7 @@ configure_logging()
 logger = logging.getLogger(__name__)
 stop_event = Event()
 histories: dict[str, EstimatorHistory] = {}
+HEALTH_HEARTBEAT_SECONDS = 30
 
 
 def run_once() -> int:
@@ -35,6 +37,18 @@ def run_once() -> int:
                 config_path=settings.state_estimator_config_path,
             )
         return len(devices)
+
+
+def wait_between_cycles(seconds: int, devices: int) -> None:
+    """Keep a successful worker health record fresh while waiting for the next cycle."""
+    deadline = time.monotonic() + seconds
+    while not stop_event.is_set():
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return
+        if stop_event.wait(min(HEALTH_HEARTBEAT_SECONDS, remaining)):
+            return
+        write_worker_health("state_estimator_healthy", devices=devices)
 
 
 def main() -> int:
@@ -59,7 +73,10 @@ def main() -> int:
         except Exception:
             logger.exception("State estimator worker cycle failed")
             write_worker_health("state_estimator_failed")
-        stop_event.wait(estimator_config.state_period_seconds)
+            if stop_event.wait(estimator_config.state_period_seconds):
+                break
+        else:
+            wait_between_cycles(estimator_config.state_period_seconds, count)
     write_worker_health("state_estimator_stopped")
     return 0
 

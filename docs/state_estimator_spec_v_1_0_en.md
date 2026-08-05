@@ -1394,8 +1394,7 @@ def estimate_state(
     calibration: CalibrationProfile,
     history: EstimatorHistory,
     config: EstimatorConfig,
-) -> EstimatorResult:
-    ...
+) -> EstimatorResult: ...
 ```
 
 `EstimatorResult` should contain:
