@@ -1,0 +1,56 @@
+version: 1
+source_of_truth: .ai/TEST_MATRIX.md
+default_environment: local_isolated_no_external_export
+status_values: [PASS, FAIL, NOT_RUN]
+
+baseline:
+  behavior: python -m pytest -q
+  quality: nox -s lint format_check types
+  diff: git diff --check
+
+classes:
+  pure_software:
+    when: Python behavior without a specialized boundary
+    required: [focused_tests, baseline.behavior, baseline.quality]
+  schema_data_contract:
+    when: Versioned shape, API/MQTT/storage, units, timezone, fixture, dashboard, export, or public field
+    required: [baseline, schema_validation, serialization_round_trip, old_and_current_fixture_replay, all_named_consumers]
+  infrastructure_deployment:
+    when: Docker, Compose, CI, deploy, environment, topology, backup, restore, or release
+    required: [baseline, exact_compose_config, changed_script_checks]
+    manual_when_risky: [isolated_build_up_health, rollback_rehearsal]
+  edge_hardware_integration:
+    when: Edge compatibility, connectivity, camera, sensor, GPIO, I2C, or device adapter
+    required: [baseline, contract_replay, disconnect_timeout_tests, fake_hardware_backend]
+    manual: [target_device_inspection]
+  control_guardrails_executor:
+    when: Targets, candidate actions, safety validation, command execution, retries, acknowledgements, or stale control state
+    required: [baseline, deterministic_simulation, guardrail_allow_block, duplicate_retry_timeout_restart_late_ack, stale_low_confidence, storage_failure]
+    manual_when_physical: [supervised_safe_hardware, rollback]
+  llm_vision:
+    when: Prompt, provider, model, vision, or model output contract
+    required: [baseline, strict_validation, malformed_json, extra_prose_reasoning, timeout, unavailable_model, bounded_output, privacy]
+  documentation_only:
+    when: Only prose, comments, or context files change
+    required: [baseline.diff, verify_changed_links_paths_commands]
+
+risk_flags:
+  physical_action:
+    add: [deterministic_simulation, duplicate_retry_timeout_restart_stale_guardrails, manual_safe_hardware_and_rollback]
+  data_loss_migration:
+    add: [isolated_upgrade_restore, counts_hashes, verified_backup, rollback]
+  security_secrets:
+    add: [nox_security, nox_deps_audit, secret_safe_evidence, threat_and_rollback_review]
+  edge_server_compatibility:
+    add: [old_fixture_replay, both_version_tests, named_edge_consumer, manual_canary]
+  production_availability:
+    add: [compose_health_and_failure, isolated_rehearsal, rollback, post_deploy_health_plan]
+  public_contract:
+    add: [all_consumers, compatibility_and_release_note, old_fixture_and_serialization]
+
+prohibitions:
+  - production_targets
+  - real_hardware_in_standard_ci
+  - cloud_export_in_rehearsal
+  - secrets_or_private_infrastructure_in_evidence
+  - claiming_manual_success_from_automation
