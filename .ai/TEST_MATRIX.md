@@ -63,6 +63,10 @@ Remove-Item Env:RUN_DOCKER_E2E
 
 # Whitespace/error check for any change
 git diff --check
+
+# Required when Feature Planner/workflow/brief/evaluation contracts change
+python -m tools.evaluate_feature_planner
+python -m pytest -q tests/test_feature_planner_evaluation.py
 ```
 
 Never add `cloud-export` to a rehearsal command. Before any Docker E2E/rehearsal, confirm its env, bind mounts, ports, project name, and targets are local and isolated. Real GPIO, I2C, cameras, sensors, and actuators are never standard CI dependencies.
@@ -77,7 +81,7 @@ Never add `cloud-export` to a rehearsal command. Before any Docker E2E/rehearsal
 | `edge_hardware_integration` | baseline; contract replay; reconnect/timeout/disconnected-device failures; fake GPIO/I2C/camera/backend tests added with the feature | target-device connectivity/capture/sensor inspection and reboot recovery | local Docker E2E |
 | `control_guardrails_executor` | baseline; deterministic replay/simulation; allowed/blocked Guardrails; duplicate, retry, timeout, late ACK, restart, stale/low-confidence and storage-failure tests | supervised safe-hardware procedure and rollback only when physical action is possible | performance/soak simulation |
 | `llm_vision` | baseline; strict schema/semantic validation; malformed JSON, extra prose/reasoning, timeout, unavailable model, bounded output and privacy tests | representative local-model acceptance if model/runtime behavior changed | cross-model evaluation |
-| `documentation_only` | `git diff --check`; verify every changed relative link/path/command against checkout | procedure walkthrough if it changes physical/deployment instructions | full pytest/quality |
+| `documentation_only` | `git diff --check`; verify every changed relative link/path/command against checkout; run Feature Planner evaluation when its agent/workflow/template/evaluation contract changes | procedure walkthrough if it changes physical/deployment instructions | full pytest/quality |
 
 For a new hardware/Executor subsystem whose focused test path does not yet exist, adding those fake/failure-path tests is part of the implementation; do not substitute a generic suite. Database migrations require an isolated PostgreSQL migration/restore procedure from the approved brief—this repository currently has no generic safe one-command round-trip harness.
 
