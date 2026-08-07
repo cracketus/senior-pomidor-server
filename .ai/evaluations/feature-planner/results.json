@@ -1,0 +1,99 @@
+{
+  "suite_version": 1,
+  "planner_version_initial": "1.0",
+  "planner_version_revision_1": "1.1",
+  "rubric": [
+    "task_classification",
+    "module_ownership",
+    "contracts_consumers",
+    "known_failures",
+    "test_strategy",
+    "safety_physical_world",
+    "rollout_rollback",
+    "scope_discipline",
+    "evidence_grounding",
+    "actionable_acceptance"
+  ],
+  "case_results": [
+    {
+      "case_id": "FP-01",
+      "initial_scores": [2, 2, 1, 1, 1, 1, 1, 2, 2, 1],
+      "revision_1_scores": [2, 2, 2, 2, 2, 1, 2, 2, 2, 2],
+      "false_assumptions": ["Initial brief implied a forecast provider could be chosen during implementation."],
+      "missing_questions": ["Provider/schema, biological horizon and approved adjustment limits."],
+      "revision_changes": ["Provider-independent contracts, explicit Unknowns, shadow mode and no-forecast fallback gate."]
+    },
+    {
+      "case_id": "FP-02",
+      "initial_scores": [2, 2, 1, 1, 1, 2, 1, 2, 1, 1],
+      "revision_1_scores": [2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+      "false_assumptions": ["Initial brief treated missing environment as confirmed root cause."],
+      "missing_questions": ["Exact worker/profile, health reason and functional ingestion freshness."],
+      "revision_changes": ["Separated symptom/hypothesis and required isolated rehearsal plus functional freshness."]
+    },
+    {
+      "case_id": "FP-03",
+      "initial_scores": [2, 2, 1, 1, 2, 1, 1, 2, 2, 1],
+      "revision_1_scores": [2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+      "false_assumptions": ["Initial brief assumed CSI and sufficient power without evidence."],
+      "missing_questions": ["Camera/interface/cable/power and edge implementation owner."],
+      "revision_changes": ["Electrical unknowns block hardware work; fake failure and manual flicker/reboot evidence added."]
+    },
+    {
+      "case_id": "FP-04",
+      "initial_scores": [2, 2, 1, 1, 2, 2, 1, 2, 2, 1],
+      "revision_1_scores": [2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+      "false_assumptions": ["Initial brief assumed target PostgreSQL and Grafana were application-owned."],
+      "missing_questions": ["Target platform ownership, RPO/RTO, final data boundary and secret custody."],
+      "revision_changes": ["Added shared-service boundary, immutable candidate, export-off proof and tested source-preserving rollback."]
+    },
+    {
+      "case_id": "FP-05",
+      "initial_scores": [2, 2, 1, 1, 1, 1, 1, 2, 2, 1],
+      "revision_1_scores": [2, 2, 2, 1, 2, 2, 2, 2, 2, 2],
+      "false_assumptions": ["Initial brief treated timeout as proof that no physical action occurred."],
+      "missing_questions": ["ACK guarantees, uncertain-state policy, persistence transaction and manual override authority."],
+      "revision_changes": ["Added Guardrails-only input, durable idempotency, late ACK/restart/storage failure and shadow simulation."]
+    },
+    {
+      "case_id": "FP-06",
+      "initial_scores": [2, 2, 1, 1, 2, 1, 1, 2, 2, 1],
+      "revision_1_scores": [2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+      "false_assumptions": ["Initial brief proposed exposing SSID and IP as diagnostics."],
+      "missing_questions": ["Allowed radio metrics, privacy consumers, cadence and external edge owner."],
+      "revision_changes": ["Added layered privacy-safe schema, stale/reboot semantics and server-first compatible rollout."]
+    },
+    {
+      "case_id": "FP-07",
+      "initial_scores": [2, 2, 1, 0, 1, 1, 1, 2, 2, 1],
+      "revision_1_scores": [2, 2, 1, 1, 2, 2, 2, 2, 2, 2],
+      "false_assumptions": ["Initial brief selected an active-high GPIO output and pin without evidence."],
+      "missing_questions": ["LED/driver voltage/current/resistor, pin conflicts, polarity and state priority."],
+      "revision_changes": ["Electrical blockers, boot-safe priority/rate limits, fake GPIO and physical rollback added."]
+    },
+    {
+      "case_id": "FP-08",
+      "initial_scores": [2, 1, 1, 1, 1, 1, 1, 2, 2, 1],
+      "revision_1_scores": [2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+      "false_assumptions": ["Initial brief assumed the flat payload was an edge contract."],
+      "missing_questions": ["Actual producer/consumers, deployed versions and exact unit/time mapping."],
+      "revision_changes": ["Full consumer matrix, single adapter ownership, old/new real-path replay and retirement telemetry."]
+    },
+    {
+      "case_id": "FP-09",
+      "initial_scores": [2, 2, 1, 1, 1, 1, 1, 2, 2, 1],
+      "revision_1_scores": [2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+      "false_assumptions": ["Initial brief guessed I2C, 3.3V and a normalized output."],
+      "missing_questions": ["Datasheet/interface/address/electrical limits/calibration/sentinel and edge owner."],
+      "revision_changes": ["Hardware unknown blockers, calibration identity, fake bus/self-test and server compatibility gate."]
+    },
+    {
+      "case_id": "FP-10",
+      "initial_scores": [2, 2, 1, 1, 2, 1, 1, 2, 2, 1],
+      "revision_1_scores": [2, 2, 2, 2, 2, 2, 2, 2, 2, 2],
+      "false_assumptions": ["Initial brief assumed parser repair alone prevented reasoning leakage."],
+      "missing_questions": ["Exact consumer/public schema, models/runtimes, fallback and diagnostic retention."],
+      "revision_changes": ["Added final-only mapping, semantic/privacy bounds and malformed/extra/reasoning/timeout fallback matrix."]
+    }
+  ]
+}

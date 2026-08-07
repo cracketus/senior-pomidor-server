@@ -1,0 +1,106 @@
+{
+  "suite_version": 1,
+  "planner_version": "1.1",
+  "cases": [
+    {
+      "id": "FP-01",
+      "title": "Weather Adapter integration",
+      "workflow": "feature",
+      "input_prompt": "Add forecast-aware adjustments to targets, resource budgets, and sampling. No weather provider or forecast schema has been selected.",
+      "planner_available_evidence": [".ai/PROJECT.md", ".ai/CURRENT_STATE.md", "docs/state_estimator_spec_v_1_0_en.md"],
+      "oracle_evidence": [".ai/ARCHITECTURE_RULES.md", "docs/CONTRACTS.md"],
+      "brief_path": ".ai/evaluations/feature-planner/briefs/01-weather-adapter.md",
+      "required_terms": ["Weather Adapter", "targets", "budget", "sampling", "Control", "Unknown"]
+    },
+    {
+      "id": "FP-02",
+      "title": "Unhealthy Docker worker and missing environment",
+      "workflow": "incident-fix",
+      "input_prompt": "After a Compose start, a worker is unhealthy and one required image/environment value may be missing. Preserve ingestion while diagnosing.",
+      "planner_available_evidence": ["docker-compose.yml", "docker-compose.dev.yml", "app/worker_health.py"],
+      "oracle_evidence": [".github/workflows/ci.yml", "tests/test_compose_config.py", ".ai/KNOWN_FAILURES.md"],
+      "brief_path": ".ai/evaluations/feature-planner/briefs/02-worker-environment.md",
+      "required_terms": ["rehearsal", "isolation", "rollback", "APP_IMAGE", "health"]
+    },
+    {
+      "id": "FP-03",
+      "title": "Camera capture and failure handling",
+      "workflow": "hardware-integration",
+      "input_prompt": "Integrate Raspberry Pi camera capture. It must handle camera absence, timeout, and unstable frames; the final camera/interface/cable/power details are not supplied.",
+      "planner_available_evidence": ["tools/pi_camera_smoke_test.py", "docs/PI_INTEGRATION_RUNBOOK.md"],
+      "oracle_evidence": [".ai/KNOWN_FAILURES.md"],
+      "brief_path": ".ai/evaluations/feature-planner/briefs/03-camera.md",
+      "required_terms": ["fake", "disconnected", "power", "manual", "Unknown"]
+    },
+    {
+      "id": "FP-04",
+      "title": "Ubuntu migration with isolated rehearsal",
+      "workflow": "infrastructure-change",
+      "input_prompt": "Move the Windows-hosted service and its PostgreSQL/photos/private state to Ubuntu with minimal data loss and a reversible cutover.",
+      "planner_available_evidence": ["docs/OPERATIONS.md", "docker-compose.yml", "tools/backup_data.ps1"],
+      "oracle_evidence": ["docs/MIGRATION_WINDOWS_TO_UBUNTU.md", "docs/UBUNTU_HOST.md", "commit:532c53b"],
+      "brief_path": ".ai/evaluations/feature-planner/briefs/04-ubuntu-migration.md",
+      "required_terms": ["rehearsal", "isolation", "rollback", "backup", "Grafana Cloud"]
+    },
+    {
+      "id": "FP-05",
+      "title": "Executor idempotency",
+      "workflow": "feature",
+      "input_prompt": "Plan an Executor that prevents duplicate physical commands across retries and process restarts. The actuator protocol and acknowledgement semantics are not yet selected.",
+      "planner_available_evidence": [".ai/ARCHITECTURE_RULES.md", "app/state_estimator/decisions.py"],
+      "oracle_evidence": ["commit:6398d9e", ".ai/TEST_MATRIX.md"],
+      "brief_path": ".ai/evaluations/feature-planner/briefs/05-executor-idempotency.md",
+      "required_terms": ["Guardrails", "idempotency", "retry", "simulation", "restart"]
+    },
+    {
+      "id": "FP-06",
+      "title": "Wi-Fi and connectivity health telemetry",
+      "workflow": "hardware-integration",
+      "input_prompt": "Expose bounded edge connectivity health so operators can distinguish Wi-Fi/link failures from MQTT/API failures without publishing private network data.",
+      "planner_available_evidence": ["docs/NETWORK.md", "tools/edge_readiness.py"],
+      "oracle_evidence": ["commit:a7c33dc1", ".ai/KNOWN_FAILURES.md"],
+      "brief_path": ".ai/evaluations/feature-planner/briefs/06-connectivity-health.md",
+      "required_terms": ["privacy", "reconnect", "stale", "edge", "server"]
+    },
+    {
+      "id": "FP-07",
+      "title": "Local Raspberry Pi status indicator",
+      "workflow": "hardware-integration",
+      "input_prompt": "Add a local status indicator on the Raspberry Pi for healthy, degraded connectivity, and error states. LED type, voltage, pin and active-high/low behavior are unknown.",
+      "planner_available_evidence": ["docs/PI_INTEGRATION_RUNBOOK.md", ".ai/SAFETY_RULES.md"],
+      "oracle_evidence": [".ai/ARCHITECTURE_RULES.md", ".ai/TEST_MATRIX.md"],
+      "brief_path": ".ai/evaluations/feature-planner/briefs/07-status-indicator.md",
+      "required_terms": ["GPIO", "voltage", "safe", "fake", "Unknown"]
+    },
+    {
+      "id": "FP-08",
+      "title": "State schema reconciliation",
+      "workflow": "schema-change",
+      "input_prompt": "Reconcile a flat consumer state payload with the nested canonical state without breaking existing edge, storage, dashboard or fixture consumers.",
+      "planner_available_evidence": ["docs/CONTRACTS.md", "docs/schemas", "tests/fixtures/contracts"],
+      "oracle_evidence": ["app/state_estimator/adapters.py", "tests/state_estimator", ".ai/KNOWN_FAILURES.md"],
+      "brief_path": ".ai/evaluations/feature-planner/briefs/08-state-schema.md",
+      "required_terms": ["compatibility", "consumers", "units", "timezone", "fixtures"]
+    },
+    {
+      "id": "FP-09",
+      "title": "New soil sensor adapter",
+      "workflow": "hardware-integration",
+      "input_prompt": "Add a new soil sensor to an edge node. Model, bus/address, voltage, calibration curve and failure sentinel are not yet known.",
+      "planner_available_evidence": ["docs/CONTRACTS.md", "docs/state_estimator_spec_v_1_0_en.md"],
+      "oracle_evidence": ["app/state_estimator/validation.py", ".ai/KNOWN_FAILURES.md"],
+      "brief_path": ".ai/evaluations/feature-planner/briefs/09-soil-sensor.md",
+      "required_terms": ["calibration", "voltage", "I2C", "fake", "Unknown"]
+    },
+    {
+      "id": "FP-10",
+      "title": "Malformed LLM JSON and reasoning leakage",
+      "workflow": "bugfix",
+      "input_prompt": "Harden a local model consumer that sometimes returns malformed JSON, extra prose, or reasoning text. Model/runtime combinations vary and output may reach a public-facing summary.",
+      "planner_available_evidence": ["app/ollama.py", "tests/test_ollama.py", "docs/OLLAMA_TROUBLESHOOTING.md"],
+      "oracle_evidence": ["app/daily_story.py", ".ai/KNOWN_FAILURES.md"],
+      "brief_path": ".ai/evaluations/feature-planner/briefs/10-llm-output.md",
+      "required_terms": ["malformed", "reasoning", "schema", "privacy", "fallback"]
+    }
+  ]
+}

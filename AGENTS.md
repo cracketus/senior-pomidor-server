@@ -8,7 +8,7 @@ Before planning, editing, or reviewing, read in this order:
 4. [`.ai/DEVELOPMENT_RULES.md`](.ai/DEVELOPMENT_RULES.md).
 5. [`.ai/KNOWN_FAILURES.md`](.ai/KNOWN_FAILURES.md) and [`.ai/TEST_MATRIX.md`](.ai/TEST_MATRIX.md).
 
-Work only from an approved Implementation Brief: an accepted issue with explicit scope and acceptance criteria, or a human-approved copy of [`.ai/templates/IMPLEMENTATION_BRIEF.md`](.ai/templates/IMPLEMENTATION_BRIEF.md). Classify the task and its risk flags using `TEST_MATRIX.md`; record applicable known-failure IDs and required checks in the brief before implementation.
+Work only from an approved Implementation Brief: an accepted issue with explicit scope and acceptance criteria, or a human-approved copy of [`.ai/templates/implementation-brief.md`](.ai/templates/implementation-brief.md). Use the read-only [Feature Planner](.ai/agents/feature-planner.md) and matching workflow when a request needs planning. Classify the task and its risk flags using `TEST_MATRIX.md`; record applicable known-failure IDs and required checks in the brief before implementation.
 
 Standard validation from the repository root:
 

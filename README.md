@@ -7,8 +7,9 @@ Server implementation for the Senior Pomidor project.
 Development agents and reviewers must start with [AGENTS.md](AGENTS.md). It routes to the
 version-controlled [`.ai` context pack](.ai/PROJECT.md), including current state, architecture and
 safety invariants, known failures, task classification, and risk-based validation requirements.
-Use [the Implementation Brief template](.ai/templates/IMPLEMENTATION_BRIEF.md) when an approved
-issue does not already provide equivalent scope and acceptance criteria.
+Use the read-only [Feature Planner](.ai/agents/feature-planner.md) and
+[Implementation Brief template](.ai/templates/implementation-brief.md) when an approved issue does
+not already provide equivalent scope, evidence, risks, validation, and acceptance criteria.
 
 ## What It Runs
 

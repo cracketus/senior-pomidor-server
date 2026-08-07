@@ -33,6 +33,6 @@ Owner: repository maintainer. Review with CI/tooling changes and quarterly. The 
 | `CURRENT_STATE.md` | release, topology/contract/subsystem/season/rehearsal change; monthly in active season |
 | `KNOWN_FAILURES.md` | incident or newly validated resolution; review during each related brief |
 | `TEST_MATRIX.md` and YAML | test/CI/risk change; keep both representations in the same change |
-| `AGENTS.md`, templates/workflow skeletons | routing/workflow change; keep short and link details |
+| `AGENTS.md`, agent/workflow/template files | routing or planning-contract change; keep links and evaluation fixtures synchronized |
 
 Changes to the context pack receive the same review as code. Do not place transient chat context or sensitive operational values in it.
