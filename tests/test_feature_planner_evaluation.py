@@ -5,5 +5,6 @@ def test_feature_planner_historical_evaluation_passes() -> None:
     summary = evaluate_suite()
 
     assert summary.case_count == 10
+    assert summary.required_passing_cases == 8
     assert summary.passing_revision_cases >= summary.required_passing_cases
     assert summary.minimum_revision_score >= 16
