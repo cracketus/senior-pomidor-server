@@ -119,7 +119,7 @@ jobs:
           fi
       - name: Build and publish multi-architecture image
         if: steps.existing-image.outputs.exists != 'true'
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           platforms: linux/amd64,linux/arm64
