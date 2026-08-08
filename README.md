@@ -10,6 +10,9 @@ safety invariants, known failures, task classification, and risk-based validatio
 Use the read-only [Feature Planner](.ai/agents/feature-planner.md) and
 [Implementation Brief template](.ai/templates/implementation-brief.md) when an approved issue does
 not already provide equivalent scope, evidence, risks, validation, and acceptance criteria.
+Approved implementations follow the [Coding Agent instructions](.ai/agents/coding-agent.md), return
+the [Implementation Report](.ai/templates/implementation-report.md), and use the
+[isolated agent task workflow](docs/AGENT_TASK_WORKFLOW.md) for branch/worktree or Compose work.
 
 ## What It Runs
 

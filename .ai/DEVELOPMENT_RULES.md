@@ -17,6 +17,9 @@ Owner: repository maintainer. Review with CI/tooling changes and quarterly. The 
 - Use fakes/simulation for hardware and stub local model responses. Tests must not contact production, activate hardware, or enable external exports.
 - Keep secrets and private infrastructure out of diffs and command output. Do not read `.env` unless a specifically authorized task requires it.
 - Update [`CURRENT_STATE.md`](CURRENT_STATE.md) only when current deployed/deployable facts change; update [`PROJECT.md`](PROJECT.md) only for stable decisions.
+- Coding work follows [`agents/coding-agent.md`](agents/coding-agent.md). Use the isolated
+  [`agent task workflow`](../docs/AGENT_TASK_WORKFLOW.md) for agent-created branches/worktrees and
+  any Compose mutation. Do not call Docker with arbitrary agent-generated arguments.
 
 ## Validation and handoff
 
@@ -24,6 +27,8 @@ Owner: repository maintainer. Review with CI/tooling changes and quarterly. The 
 - Report exact commands and outcomes. Label checks `PASS`, `FAIL`, or `NOT RUN` with a reason; never imply manual/physical success from CI.
 - Review the final diff for debug artifacts, accidental secrets, unrelated files, contract drift, rollback gaps, and known-failure regressions.
 - Reviewer reclassifies the change independently and verifies the brief, rules, tests, manual evidence, and documentation are consistent.
+- Handoff uses [`templates/implementation-report.md`](templates/implementation-report.md), including
+  exact commands, explicit deviations, compatibility/safety impact, and pending manual evidence.
 
 ## Context-pack maintenance
 

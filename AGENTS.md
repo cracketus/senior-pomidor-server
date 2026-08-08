@@ -10,6 +10,10 @@ Before planning, editing, or reviewing, read in this order:
 
 Work only from an approved Implementation Brief: an accepted issue with explicit scope and acceptance criteria, or a human-approved copy of [`.ai/templates/implementation-brief.md`](.ai/templates/implementation-brief.md). Use the read-only [Feature Planner](.ai/agents/feature-planner.md) and matching workflow when a request needs planning. Classify the task and its risk flags using `TEST_MATRIX.md`; record applicable known-failure IDs and required checks in the brief before implementation.
 
+Approved implementation work follows the [Coding Agent](.ai/agents/coding-agent.md), uses the
+[isolated task workflow](docs/AGENT_TASK_WORKFLOW.md) for branches/worktrees or Compose mutation, and
+returns [`.ai/templates/implementation-report.md`](.ai/templates/implementation-report.md).
+
 Standard validation from the repository root:
 
 ```text

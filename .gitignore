@@ -14,6 +14,11 @@ backups/
 *.db
 .codex-known-hosts
 .codex-pi-key*
+.agent-tasks/
+.agent-worktrees/
+/migration-rehearsal/
+/journalctl_outage.txt
+/docs/migration-check.txt
 docs/ai-harness-plan.md
 senior_pomidor_rosalind_package/
 output/

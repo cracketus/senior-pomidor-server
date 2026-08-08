@@ -15,4 +15,12 @@ Select `feature`, `bugfix`, `incident-fix`, `schema-change`, `infrastructure-cha
 
 Ten example outputs across feature, incident, infrastructure, schema, hardware, control and LLM categories are in [`../evaluations/feature-planner/briefs/`](../evaluations/feature-planner/briefs/). They are evaluation fixtures, not approved work orders.
 
-Coding Agent and Reviewer role prompts remain reserved for separately approved work. All roles still follow root [`AGENTS.md`](../../AGENTS.md) and the context pack.
+## Coding Agent
+
+[`coding-agent.md`](coding-agent.md) implements one approved brief and returns the mandatory
+[`Implementation Report`](../templates/implementation-report.md). Infrastructure-sensitive tasks
+use the isolated [agent task workflow](../../docs/AGENT_TASK_WORKFLOW.md). The role never authorizes
+production deployment, merge, production secrets, or real hardware.
+
+The Reviewer role remains reserved for separately approved work. All roles still follow root
+[`AGENTS.md`](../../AGENTS.md) and the context pack.

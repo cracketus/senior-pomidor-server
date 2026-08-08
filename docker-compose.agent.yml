@@ -1,0 +1,45 @@
+---
+# Safe local-only overlay. Invoke only through `python -m tools.agent_task compose`.
+services:
+  api:
+    environment:
+      EXECUTOR_BACKEND: ${EXECUTOR_BACKEND:?agent executor backend is required}
+      HARDWARE_BACKEND: ${HARDWARE_BACKEND:?agent hardware backend is required}
+      GPIO_ENABLED: ${GPIO_ENABLED:?agent GPIO setting is required}
+    volumes:
+      - ${PHOTO_DATA_DIR:?agent photo path is required}:/app/data/photos
+  worker:
+    environment:
+      EXECUTOR_BACKEND: ${EXECUTOR_BACKEND:?agent executor backend is required}
+      HARDWARE_BACKEND: ${HARDWARE_BACKEND:?agent hardware backend is required}
+      GPIO_ENABLED: ${GPIO_ENABLED:?agent GPIO setting is required}
+    volumes:
+      - ${PHOTO_DATA_DIR:?agent photo path is required}:/app/data/photos
+  state-estimator-worker:
+    volumes:
+      - ${ESTIMATOR_PRIVATE_DATA_DIR:?agent estimator path is required}:/app/data/private
+  grafana-cloud-exporter:
+    environment:
+      GRAFANA_CLOUD_EXPORT_ENABLED: "false"
+      GRAFANA_CLOUD_REMOTE_WRITE_URL: ""
+      GRAFANA_CLOUD_INSTANCE_ID: ""
+      GRAFANA_CLOUD_API_TOKEN: ""
+  mosquitto:
+    volumes:
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - ${MOSQUITTO_DATA_DIR:?agent MQTT path is required}:/mosquitto/data
+  postgres:
+    volumes:
+      - ${POSTGRES_DATA_DIR:?agent PostgreSQL path is required}:/var/lib/postgresql/data
+      - ./docker/postgres/init-grafana-reader.sh:/docker-entrypoint-initdb.d/20-grafana-reader.sh:ro
+  grafana:
+    volumes:
+      - ${GRAFANA_DATA_DIR:?agent Grafana path is required}:/var/lib/grafana
+      - ./docker/grafana/provisioning:/etc/grafana/provisioning:ro
+
+volumes:
+  ollama_models:
+    driver_opts:
+      type: none
+      o: bind
+      device: ${OLLAMA_DATA_DIR:?agent Ollama path is required}
