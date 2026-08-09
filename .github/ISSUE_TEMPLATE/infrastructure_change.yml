@@ -1,0 +1,51 @@
+name: Infrastructure or deployment change
+description: Propose a Compose, CI, host, release, backup, or deployment change.
+title: "[Infrastructure]: "
+labels:
+  - "workflow:feature"
+  - "area:infrastructure"
+  - "risk:deployment"
+  - "status:needs-planning"
+body:
+  - type: textarea
+    id: scope
+    attributes:
+      label: Change and operational goal
+      description: Identify the exact files, environments, services, and measurable outcome.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Current topology and evidence
+      description: Link Compose/release/CI files, checks, and safe redacted logs. Do not include hostnames, credentials, or production secrets.
+    validations:
+      required: true
+  - type: textarea
+    id: safety
+    attributes:
+      label: Availability, data, and security impact
+      description: State production boundary, backup/restore evidence, isolated rehearsal, external-export status, and abort criteria.
+    validations:
+      required: true
+  - type: input
+    id: brief
+    attributes:
+      label: Approved Implementation Brief
+      description: Required before coding.
+    validations:
+      required: true
+  - type: textarea
+    id: rollout
+    attributes:
+      label: Rollout, health checks, and rollback
+      description: Include exact pre/post checks, owner, recovery evidence, and what remains manual.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: List render/check commands, isolated rehearsal evidence, health checks, rollback, and documentation.
+    validations:
+      required: true
