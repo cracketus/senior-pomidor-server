@@ -9,7 +9,7 @@ from typing import cast
 import pytest
 
 from tools.agent_task import RepositoryContext, create_task
-from tools.validate_change import CommandResult, validate_change
+from tools.validate_change import CommandResult, _nox_reuse_ready, _validation_storage_paths, validate_change
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -58,6 +58,8 @@ def test_full_validation_caches_commands_and_invalidates_only_relevant_diff(
     metadata = create_task(
         context, "TOMATO-AI-41", "validation", "feature", worktree=False, task_classes=("pure_software",)
     )
+    for session in ("lint", "format_check", "types"):
+        (repo / ".nox" / session).mkdir(parents=True)
     (repo / "tools" / "sample.py").write_text("VALUE = 2\n", encoding="utf-8")
     monkeypatch.setenv("GITHUB_PERSONAL_ACCESS_TOKEN", "must-not-reach-validation")
     calls: list[list[str]] = []
@@ -79,10 +81,24 @@ def test_full_validation_caches_commands_and_invalidates_only_relevant_diff(
         for command in calls
     )
     quality_runs = sum(bool(command) and command[0] == "nox" for command in calls)
+    pytest_command = next(
+        command
+        for command in calls
+        if command[1:4] == ["-m", "pytest", "-q"] and not any(arg.startswith("tests/") for arg in command)
+    )
+    quality_command = next(command for command in calls if command and command[0] == "nox")
+    pytest_basetemp = Path(pytest_command[pytest_command.index("--basetemp") + 1])
+    nox_envdir = Path(quality_command[quality_command.index("--envdir") + 1])
 
     assert first_code == second_code == 0
     assert full_pytest_runs == 1
     assert quality_runs == 1
+    assert pytest_basetemp.is_absolute()
+    assert pytest_basetemp.parent.parent == repo.resolve()
+    assert metadata["task_key"] not in str(pytest_basetemp)
+    assert "--reuse-existing-virtualenvs" in quality_command
+    assert "--no-install" in quality_command
+    assert nox_envdir == repo.resolve() / ".nox"
     assert all("GITHUB_PERSONAL_ACCESS_TOKEN" not in environment for environment in environments)
     assert all(environment["GIT_CONFIG_KEY_0"] == "safe.directory" for environment in environments)
     assert all(environment["GIT_CONFIG_VALUE_0"] == str(repo.resolve()) for environment in environments)
@@ -111,6 +127,36 @@ def test_full_validation_caches_commands_and_invalidates_only_relevant_diff(
     payload = json.loads(Path(metadata["state_dir"], "validation.json").read_text(encoding="utf-8"))
     assert payload["schema"] == "senior-pomidor.validation.v1"
     assert not Path(metadata["state_dir"], "validation.json.tmp").exists()
+
+
+def test_validation_storage_uses_short_control_root_paths(tmp_path: Path) -> None:
+    control_root = tmp_path / "repo"
+    checkout_root = control_root / ".agent-worktrees" / ("deep-task-name-" * 6)
+    context = RepositoryContext(checkout_root, control_root, control_root / ".git")
+    task_key = "tomato-ai-43-" + ("long-validation-task-" * 8)
+
+    pytest_basetemp, nox_envdir = _validation_storage_paths(context, "123456789abc", task_key, "first-input")
+    changed_basetemp, _ = _validation_storage_paths(context, "123456789abc", task_key, "second-input")
+
+    assert pytest_basetemp.parent == control_root / ".agent-validation-tmp-123456789abc"
+    assert len(pytest_basetemp.name) == 12
+    assert task_key not in str(pytest_basetemp)
+    assert checkout_root not in pytest_basetemp.parents
+    assert changed_basetemp != pytest_basetemp
+    assert nox_envdir == control_root / ".nox"
+
+
+def test_nox_skips_install_only_for_complete_unchanged_shared_environments(tmp_path: Path) -> None:
+    args = ["nox", "-s", "lint", "format_check", "types"]
+    envdir = tmp_path / ".nox"
+
+    assert not _nox_reuse_ready(args, str(envdir), ("tools/sample.py",))
+    for session in ("lint", "format_check", "types"):
+        (envdir / session).mkdir(parents=True)
+
+    assert _nox_reuse_ready(args, str(envdir), ("tools/sample.py",))
+    assert not _nox_reuse_ready(args, str(envdir), ("pyproject.toml",))
+    assert not _nox_reuse_ready(args, str(envdir), ("noxfile.py",))
 
 
 def test_docs_only_skips_pytest_and_compose(validation_repo: tuple[Path, RepositoryContext, str]) -> None:

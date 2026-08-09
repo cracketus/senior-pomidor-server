@@ -17,9 +17,16 @@ Results are written atomically to `.agent-tasks/<key>/validation.json`. Every se
 results are keyed by the relevant diff content, exact command, bounded platform identity, and
 canonical configuration hashes. A documentation-only addition therefore does not invalidate an
 unchanged Python check, while Python/tool/test changes do. Nox checks reuse their existing local
-virtual environments. Long-running commands stream output and periodic heartbeats and have bounded
-per-check timeouts. Pytest disables only its local cache plugin and uses a task/user-scoped ignored
-base-temp directory to avoid cross-identity Windows ACL and cleanup failures.
+virtual environments from the primary repository control root, including when validation runs from an
+isolated worktree. Reused validation sessions skip their `session.install` steps; dependency or nox
+configuration changes or missing selected session directories retain normal `session.install` behavior
+to bootstrap/update the shared environments safely. Long-running commands stream output and periodic
+heartbeats and have bounded per-check timeouts. Pytest disables only its local cache plugin and uses an
+ignored, identity-scoped base-temp directory below the short primary control root. The
+task-and-relevant-Python-input component is a bounded hash rather than the full task key, so an
+invalidated Python/tooling diff receives a fresh directory while documentation-only changes retain
+cached evidence. This avoids cross-identity Windows ACL failures, stale-directory cleanup, and
+nested-worktree path overflow.
 
 Compose rendering is selected only by infrastructure or matching risk routing and is executed through
 the isolated `tools.agent_task compose ... config` boundary. Validation never starts services,

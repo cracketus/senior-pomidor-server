@@ -22,6 +22,7 @@ import yaml
 from tools.agent_context import ContextSelection, select_context
 from tools.agent_task import (
     AgentTaskError,
+    RepositoryContext,
     _read_env,
     load_task,
     repository_context,
@@ -145,6 +146,7 @@ def _actual_command(
     changed_files: tuple[str, ...],
     file_hashes: dict[str, str],
     pytest_basetemp: str,
+    nox_envdir: str,
 ) -> list[str] | None:
     if check_id == "compose_config":
         return [sys.executable, "-m", "tools.agent_task", "compose", task_key, "config"]
@@ -177,11 +179,40 @@ def _actual_command(
     args = shlex.split(command, posix=os.name != "nt")
     if args and args[0] == "nox" and "--reuse-existing-virtualenvs" not in args:
         args.insert(1, "--reuse-existing-virtualenvs")
+    if args and args[0] == "nox" and _nox_reuse_ready(args, nox_envdir, changed_files):
+        args.insert(1, "--no-install")
+    if args and args[0] == "nox" and "--envdir" not in args:
+        args[1:1] = ["--envdir", nox_envdir]
     if args[:2] == ["python", "-m"]:
         args[0] = sys.executable
     if args[1:4] == ["-m", "pytest", "-q"]:
         args.extend(["-p", "no:cacheprovider", "--basetemp", pytest_basetemp])
     return args
+
+
+def _nox_reuse_ready(args: list[str], nox_envdir: str, changed_files: tuple[str, ...]) -> bool:
+    if any(path.casefold() in {"noxfile.py", "pyproject.toml"} for path in changed_files):
+        return False
+    try:
+        session_index = args.index("-s") + 1
+    except ValueError:
+        return False
+    sessions = [value for value in args[session_index:] if not value.startswith("-")]
+    return bool(sessions) and all((Path(nox_envdir) / session).is_dir() for session in sessions)
+
+
+def _validation_storage_paths(
+    context: RepositoryContext, identity_hash: str, task_key: str, pytest_input_hash: str
+) -> tuple[Path, Path]:
+    run_hash = _sha256_bytes(f"{task_key}|{pytest_input_hash}".encode("utf-8", "replace"))[:12]
+    pytest_basetemp = context.control_root / f".agent-validation-tmp-{identity_hash}" / run_hash
+    nox_envdir = context.control_root / ".nox"
+    return pytest_basetemp, nox_envdir
+
+
+def _pytest_input_hash(changed_files: tuple[str, ...], file_hashes: dict[str, str]) -> str:
+    relevant = {path: file_hashes[path] for path in changed_files if _is_relevant("full_pytest", path)}
+    return _sha256_bytes(json.dumps(relevant, sort_keys=True, separators=(",", ":")).encode())
 
 
 def _is_relevant(check_id: str, path: str) -> bool:
@@ -369,9 +400,10 @@ def validate_change(
         ]
     )
     identity_hash = _sha256_bytes(identity_source.encode("utf-8", "replace"))[:12]
-    pytest_temp_root = root / f".agent-validation-tmp-{identity_hash}"
-    pytest_temp_root.mkdir(exist_ok=True)
-    pytest_basetemp = f"{pytest_temp_root.name}/{task_key}"
+    pytest_basetemp, nox_envdir = _validation_storage_paths(
+        context, identity_hash, task_key, _pytest_input_hash(changed_files, file_hashes)
+    )
+    pytest_basetemp.parent.mkdir(exist_ok=True)
     environment.update(
         {
             "GIT_CONFIG_COUNT": "1",
@@ -396,7 +428,8 @@ def validate_change(
             base_sha,
             changed_files,
             file_hashes,
-            pytest_basetemp,
+            str(pytest_basetemp),
+            str(nox_envdir),
         )
         if command is None:
             result["reason"] = "selected_check_requires_explicit_focused_or_manual_evidence"
