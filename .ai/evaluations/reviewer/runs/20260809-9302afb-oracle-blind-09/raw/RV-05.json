@@ -1,0 +1,91 @@
+{
+  "schema": "senior-pomidor.review-report.v1",
+  "title": "Oracle-blind review of physical-control safety changes",
+  "case_id": "RV-05",
+  "reviewer_version": "1.0",
+  "reviewer_hash": "51ab66ce62e2b5363d7a71587edb937f1e34feb842d726e24141da4b03c38f0f",
+  "verdict": "REQUEST CHANGES",
+  "rationale": "The change introduces a direct Guardrails/Executor bypass, restart-unsafe in-memory idempotency, and a missing-timestamp path that treats unobserved state as fresh. Each defect can authorize or repeat a physical action, and the required supervised hardware and restart rehearsal remains not run.",
+  "classification": {
+    "task_classes": [
+      "control_guardrails_executor",
+      "edge_hardware_integration"
+    ],
+    "risk_flags": [
+      "physical_action",
+      "production_availability"
+    ],
+    "sp_fail_ids": []
+  },
+  "scope_architecture": "The reviewed changes are confined to Control, Guardrails, and Executor behavior, but they violate the mandatory Control candidate -> deterministic Guardrails -> idempotent Executor -> approved/fake adapter ownership path. The direct adapter call assigns execution authority to Control, while the process-local acknowledgement set does not provide Executor-owned durable transitions.",
+  "findings": [
+    {
+      "id": "OBS-CONTROL-BYPASS-001",
+      "severity": "BLOCKER",
+      "category": "architecture",
+      "location": "app/control.py",
+      "finding": "A model or analyst suggestion can invoke the watering adapter directly without deterministic Guardrails or the Executor.",
+      "evidence": "01-guardrails-bypass.diff adds an adapter call directly inside apply_suggestion.",
+      "evidence_excerpt": "def apply_suggestion(adapter, suggestion):\n    if suggestion[\"action\"] == \"water\":\n        adapter.water(seconds=suggestion[\"seconds\"])",
+      "impact": "Untrusted input can cause an unvalidated physical watering action with no safety gate, idempotency state machine, acknowledgement handling, or auditable execution transition.",
+      "required_change": "Route every suggestion through a deterministic Guardrails decision and the idempotent Executor before an approved or fake adapter can run.",
+      "suggested_test": "Test blocked and allowed suggestions through Control, Guardrails, Executor, and a fake adapter."
+    },
+    {
+      "id": "OBS-EXECUTOR-RESTART-001",
+      "severity": "BLOCKER",
+      "category": "safety",
+      "location": "app/executor.py",
+      "finding": "Executor idempotency exists only in process memory and records acknowledgement after adapter delivery.",
+      "evidence": "02-duplicate-restart.diff uses a module-level set and adds the command identifier only after adapter.send returns.",
+      "evidence_excerpt": "ACKNOWLEDGED = set()\ndef execute(adapter, command):\n    if command.id not in ACKNOWLEDGED:\n        adapter.send(command)\n        ACKNOWLEDGED.add(command.id)",
+      "impact": "A restart clears the acknowledgement set, and a crash after delivery but before the add can repeat an already performed or uncertain physical action.",
+      "required_change": "Persist idempotency and execution transitions before and after adapter delivery so restart, crash, retry, and late acknowledgement cannot repeat an uncertain action.",
+      "suggested_test": "Simulate duplicate delivery, crash after send, process restart, retry, timeout, and late acknowledgement with a fake adapter."
+    },
+    {
+      "id": "OBS-GUARDRAILS-FRESHNESS-001",
+      "severity": "BLOCKER",
+      "category": "safety",
+      "location": "app/guardrails.py",
+      "finding": "A state without observed_at is assigned an age of zero and therefore passes the freshness gate.",
+      "evidence": "04-stale-state.diff explicitly selects 0 when observed_at is absent.",
+      "evidence_excerpt": "    age_seconds = (now - state[\"observed_at\"]).total_seconds() if state.get(\"observed_at\") else 0\n    return age_seconds <= 300",
+      "impact": "Missing or unverifiable telemetry can be treated as current and authorize a physical action instead of failing safe.",
+      "required_change": "Reject state with a missing observed_at timestamp and validate timezone-aware freshness before authorizing any action.",
+      "suggested_test": "Replay missing, stale, future, malformed, and timezone-aware timestamps and verify every invalid state fails closed."
+    },
+    {
+      "id": "OBS-PHYSICAL-EVIDENCE-001",
+      "severity": "HIGH",
+      "category": "tests",
+      "location": "implementation_report.manual_evidence",
+      "finding": "The required supervised safe-hardware and restart rehearsal evidence is absent.",
+      "evidence": "The supplied manual evidence explicitly records both required procedures as not run.",
+      "evidence_excerpt": "NOT RUN: supervised safe-hardware and restart rehearsal",
+      "impact": "CI and fake-adapter results cannot establish safe actuator behavior, abort/rollback handling, or restart behavior on the supervised physical path.",
+      "required_change": "Complete the bounded supervised safe-hardware procedure and restart rehearsal with a human owner, abort boundary, rollback, and recorded observations.",
+      "suggested_test": "manual: Run the supervised safe-hardware and restart rehearsal with the actuator constrained to a safe test setup and record duplicate, abort, restart, and rollback outcomes."
+    }
+  ],
+  "contract_consumer_review": "The action suggestion is produced outside the adapter boundary and consumed by Control, Guardrails, Executor, and the hardware adapter. The proposed flow bypasses two required consumers entirely. Command identity is present but not durably preserved across the Executor lifecycle, and state freshness permits a missing timestamp rather than enforcing the versioned-state safety contract.",
+  "evidence_matrix": [
+    {
+      "check": "PASS: unit tests and fake-adapter CI",
+      "status": "PASS",
+      "manual": false
+    },
+    {
+      "check": "NOT RUN: supervised safe-hardware and restart rehearsal",
+      "status": "NOT_RUN",
+      "manual": true
+    }
+  ],
+  "operations_safety_security_privacy": "The physical path is unsafe because it can bypass Guardrails, repeat actions after crash/restart, and accept missing observation time as fresh. The supplied patches do not demonstrate durable transition logging, uncertain-action handling, manual override, abort, rollback, or safe supervised hardware behavior.",
+  "documentation_assessment": "No documentation patch was supplied for this case. The missing supervised procedure results and rollback evidence remain an explicit release limitation.",
+  "follow_ups": [],
+  "limitations": [
+    "Review was limited to the three named patch artifacts and the two supplied evidence statements.",
+    "No real hardware, production system, private infrastructure, or production secret was accessed."
+  ]
+}

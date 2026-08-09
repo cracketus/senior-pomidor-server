@@ -1,0 +1,28 @@
+{
+  "schema": "senior-pomidor.reviewer-oracle.v1",
+  "version": 2,
+  "supersedes": ".ai/evaluations/reviewer/oracles/v1.json",
+  "change_rationale": "Run 20260809-c339e8d-oracle-blind-01 showed that v1 omitted supported historical, manual-evidence, edge-compatibility and LLM negative-test findings. The private-network historical case was replaced rather than added to the oracle. A complete fresh blind rerun is mandatory.",
+  "findings": [
+    {"id":"RF-014","case_id":"RV-01","severity":"MEDIUM","category":"tests","summary":"The fixture brief omits schema/public-contract classification and named consumer compatibility evidence.","rationale":"The pinned diff adds versioned persistence, API and dashboard consumers."},
+    {"id":"RF-015","case_id":"RV-03","severity":"HIGH","category":"operations","summary":"The supplied evidence does not cover the diff's data-loss migration and isolated restore requirements.","rationale":"The pinned production-layout diff changes backup/restore targets, retention and durable paths."},
+    {"id":"RF-016","case_id":"RV-04","severity":"HIGH","category":"tests","summary":"Representative local-model acceptance evidence is missing for changed runtime/output-bound behavior.","rationale":"Fake-client automation cannot close the changed Ollama runtime behavior."},
+    {"id":"RF-001","case_id":"RV-05","severity":"BLOCKER","category":"architecture","summary":"Control calls the hardware adapter without Guardrails or Executor."},
+    {"id":"RF-002","case_id":"RV-05","severity":"BLOCKER","category":"safety","summary":"Restart loses acknowledgement state and repeats a physical command."},
+    {"id":"RF-004","case_id":"RV-05","severity":"BLOCKER","category":"safety","summary":"Missing timestamps are treated as fresh control state."},
+    {"id":"RF-018","case_id":"RV-05","severity":"HIGH","category":"tests","summary":"Required supervised hardware and restart-rehearsal evidence is NOT RUN.","requires_manual_verification":true,"rationale":"The fixture carries physical_action and production_availability."},
+    {"id":"RF-003","case_id":"RV-06","severity":"HIGH","category":"correctness","summary":"A 0..1 moisture ratio is compared with a percent threshold."},
+    {"id":"RF-005","case_id":"RV-06","severity":"BLOCKER","category":"tests","summary":"Expected fixture was changed to normalize an incompatible payload."},
+    {"id":"RF-006","case_id":"RV-06","severity":"HIGH","category":"tests","summary":"The test mocks ingestion while the HTTP path still rejects the payload."},
+    {"id":"RF-019","case_id":"RV-06","severity":"HIGH","category":"tests","summary":"The contract change lacks required edge compatibility and manual canary evidence.","requires_manual_verification":true,"rationale":"Changing the telemetry fixture shape affects the edge producer even without physical action."},
+    {"id":"RF-007","case_id":"RV-07","severity":"HIGH","category":"operations","summary":"APP_IMAGE silently defaults to latest instead of failing clearly."},
+    {"id":"RF-008","case_id":"RV-07","severity":"BLOCKER","category":"operations","summary":"The rehearsal profile activates external cloud export."},
+    {"id":"RF-020","case_id":"RV-07","severity":"HIGH","category":"tests","summary":"Required security, isolated rehearsal, rollback and zero-export evidence is missing.","requires_manual_verification":true,"rationale":"Compose parsing alone cannot close the declared availability/security risks."},
+    {"id":"RF-009","case_id":"RV-08","severity":"HIGH","category":"security","summary":"Secret-like private-key material is committed in a fixture."},
+    {"id":"RF-010","case_id":"RV-09","severity":"HIGH","category":"security","summary":"Raw model text is trusted and published without parsing or validation."},
+    {"id":"RF-021","case_id":"RV-09","severity":"HIGH","category":"tests","summary":"Supplied tests omit required malformed/reasoning/timeout/unavailable/oversized/privacy cases.","rationale":"A generic happy-path unit-test result cannot close SP-FAIL-012 or SP-FAIL-013."},
+    {"id":"RF-011","case_id":"RV-10","severity":"HIGH","category":"correctness","summary":"An open temporary file is unlinked before close and fails on Windows."},
+    {"id":"RF-013","case_id":"RV-10","severity":"HIGH","category":"operations","summary":"Required rollback rehearsal is NOT RUN despite green CI.","requires_manual_verification":true},
+    {"id":"RF-012","case_id":"RV-10","severity":"MEDIUM","category":"docs","summary":"The runbook documents a configuration default that differs from code."}
+  ]
+}

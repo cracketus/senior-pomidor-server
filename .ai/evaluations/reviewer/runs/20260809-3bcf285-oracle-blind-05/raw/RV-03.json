@@ -1,0 +1,64 @@
+{
+  "schema": "senior-pomidor.review-report.v1",
+  "title": "Secure multi-application production layout review",
+  "case_id": "RV-03",
+  "reviewer_version": "1.0",
+  "reviewer_hash": "51ab66ce62e2b5363d7a71587edb937f1e34feb842d726e24141da4b03c38f0f",
+  "verdict": "REQUEST CHANGES",
+  "rationale": "The intended ownership split is present, but production configuration still accepts a built-in database connection fallback, and the supplied evidence does not demonstrate the mandatory isolated rehearsal, recovery, or security checks for this availability and data-migration change.",
+  "classification": {
+    "task_classes": ["infrastructure_deployment"],
+    "risk_flags": ["data_loss_migration", "security_secrets", "production_availability"],
+    "sp_fail_ids": ["SP-FAIL-003", "SP-FAIL-004", "SP-FAIL-005"]
+  },
+  "scope_architecture": "The diff separates application-owned services from platform-owned services and changes release, backup, restore, systemd, environment, and Compose behavior. It is therefore a high-risk infrastructure and recovery change, not merely a documentation or layout update.",
+  "findings": [
+    {
+      "id": "obs-v5-rv03-001",
+      "severity": "HIGH",
+      "category": "operations",
+      "location": "docker-compose.yml:10",
+      "finding": "Production application services inherit an app-environment anchor that provides a fallback database URL instead of requiring the platform database configuration to be set.",
+      "evidence": "The new shared environment anchor is used by migration and runtime services, and its next line supplies a default DATABASE_URL. The infrastructure checklist requires required variables to fail clearly rather than using unsafe fallbacks.",
+      "evidence_excerpt": "x-app-environment: &app-environment",
+      "impact": "A missing or incorrectly loaded production secret can silently direct the application at a default endpoint instead of failing before migration or startup.",
+      "required_change": "Require DATABASE_URL in the production Compose path and retain any development-only fallback exclusively in the development overlay.",
+      "suggested_test": "Render the production Compose configuration with DATABASE_URL unset and assert that configuration fails before any service can start."
+    },
+    {
+      "id": "obs-v5-rv03-002",
+      "severity": "HIGH",
+      "category": "tests",
+      "location": "implementation_report.manual_evidence",
+      "finding": "No inspectable isolated rehearsal, restore, rollback, or post-rollback health evidence is supplied for the changed shared-service and backup/restore topology.",
+      "evidence": "The fixture supplies only a general historical pass statement despite security_secrets and production_availability being declared and backup/restore scripts being changed. TEST_MATRIX and SP-FAIL-003 through SP-FAIL-005 require an isolated, export-disabled rehearsal with recovery comparison.",
+      "evidence_excerpt": "PASS: historical bounded production-layout review is supplied by this fixture",
+      "impact": "The change can be approved without proof that a rehearsal is isolated from platform services or that recovery preserves application data and restores readiness.",
+      "required_change": "Attach an isolated candidate-bundle rehearsal showing distinct credentials, paths, loopback ports, disabled external export, restore comparisons, rollback, and post-rollback health.",
+      "suggested_test": "Run an isolated restore rehearsal from the candidate bundle, verify no external export, compare counts and representative hashes, then execute and verify rollback."
+    },
+    {
+      "id": "obs-v5-rv03-003",
+      "severity": "HIGH",
+      "category": "security",
+      "location": "implementation_report.automated_evidence",
+      "finding": "The supplied evidence does not include inspectable security or dependency-audit results required by the declared security_secrets risk flag.",
+      "evidence": "A generic historical security-check statement is not command output or a result that can be inspected for this diff. The reviewer checklist requires nox security and dependency-audit evidence when security_secrets applies.",
+      "evidence_excerpt": "PASS: historical Compose, release and security checks",
+      "impact": "Credential-handling, permission, and dependency regressions in the changed production assets can remain unreviewed.",
+      "required_change": "Attach the scoped security scan and dependency-audit results for the pinned production-layout artifact.",
+      "suggested_test": "Run nox -s security deps_audit and retain the results with the release evidence."
+    }
+  ],
+  "contract_consumer_review": "Reviewed Compose, systemd, release bundle, backup/restore, environment template, local overlay, production overlay, and associated static tests. The platform boundary is documented, but the missing-variable path and recovery evidence prevent validation of the operational contract.",
+  "evidence_matrix": [
+    {"check": "Pinned diff SHA-256", "status": "PASS", "manual": false},
+    {"check": "Application/platform ownership and static Compose inspection", "status": "PASS", "manual": false},
+    {"check": "Security and dependency audit evidence", "status": "NOT_RUN", "manual": false},
+    {"check": "Isolated restore, rollback, and post-rollback health rehearsal", "status": "NOT_RUN", "manual": true}
+  ],
+  "operations_safety_security_privacy": "No real hardware path is added. The changed production topology, credentials, backup, and restore paths require fail-closed configuration and isolated recovery proof; those prerequisites are not met by the supplied summaries.",
+  "documentation_assessment": "The modified runbooks describe the new ownership model, but documentation cannot demonstrate isolated recovery or replace executable security evidence.",
+  "follow_ups": [],
+  "limitations": ["The historical fixture supplies stated PASS summaries but no inspectable CI logs, security results, or rehearsal artifact."]
+}

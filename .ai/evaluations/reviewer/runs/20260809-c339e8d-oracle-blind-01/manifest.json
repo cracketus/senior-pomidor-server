@@ -1,0 +1,13 @@
+{
+  "schema": "senior-pomidor.reviewer-run.v1",
+  "run_id": "20260809-c339e8d-oracle-blind-01",
+  "status": "calibration_failed_private_raw_withheld",
+  "repository_revision": "c339e8d4767d969d1e16a1a7d50db2d1dc3dbfb6",
+  "model_tier": "strong",
+  "parameters": {"case_routing":{"RV-01..RV-04":"medium","RV-05..RV-10":"strong"}},
+  "invalidation_reasons": [
+    "oracle v1 omitted supported findings",
+    "false-positive and actionable-quality gates failed",
+    "one historical artifact caused private-infrastructure detail to be repeated in raw evidence"
+  ]
+}

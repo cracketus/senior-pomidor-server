@@ -1,0 +1,99 @@
+{
+  "schema": "senior-pomidor.review-report.v1",
+  "title": "Review of Compose defaults and rehearsal export isolation",
+  "case_id": "RV07",
+  "reviewer_version": "1.0",
+  "reviewer_hash": "51ab66ce62e2b5363d7a71587edb937f1e34feb842d726e24141da4b03c38f0f",
+  "verdict": "REQUEST CHANGES",
+  "rationale": "The rehearsal profile explicitly enables an external Grafana Cloud exporter, and Compose now falls back to an unqualified latest image. Required isolated rehearsal/export, rollback, and security evidence is missing.",
+  "classification": {
+    "task_classes": [
+      "infrastructure_deployment"
+    ],
+    "risk_flags": [
+      "production_availability",
+      "security_secrets"
+    ],
+    "sp_fail_ids": [
+      "SP-FAIL-001",
+      "SP-FAIL-003",
+      "SP-FAIL-004"
+    ]
+  },
+  "scope_architecture": "The patches change the application image environment contract and rehearsal topology. They violate the operational invariants that required variables fail clearly, rehearsals use the immutable candidate, and external export remains disabled.",
+  "findings": [
+    {
+      "id": "OBS-REHEARSAL-EXPORT-ENABLED",
+      "severity": "BLOCKER",
+      "category": "operations",
+      "location": "docker-compose.rehearsal.yml",
+      "finding": "The rehearsal profile starts the Grafana Cloud exporter with external export enabled.",
+      "evidence": "The rehearsal service is assigned to the rehearsal profile and sets GRAFANA_CLOUD_EXPORT_ENABLED to true.",
+      "evidence_excerpt": "grafana-cloud-exporter:\n    profiles: [rehearsal]\n    environment:\n      GRAFANA_CLOUD_EXPORT_ENABLED: \"true\"",
+      "impact": "A rehearsal can send duplicate or private operational metrics to an external destination, breaching isolation and public-export safety rules.",
+      "required_change": "Remove the exporter from the rehearsal topology and enforce external export off so rendered rehearsal configuration cannot produce remote writes.",
+      "suggested_test": "Render the exact rehearsal Compose configuration and verify the exporter is absent, export is disabled, and observed remote writes remain zero."
+    },
+    {
+      "id": "OBS-IMPLICIT-LATEST-IMAGE",
+      "severity": "HIGH",
+      "category": "operations",
+      "location": "docker-compose.yml",
+      "finding": "A missing APP_IMAGE silently selects the unqualified latest image.",
+      "evidence": "The required-variable interpolation is replaced with a default of latest.",
+      "evidence_excerpt": "image: ${APP_IMAGE:-latest}",
+      "impact": "Local, CI, rehearsal, or release commands can run an unintended or stale image and produce evidence for a different artifact than the release candidate.",
+      "required_change": "Restore fail-fast APP_IMAGE validation and require a pinned candidate reference or digest for rehearsal and release workflows.",
+      "suggested_test": "Render Compose without APP_IMAGE and assert a clear failure, then render with the pinned candidate and verify its exact image reference."
+    },
+    {
+      "id": "OBS-REHEARSAL-EVIDENCE-NOT-RUN",
+      "severity": "HIGH",
+      "category": "tests",
+      "location": "implementation_report.manual_evidence",
+      "finding": "The required isolated rehearsal, export-zero, and rollback evidence is NOT RUN.",
+      "evidence": "The supplied packet reports only Compose CI PASS and explicitly marks rehearsal/export manual evidence NOT RUN.",
+      "evidence_excerpt": "manual NOT RUN rehearsal/export",
+      "impact": "The production-availability change lacks proof of startup, isolation, zero remote writes, failure recovery, and safe rollback.",
+      "required_change": "Complete an isolated candidate-bundle rehearsal with export disabled, failure injection, health verification, and rollback before approval.",
+      "suggested_test": "manual: Rehearse the pinned candidate under a distinct Compose project with loopback ports and isolated paths, confirm zero remote writes, inject startup failure, and complete rollback."
+    },
+    {
+      "id": "OBS-SECURITY-CHECKS-MISSING",
+      "severity": "HIGH",
+      "category": "security",
+      "location": "implementation_report.automated_evidence",
+      "finding": "The security and dependency checks required by security_secrets are not evidenced.",
+      "evidence": "The supplied automated evidence is limited to Compose CI; no nox security or dependency-audit result is provided.",
+      "evidence_excerpt": "auto PASS Compose CI",
+      "impact": "Credential/export configuration and dependency risks are unreviewed for a change that can contact an external service.",
+      "required_change": "Run and record the repository security and dependency-audit checks and review the rendered configuration without exposing credentials.",
+      "suggested_test": "Run nox -s security deps_audit and inspect the rendered rehearsal environment for secret-safe, disabled export behavior."
+    }
+  ],
+  "contract_consumer_review": "APP_IMAGE changes from required to optional and therefore changes every Compose consumer's environment contract. The rehearsal exporter adds an external consumer that is explicitly forbidden in rehearsal; no safe rollout compatibility is demonstrated.",
+  "evidence_matrix": [
+    {
+      "check": "Compose CI",
+      "status": "PASS",
+      "manual": false
+    },
+    {
+      "check": "Security and dependency audit",
+      "status": "NOT_RUN",
+      "manual": false
+    },
+    {
+      "check": "Isolated rehearsal, zero external writes, failure recovery, and rollback",
+      "status": "NOT_RUN",
+      "manual": true
+    }
+  ],
+  "operations_safety_security_privacy": "The rehearsal configuration has direct external-export reachability and an unsafe image fallback. No production access was used, and no credentials were inspected; those limitations do not make the rendered topology safe.",
+  "documentation_assessment": "No operator-facing explanation, pinned-image requirement, export isolation proof, or completed rollback record accompanies the topology change.",
+  "follow_ups": [],
+  "limitations": [
+    "Review was limited to the supplied hash-verified patch and direct evidence packet.",
+    "No Compose services were started and no production or external endpoint was contacted."
+  ]
+}

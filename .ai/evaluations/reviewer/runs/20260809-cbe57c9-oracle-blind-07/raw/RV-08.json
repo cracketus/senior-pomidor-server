@@ -1,0 +1,102 @@
+{
+  "schema": "senior-pomidor.review-report.v1",
+  "title": "Oracle-blind review of synthetic SSH credential fixture",
+  "case_id": "RV-08",
+  "reviewer_version": "1.0",
+  "reviewer_hash": "51ab66ce62e2b5363d7a71587edb937f1e34feb842d726e24141da4b03c38f0f",
+  "verdict": "REQUEST CHANGES",
+  "rationale": "The patch commits an unmistakably synthetic but private-key-shaped artifact. The selected security risk requires the content decision, automated secret scanning, credential-parser rejection, and manual format inspection to be assessed independently; only generic fixture tests are reported, and the manual inspection is explicitly not run.",
+  "classification": {
+    "task_classes": [
+      "pure_software"
+    ],
+    "risk_flags": [
+      "security_secrets"
+    ],
+    "sp_fail_ids": [
+      "SP-FAIL-016"
+    ]
+  },
+  "scope_architecture": "A non-usable synthetic SSH fixture and testable rejection behavior are in scope. SP-FAIL-016 applies because private-key-shaped content can be confused with real credential material or accepted by a credential path. The fixture content, scanner result, parser behavior, and human format inspection are separate controls and none substitutes for another.",
+  "findings": [
+    {
+      "id": "RV08-OBS-001",
+      "severity": "HIGH",
+      "category": "security",
+      "location": "tests/fixtures/ssh/private_key.txt",
+      "finding": "The repository gains a private-key-shaped test artifact even though its body and marker are unmistakably synthetic.",
+      "evidence": "The new committed file uses BEGIN/END PRIVATE KEY-style delimiters and secret-like body text.",
+      "evidence_excerpt": "-----BEGIN SYNTHETIC PRIVATE KEY-----\nevaluation-only-secret-like-material-must-never-be-accepted\n-----END SYNTHETIC PRIVATE KEY-----",
+      "impact": "Key-shaped source material can trigger scanners, normalize unsafe fixture practices, or be copied into a path that mistakes it for credential input.",
+      "required_change": "Replace the committed key-shaped file with a representation that cannot be confused with usable private-key material while preserving the rejection test intent.",
+      "suggested_test": "Verify the replacement is unmistakably non-credential data and cannot be loaded by the supported SSH credential parser."
+    },
+    {
+      "id": "RV08-OBS-002",
+      "severity": "HIGH",
+      "category": "security",
+      "location": "implementation_report.automated_evidence",
+      "finding": "No automated secret-scan, security-session, or dependency-audit result is provided for the security-shaped fixture.",
+      "evidence": "The supplied automated evidence reports only fixture tests, which is not scanner evidence.",
+      "evidence_excerpt": "automated PASS fixture tests",
+      "impact": "A scanner regression or additional credential-like content can enter source while the review is told automation passed.",
+      "required_change": "Run the required security, dependency-audit, and repository secret-scan checks and report their exact commands and outcomes.",
+      "suggested_test": "Run nox -s security deps_audit and the repository secret scanner against the committed fixture, then record PASS or FAIL without printing sensitive material."
+    },
+    {
+      "id": "RV08-OBS-003",
+      "severity": "HIGH",
+      "category": "tests",
+      "location": "tests/fixtures/ssh/private_key.txt",
+      "finding": "The patch adds only fixture data and no inspectable assertion that the real credential parser rejects it.",
+      "evidence": "The fixture says it must never be accepted, but the allowed patch contains no parser invocation or rejection assertion.",
+      "evidence_excerpt": "evaluation-only-secret-like-material-must-never-be-accepted",
+      "impact": "The artifact can satisfy a fixture-presence test while the credential-handling path still accepts or mishandles it.",
+      "required_change": "Add a behavior-focused test that passes the fixture through the real supported credential parser and asserts safe rejection with secret-free diagnostics.",
+      "suggested_test": "Test parser rejection, error redaction, public-key-only acceptance, malformed delimiters, and permission handling on the supported path."
+    },
+    {
+      "id": "RV08-OBS-004",
+      "severity": "HIGH",
+      "category": "tests",
+      "location": "implementation_report.manual_evidence",
+      "finding": "The required secret-safe format and credential-usability inspection was not run.",
+      "evidence": "The supplied manual security evidence is explicitly NOT RUN.",
+      "evidence_excerpt": "manual NOT RUN secret scanner/format inspection",
+      "impact": "Automation alone has not established that the committed artifact is unusable as a key or that only public-key formats can reach installation paths.",
+      "required_change": "Complete a secret-safe human format and non-usability inspection without displaying key material, and record the result.",
+      "suggested_test": "manual: Have the security owner verify type and non-usability by fingerprint/format tooling without printing contents, and confirm installation accepts public formats only."
+    }
+  ],
+  "contract_consumer_review": "The relevant consumer is the real SSH credential parser or installation path, not the fixture loader alone. The patch does not demonstrate that the synthetic artifact is rejected there or that valid public-key input remains accepted. SP-FAIL-016 therefore remains uncovered.",
+  "evidence_matrix": [
+    {
+      "check": "Reported fixture tests",
+      "status": "PASS",
+      "manual": false
+    },
+    {
+      "check": "Security/dependency audit and repository secret scan",
+      "status": "NOT_RUN",
+      "manual": false
+    },
+    {
+      "check": "Real credential-parser rejection test",
+      "status": "NOT_RUN",
+      "manual": false
+    },
+    {
+      "check": "Secret-safe key format and non-usability inspection",
+      "status": "NOT_RUN",
+      "manual": true
+    }
+  ],
+  "operations_safety_security_privacy": "The text is plainly synthetic, so this review does not identify an actual usable credential, but reviewer calibration still treats a committed secret-shaped artifact as HIGH until content, scanning, parser rejection, and manual inspection are all demonstrated. No real keys, secret stores, hosts, or private infrastructure were accessed.",
+  "documentation_assessment": "No reviewed documentation defines why a key-shaped file is required, how it is guaranteed unusable, which parser consumes it, or how scanner exceptions are avoided. No scanner suppression should be added merely to accommodate this fixture.",
+  "follow_ups": [],
+  "limitations": [
+    "Review was limited to the supplied hash-verified fixture patch, mandatory stable rules, reviewer guidance, schema, and direct evidence packet.",
+    "No secret scanner output, parser implementation, real key, host configuration, production system, or unlisted evaluation artifact was inspected.",
+    "The manual format inspection and all named security automation remain unavailable."
+  ]
+}

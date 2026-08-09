@@ -1,0 +1,113 @@
+{
+  "schema": "senior-pomidor.review-report.v1",
+  "title": "Review of RV-10 export cleanup and operations update",
+  "case_id": "RV-10",
+  "reviewer_version": "1.0",
+  "reviewer_hash": "51ab66ce62e2b5363d7a71587edb937f1e34feb842d726e24141da4b03c38f0f",
+  "verdict": "REQUEST CHANGES",
+  "rationale": "The temporary-export cleanup operates on a named temporary file while its handle is still open, which is not portable to supported Windows behavior and can also cause context cleanup errors. Windows coverage and the required isolated rollback rehearsal are missing, while the new documented freshness default has no supplied runtime-source evidence.",
+  "classification": {
+    "task_classes": [
+      "pure_software",
+      "infrastructure_deployment"
+    ],
+    "risk_flags": [
+      "production_availability"
+    ],
+    "sp_fail_ids": [
+      "SP-FAIL-014"
+    ]
+  },
+  "scope_architecture": "Changed-path inventory: tools/export.py adds a temporary-file creation/write/unlink lifecycle with supported-operating-system implications; docs/OPERATIONS.md changes the documented state-freshness default from 300 to 30 seconds; implementation-report.md records Linux-only CI and a pending rollback rehearsal. No persisted/public field, required environment variable, migration revision, or privilege-boundary change is shown. SP-FAIL-014 directly applies and is not covered by Linux-only evidence.",
+  "findings": [
+    {
+      "id": "OBS-RV10-001",
+      "severity": "HIGH",
+      "category": "correctness",
+      "location": "tools/export.py",
+      "finding": "The export path reopens and unlinks a NamedTemporaryFile while its original handle remains open.",
+      "evidence": "Path.write_text and Path.unlink execute inside the NamedTemporaryFile context. Windows can reject the second open or unlink, and context cleanup can attempt to remove a path already unlinked.",
+      "evidence_excerpt": "with tempfile.NamedTemporaryFile() as handle:\n    Path(handle.name).write_text(payload, encoding=\"utf-8\")\n    Path(handle.name).unlink()",
+      "impact": "Temporary export cleanup can fail on a supported platform and leave the export operation in an error or partially cleaned state.",
+      "required_change": "Close the temporary handle before reopening or deleting its path, define cleanup ownership once, and make error cleanup deterministic on Windows and Linux.",
+      "suggested_test": "Test successful write, read/use, explicit close, deletion, and injected write/delete failures on both Windows and Linux and assert no open handle or leftover file remains."
+    },
+    {
+      "id": "OBS-RV10-002",
+      "severity": "HIGH",
+      "category": "tests",
+      "location": "implementation-report.md",
+      "finding": "The supplied automated evidence is Linux-only despite a filesystem change covered by the known Windows locking failure.",
+      "evidence": "The report explicitly limits CI evidence to Linux and provides no Windows focused cleanup result for SP-FAIL-014.",
+      "evidence_excerpt": "| PASS | CI | All automated checks passed |",
+      "impact": "The supported Windows failure path can reach release without being exercised even though Linux CI is green.",
+      "required_change": "Run and record focused temporary-file cleanup tests on Windows and Linux, including explicit handle closure and cleanup after failure.",
+      "suggested_test": "Run the focused export filesystem suite on Windows and Linux and verify cleanup after explicit close, write failure, and delete failure."
+    },
+    {
+      "id": "OBS-RV10-003",
+      "severity": "HIGH",
+      "category": "tests",
+      "location": "implementation-report.md",
+      "finding": "The required isolated availability rollback rehearsal remains NOT RUN despite a requested approval verdict.",
+      "evidence": "production_availability requires failure injection, rollback, and observable recovery; the report leaves the isolated rollback rehearsal pending.",
+      "evidence_excerpt": "| NOT RUN | isolated rollback rehearsal | Awaiting operator |\nVerdict requested: APPROVE",
+      "impact": "Operators lack demonstrated recovery and post-rollback health evidence for an availability-scoped operational change.",
+      "required_change": "Complete the isolated failure-injection and rollback rehearsal and record post-rollback health and data checks before requesting approval.",
+      "suggested_test": "manual: Have the operations owner run the isolated export failure, abort, rollback, and post-rollback freshness and data-integrity checks."
+    },
+    {
+      "id": "OBS-RV10-004",
+      "severity": "MEDIUM",
+      "category": "docs",
+      "location": "docs/OPERATIONS.md",
+      "finding": "The documented state-freshness default changes from 300 to 30 seconds without any supplied runtime configuration or implementation evidence.",
+      "evidence": "The artifact set changes only the prose value; it does not identify the owning setting, startup configuration, or test demonstrating that 30 seconds is the supported default.",
+      "evidence_excerpt": "State freshness defaults to 300 seconds.\nState freshness defaults to 30 seconds.",
+      "impact": "Operators can tune alerts or interpret health against a value that differs from the actual runtime default.",
+      "required_change": "Align the documentation with the authoritative runtime setting and add a configuration test that asserts the documented default.",
+      "suggested_test": "Verify the runtime configuration source and rendered effective freshness value equal the documented 30 seconds."
+    }
+  ],
+  "contract_consumer_review": "The temporary export path is consumed by export callers and filesystem cleanup on Windows and Linux; SP-FAIL-014 requires focused evidence on both. The documented freshness value is an operator-facing configuration claim whose producer must be the authoritative runtime setting and whose consumers include health/operations procedures. No schema, edge, database, or public API contract change is demonstrated by the supplied artifacts.",
+  "evidence_matrix": [
+    {
+      "check": "Both patch artifact SHA-256 values match the case metadata",
+      "status": "PASS",
+      "manual": false
+    },
+    {
+      "check": "Reported Linux CI and documentation checks",
+      "status": "PASS",
+      "manual": false
+    },
+    {
+      "check": "Focused Windows temporary-file handle and cleanup tests",
+      "status": "NOT_RUN",
+      "manual": false
+    },
+    {
+      "check": "Full pytest and lint, format, and type baseline with exact commands",
+      "status": "NOT_RUN",
+      "manual": false
+    },
+    {
+      "check": "Runtime freshness default matches documentation",
+      "status": "NOT_RUN",
+      "manual": false
+    },
+    {
+      "check": "Isolated failure injection, rollback, and post-rollback health/data rehearsal",
+      "status": "NOT_RUN",
+      "manual": true
+    }
+  ],
+  "operations_safety_security_privacy": "No physical action, secret, migration, external export, production access, or private-data content is shown. Availability risk comes from non-portable cleanup and unverified rollback. Cleanup must be bounded and observable without deleting durable export data or broad paths.",
+  "documentation_assessment": "The operations default change is not traceable to an authoritative setting in the supplied artifacts. The implementation report honestly records the rollback rehearsal as NOT RUN but then requests approval, which conflicts with the production_availability exit criteria.",
+  "follow_ups": [],
+  "limitations": [
+    "Review was limited to the approved evaluation case, mandatory stable rule pack, reviewer contract, report schema, and the two hash-verified named patch artifacts.",
+    "No export callers, runtime freshness configuration, CI logs, Windows execution environment, production paths, or private infrastructure were inspected.",
+    "Reported PASS statuses reflect supplied claims only; no tests, filesystem mutation, or rollback rehearsal was executed by the reviewer."
+  ]
+}

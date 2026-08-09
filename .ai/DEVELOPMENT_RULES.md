@@ -26,7 +26,9 @@ Owner: repository maintainer. Review with CI/tooling changes and quarterly. The 
 - Run every required check selected by [`TEST_MATRIX.md`](TEST_MATRIX.md), plus focused tests during iteration.
 - Report exact commands and outcomes. Label checks `PASS`, `FAIL`, or `NOT RUN` with a reason; never imply manual/physical success from CI.
 - Review the final diff for debug artifacts, accidental secrets, unrelated files, contract drift, rollback gaps, and known-failure regressions.
-- Reviewer reclassifies the change independently and verifies the brief, rules, tests, manual evidence, and documentation are consistent.
+- Reviewer follows [`agents/reviewer.md`](agents/reviewer.md) in a separate read-only session/context,
+  reclassifies the change independently, verifies the brief, rules, tests, manual evidence and
+  documentation, and returns [`templates/review-report.md`](templates/review-report.md).
 - Handoff uses [`templates/implementation-report.md`](templates/implementation-report.md), including
   exact commands, explicit deviations, compatibility/safety impact, and pending manual evidence.
 

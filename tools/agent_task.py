@@ -689,6 +689,7 @@ def check_task(context: RepositoryContext, key: str, check_name: str) -> int:
         "quality": ["nox", "-s", "lint", "format_check", "types"],
         "security": ["nox", "-s", "security", "deps_audit"],
         "planner": [sys.executable, "-m", "tools.evaluate_feature_planner"],
+        "reviewer-corpus": [sys.executable, "-m", "tools.evaluate_reviewer"],
     }
     command = commands.get(check_name)
     if command is None:
@@ -718,7 +719,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     compose.add_argument("--profile", action="append", choices=sorted(ALLOWED_PROFILES), default=[])
     check = subparsers.add_parser("check", help="run one fixed check with the generated test environment")
     check.add_argument("task_key")
-    check.add_argument("check_name", choices=("pytest", "quality", "security", "planner"))
+    check.add_argument("check_name", choices=("pytest", "quality", "security", "planner", "reviewer-corpus"))
     cleanup = subparsers.add_parser("cleanup", help="remove only a clean worktree; preserve branch and data")
     cleanup.add_argument("task_key")
     retire = subparsers.add_parser("retire", help="release a cleaned task's owned port allocation")

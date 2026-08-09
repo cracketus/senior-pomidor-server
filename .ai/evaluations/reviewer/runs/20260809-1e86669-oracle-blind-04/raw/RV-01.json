@@ -1,0 +1,52 @@
+{
+  "schema": "senior-pomidor.review-report.v1",
+  "title": "RV-01 review: Read-only action simulation boundary",
+  "case_id": "RV-01",
+  "reviewer_version": "1.0",
+  "reviewer_hash": "d98d2797c73aaa71b6f2401541d4f7b3248dd033d141b639f48e95eaa5e9471b",
+  "verdict": "REQUEST CHANGES",
+  "rationale": "The simulation remains explicitly non-actuating, but the pinned diff also changes production estimator cadence and alert timing outside the approved read-only-simulation scope, without the availability evidence required for that operational change. The guardrail result can also allow when required health input is absent.",
+  "classification": {
+    "task_classes": ["control_guardrails_executor", "schema_data_contract", "infrastructure_deployment"],
+    "risk_flags": ["data_loss_migration", "production_availability"],
+    "sp_fail_ids": ["SP-FAIL-002", "SP-FAIL-005"]
+  },
+  "scope_architecture": "The action simulation is advisory-only and contains explicit false actuation fields, so it does not create an Executor or hardware path. Adding persisted simulation records/read APIs is a schema contract, while the changed worker cadence and stale-alert thresholds are an operational availability change not covered by either acceptance criterion.",
+  "findings": [
+    {
+      "id": "rv01-cadence-outside-brief",
+      "severity": "HIGH",
+      "category": "operations",
+      "location": "config/state_estimator_v1.yaml:6",
+      "finding": "The pinned diff changes the estimator's production cadence in addition to adding the read-only simulation, but the approved brief has neither scope nor availability classification/evidence for that change.",
+      "evidence": "The brief accepts only non-actuation and deterministic guardrails. The diff changes the worker-configured cadence and also widens collection/staleness thresholds and Grafana alert windows; the supplied report has only a generic historical test PASS and no failure/recovery or rehearsal evidence.",
+      "evidence_excerpt": "state_period_seconds: 600",
+      "impact": "A missed or delayed estimator cycle and stale-telemetry alert are production-availability behaviors; changing their timing without the required operational validation can delay detection of lost ingestion.",
+      "required_change": "Split the cadence/alert retuning into an approved operational brief, or expand this brief with infrastructure_deployment and production_availability classification, rollback, failure/recovery checks, and recorded rehearsal evidence.",
+      "suggested_test": "Test the configured cadence and stale-alert boundaries, then run an isolated worker failure/recovery rehearsal with the documented rollback."
+    },
+    {
+      "id": "rv01-missing-health-allows",
+      "severity": "MEDIUM",
+      "category": "safety",
+      "location": "app/state_estimator/decisions.py:83",
+      "finding": "A valid state with no sensor-health payload or no required sensor entries can produce an ALLOW guardrail result.",
+      "evidence": "The sensor loop substitutes an empty object when sensor_health is absent, so it adds no blocking reason. The included test covers missing state with missing health, but not a good state with missing health or a missing required sensor record.",
+      "evidence_excerpt": "for sensor in (sensor_health or {}).get(\"sensors\", []):",
+      "impact": "The read API and persisted simulation can report that guardrails allow a decision despite missing required health evidence, which is an incorrect safety status even though this revision does not actuate hardware.",
+      "required_change": "Fail closed when the health snapshot is absent or lacks each required sensor, and add deterministic regression coverage for both cases.",
+      "suggested_test": "Test build_guardrails with a GOOD state and respectively no health payload and a health payload missing each required sensor."
+    }
+  ],
+  "contract_consumer_review": "New action-simulation data is persisted, exposed through two API reads, written to private logs, and queried by Grafana. Those consumers are present in the diff, but the brief does not classify this added persistence/API/dashboard shape as schema_data_contract and does not supply migration/restore evidence.",
+  "evidence_matrix": [
+    {"check": "Approved fixture brief and pinned diff identity", "status": "PASS", "manual": false},
+    {"check": "Historical repository test evidence supplied in implementation report", "status": "PASS", "manual": false},
+    {"check": "Isolated schema migration/restore evidence for action_simulations", "status": "NOT_RUN", "manual": true},
+    {"check": "Cadence and alert failure/recovery rehearsal", "status": "NOT_RUN", "manual": true}
+  ],
+  "operations_safety_security_privacy": "The simulation declares physical_actuation false and no hardware adapter is introduced. However, the operational cadence change needs availability evidence, and missing health input must be represented as blocked rather than silently allowed.",
+  "documentation_assessment": "The changed specifications describe the new cadence and advisory sampling behavior, but that operational behavior is outside the accepted brief and lacks the corresponding evidence record.",
+  "follow_ups": [],
+  "limitations": ["Review was limited to the approved fixture brief, implementation-report fields, stable context pack, and pinned diff; historical commands were not re-run.", "No production, hardware, private infrastructure, or external service was accessed."]
+}

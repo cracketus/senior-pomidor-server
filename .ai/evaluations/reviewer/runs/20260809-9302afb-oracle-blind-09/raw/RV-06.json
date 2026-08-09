@@ -1,0 +1,107 @@
+{
+  "schema": "senior-pomidor.review-report.v1",
+  "title": "Oracle-blind review of the public telemetry contract change",
+  "case_id": "RV-06",
+  "reviewer_version": "1.0",
+  "reviewer_hash": "51ab66ce62e2b5363d7a71587edb937f1e34feb842d726e24141da4b03c38f0f",
+  "verdict": "REQUEST CHANGES",
+  "rationale": "The fixture replaces the established nested percent field with an unversioned flat ratio field, decision logic compares that ratio to a percent threshold, and the new API test mocks and calls the ingestion function instead of exercising the API path. Required compatibility, transport, consumer, and canary evidence is also missing.",
+  "classification": {
+    "task_classes": [
+      "schema_data_contract",
+      "edge_hardware_integration"
+    ],
+    "risk_flags": [
+      "edge_server_compatibility",
+      "public_contract"
+    ],
+    "sp_fail_ids": [
+      "SP-FAIL-009",
+      "SP-FAIL-010",
+      "SP-FAIL-011"
+    ]
+  },
+  "scope_architecture": "The changes affect the edge telemetry fixture, State Estimator decision logic, and the API ingestion test. The State Estimator remains the correct owner for normalization, but the patch does not place an explicit conversion at that boundary and instead introduces inconsistent shape and units.",
+  "findings": [
+    {
+      "id": "OBS-TELEMETRY-CONTRACT-001",
+      "severity": "BLOCKER",
+      "category": "correctness",
+      "location": "tests/fixtures/contracts/telemetry.json",
+      "finding": "The telemetry fixture replaces a nested percent field with an unversioned flat ratio field without compatibility or migration behavior.",
+      "evidence": "05-fixture-mock.diff removes state.soil_moisture_percent and adds soil_moisture with a different shape and unit.",
+      "evidence_excerpt": "  \"state\": {\"soil_moisture_percent\": 42}\n  \"soil_moisture\": 0.42",
+      "impact": "Existing edge, API, storage, dashboard, export, and public consumers can reject the payload or silently interpret a different unit, creating an incompatible public contract.",
+      "required_change": "Version the new telemetry shape and unit or preserve the existing contract through one explicit adapter, then define compatibility, rollout order, and every affected consumer.",
+      "suggested_test": "Replay old and current versioned fixtures through the real API or MQTT boundary, persistence, read API, and public serialization."
+    },
+    {
+      "id": "OBS-MOISTURE-UNITS-001",
+      "severity": "HIGH",
+      "category": "correctness",
+      "location": "app/state_estimator/decisions.py",
+      "finding": "A normalized soil-moisture ratio is compared directly with a default expressed as percent.",
+      "evidence": "03-schema-unit.diff names the state value ratio and the threshold percent while comparing them without conversion.",
+      "evidence_excerpt": "def is_dry(state, dry_below_percent=35):\n    return state[\"soil_moisture_ratio\"] < dry_below_percent",
+      "impact": "Valid ratio values in the 0..1 range are effectively always below 35, so dryness decisions are materially wrong.",
+      "required_change": "Align the field and threshold to one named unit with an explicit conversion at the State Estimator boundary.",
+      "suggested_test": "Test 0, 1, 50, and 100 percent equivalents plus out-of-range values and serialization round-trips."
+    },
+    {
+      "id": "OBS-API-SELF-MOCK-001",
+      "severity": "HIGH",
+      "category": "tests",
+      "location": "tests/test_api.py",
+      "finding": "The API test replaces the ingestion function with a mock and invokes that mock directly.",
+      "evidence": "05-fixture-mock.diff never sends the payload through an HTTP route, validation, normalization, persistence, or read path.",
+      "evidence_excerpt": "def test_ingestion(mocker):\n    ingest = mocker.patch(\"app.api.ingest_payload\", return_value={\"ok\": True})\n    assert ingest({\"soil_moisture\": 0.42}) == {\"ok\": True}",
+      "impact": "The test can pass while the real ingestion path rejects, misnormalizes, or fails to persist the changed telemetry contract.",
+      "required_change": "Replace the self-mocking test with a request through the real API boundary and assert validated persistence and read-back behavior.",
+      "suggested_test": "Test the old and new payloads through the API client without mocking app.api.ingest_payload."
+    },
+    {
+      "id": "OBS-CONTRACT-EVIDENCE-001",
+      "severity": "HIGH",
+      "category": "tests",
+      "location": "implementation_report.automated_evidence",
+      "finding": "The supplied automated evidence does not cover the required round-trip, old/current replay, transport, storage, or named-consumer checks.",
+      "evidence": "The evidence reports only schema fixture and API unit tests, which do not establish end-to-end compatibility.",
+      "evidence_excerpt": "PASS: schema fixture and API unit tests",
+      "impact": "Contract breakage can remain undetected in edge ingestion, persistence, dashboards, export, or public serialization despite green unit tests.",
+      "required_change": "Run schema validation, serialization round-trip, old/current fixture replay, and API, MQTT, storage, dashboard, export, and public-consumer checks.",
+      "suggested_test": "Run the schema-data-contract suite and replay both versions through every named consumer."
+    },
+    {
+      "id": "OBS-EDGE-CANARY-001",
+      "severity": "HIGH",
+      "category": "tests",
+      "location": "implementation_report.manual_evidence",
+      "finding": "The stated lack of physical action does not satisfy the required edge/public consumer verification for a telemetry contract change.",
+      "evidence": "The only supplied manual statement addresses physical action and provides no edge compatibility canary.",
+      "evidence_excerpt": "NOT APPLICABLE: no physical action is in scope",
+      "impact": "The server change can be incompatible with the deployed edge producer or public consumers even though no actuator is involved.",
+      "required_change": "Complete a bounded edge and public-consumer canary with the rollout order and rollback recorded.",
+      "suggested_test": "manual: Replay representative old and new telemetry from the named edge producer and verify each public consumer before rollout."
+    }
+  ],
+  "contract_consumer_review": "The producer is the edge telemetry source; consumers include API/MQTT validation, State Estimator normalization, storage, read APIs, dashboard/export, and public serialization. The patch changes both shape and units without a schema version, compatibility adapter, old-fixture preservation, consumer inventory, or rollout order.",
+  "evidence_matrix": [
+    {
+      "check": "PASS: schema fixture and API unit tests",
+      "status": "PASS",
+      "manual": false
+    },
+    {
+      "check": "NOT APPLICABLE: no physical action is in scope",
+      "status": "NOT_RUN",
+      "manual": true
+    }
+  ],
+  "operations_safety_security_privacy": "No physical action is in scope, but compatibility is operationally significant. The changed edge/public contract lacks an observed canary and rollback path, and the unit mismatch can corrupt derived state consumed by downstream public surfaces.",
+  "documentation_assessment": "No schema documentation, compatibility note, consumer migration guidance, or release note was supplied with the contract change.",
+  "follow_ups": [],
+  "limitations": [
+    "Review was limited to the two named patch artifacts and the two supplied evidence statements.",
+    "No physical-action evidence was required, but edge/public compatibility evidence remains required by the independently selected risk flags."
+  ]
+}

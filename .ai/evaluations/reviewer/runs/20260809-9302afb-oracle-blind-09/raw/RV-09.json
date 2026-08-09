@@ -1,0 +1,70 @@
+{
+  "schema": "senior-pomidor.review-report.v1",
+  "title": "Oracle-blind review of the public daily-story mapping",
+  "case_id": "RV-09",
+  "reviewer_version": "1.0",
+  "reviewer_hash": "51ab66ce62e2b5363d7a71587edb937f1e34feb842d726e24141da4b03c38f0f",
+  "verdict": "REQUEST CHANGES",
+  "rationale": "The public summary is changed from the validated final field to raw model response text. That makes malformed output, extra prose, hidden reasoning, prompt echoes, and private or secret-like material reachable on a public surface, while the supplied unit-test evidence does not name the mandatory negative and privacy cases.",
+  "classification": {
+    "task_classes": [
+      "llm_vision",
+      "schema_data_contract"
+    ],
+    "risk_flags": [
+      "public_contract",
+      "security_secrets"
+    ],
+    "sp_fail_ids": [
+      "SP-FAIL-012",
+      "SP-FAIL-013"
+    ]
+  },
+  "scope_architecture": "Daily Story is a bounded analyst/communication consumer and may publish only validated final output. The patch bypasses that owner boundary by assigning the provider response text directly to the public field.",
+  "findings": [
+    {
+      "id": "OBS-DAILY-STORY-RAW-001",
+      "severity": "BLOCKER",
+      "category": "security",
+      "location": "app/daily_story.py",
+      "finding": "Raw untrusted model response text is assigned directly to the public summary.",
+      "evidence": "08-llm-trust.diff removes validate_story_response and parsed.final from the public mapping.",
+      "evidence_excerpt": "    public_summary = response.text",
+      "impact": "Malformed content, extra prose, hidden reasoning, prompt echoes, or private and secret-like material can be persisted or published without schema, semantic, length, or privacy enforcement.",
+      "required_change": "Restore strict parsing and semantic validation, map only the validated final field, bound output size, and enforce output privacy before persistence or publication.",
+      "suggested_test": "Test malformed and truncated JSON, extra prose and reasoning on both sides of the payload, prompt echoes, timeout, unavailable model, oversized output, and secret-like content."
+    },
+    {
+      "id": "OBS-DAILY-STORY-EVIDENCE-001",
+      "severity": "HIGH",
+      "category": "tests",
+      "location": "implementation_report.automated_evidence",
+      "finding": "Generic daily-story unit-test evidence does not establish the required parser-boundary and privacy failure cases.",
+      "evidence": "The supplied automated statement does not name malformed, reasoning, timeout, unavailable, oversized, prompt-echo, or privacy checks.",
+      "evidence_excerpt": "PASS: daily-story unit tests",
+      "impact": "The unsafe raw-output path can remain green because passing unspecified unit tests is not proof that public serialization rejects hostile or malformed model responses.",
+      "required_change": "Add and run strict parser, semantic, bounded-output, unavailable-model, public-serialization privacy, security, and dependency-audit tests.",
+      "suggested_test": "Run the daily-story and model-output suites with malformed, reasoning, timeout, unavailable, oversized, prompt-echo, and secret-like fixtures."
+    }
+  ],
+  "contract_consumer_review": "The model provider produces an untrusted response; the strict validator should consume it and expose only a validated final field to Daily Story persistence and public serialization. The patch removes that intermediate contract and exposes provider-native text directly, changing the public contract without compatibility or privacy enforcement.",
+  "evidence_matrix": [
+    {
+      "check": "PASS: daily-story unit tests",
+      "status": "PASS",
+      "manual": false
+    },
+    {
+      "check": "NOT APPLICABLE: local model acceptance is optional for this fixture",
+      "status": "PASS",
+      "manual": true
+    }
+  ],
+  "operations_safety_security_privacy": "The change does not create a physical action path. It does create a reachable public privacy boundary failure because provider response text can contain reasoning, prompts, raw private inputs, or secret-like data. Representative local-model acceptance can remain optional for this fixture, but deterministic parser and privacy tests are required.",
+  "documentation_assessment": "No public-contract or privacy documentation update was supplied. Documentation cannot make raw provider output trustworthy; the implementation boundary must be restored first.",
+  "follow_ups": [],
+  "limitations": [
+    "Review was limited to 08-llm-trust.diff and the two supplied evidence statements.",
+    "Representative local-model acceptance was treated as optional exactly as supplied; this does not waive deterministic negative and privacy tests."
+  ]
+}

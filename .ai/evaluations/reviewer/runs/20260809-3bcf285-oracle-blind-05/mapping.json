@@ -1,0 +1,32 @@
+{
+  "schema":"senior-pomidor.reviewer-mapping.v1",
+  "mappings":[
+    {"observed_finding_id":"obs-v5-rv01-001","oracle_finding_id":"RF-014"},
+    {"observed_finding_id":"obs-v5-rv01-002","oracle_finding_id":"RF-022"},
+    {"observed_finding_id":"obs-v5-rv03-001","oracle_finding_id":"RF-023"},
+    {"observed_finding_id":"obs-v5-rv03-002","oracle_finding_id":"RF-015"},
+    {"observed_finding_id":"obs-v5-rv04-001","oracle_finding_id":"RF-024"},
+    {"observed_finding_id":"obs-v5-rv04-002","oracle_finding_id":"RF-016"},
+    {"observed_finding_id":"OBS-RV05-001","oracle_finding_id":"RF-001"},
+    {"observed_finding_id":"OBS-RV05-002","oracle_finding_id":"RF-002"},
+    {"observed_finding_id":"OBS-RV05-003","oracle_finding_id":"RF-004"},
+    {"observed_finding_id":"OBS-RV05-004","oracle_finding_id":"RF-018"},
+    {"observed_finding_id":"OBS-RV06-001","oracle_finding_id":"RF-005"},
+    {"observed_finding_id":"OBS-RV06-002","oracle_finding_id":"RF-003"},
+    {"observed_finding_id":"OBS-RV06-003","oracle_finding_id":"RF-006"},
+    {"observed_finding_id":"OBS-RV06-004","oracle_finding_id":"RF-019"},
+    {"observed_finding_id":"OBS-RV07-001","oracle_finding_id":"RF-008"},
+    {"observed_finding_id":"OBS-RV07-002","oracle_finding_id":"RF-007"},
+    {"observed_finding_id":"OBS-RV07-003","oracle_finding_id":"RF-020"},
+    {"observed_finding_id":"OBS-RV07-004","oracle_finding_id":"RF-026"},
+    {"observed_finding_id":"OBS-RV08-001","oracle_finding_id":"RF-009"},
+    {"observed_finding_id":"OBS-RV08-002","oracle_finding_id":"RF-027"},
+    {"observed_finding_id":"OBS-RV09-001","oracle_finding_id":"RF-010"},
+    {"observed_finding_id":"OBS-RV09-003","oracle_finding_id":"RF-021"},
+    {"observed_finding_id":"OBS-RV09-004","oracle_finding_id":"RF-032"},
+    {"observed_finding_id":"OBS-RV10-001","oracle_finding_id":"RF-011"},
+    {"observed_finding_id":"OBS-RV10-002","oracle_finding_id":"RF-033"},
+    {"observed_finding_id":"OBS-RV10-003","oracle_finding_id":"RF-013"},
+    {"observed_finding_id":"OBS-RV10-004","oracle_finding_id":"RF-012"}
+  ]
+}

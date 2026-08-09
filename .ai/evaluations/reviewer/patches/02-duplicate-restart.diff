@@ -1,0 +1,7 @@
+diff --git a/app/executor.py b/app/executor.py
+@@
++ACKNOWLEDGED = set()
++def execute(adapter, command):
++    if command.id not in ACKNOWLEDGED:
++        adapter.send(command)
++        ACKNOWLEDGED.add(command.id)

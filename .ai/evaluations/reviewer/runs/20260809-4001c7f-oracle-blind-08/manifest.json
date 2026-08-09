@@ -1,0 +1,30 @@
+{
+  "schema":"senior-pomidor.reviewer-run.v1",
+  "run_id":"20260809-4001c7f-oracle-blind-08",
+  "status":"invalid_output_contract",
+  "repository_revision":"4001c7f7353a3ec394b3d8e2fa1efeda69e1fa35",
+  "model_tier":"strong",
+  "parameters":{"temperature":0,"oracle_blind":true,"case_routing":{"RV-01..RV-04":"medium","RV-05..RV-10":"strong"},"context_policy":"direct compact case packet plus reviewer instructions, schema and pinned artifacts; registries, oracle and prior outputs forbidden"},
+  "files":{
+    "reviewer":{"path":".ai/agents/reviewer.md","sha256":"51ab66ce62e2b5363d7a71587edb937f1e34feb842d726e24141da4b03c38f0f"},
+    "report_schema":{"path":".ai/templates/review-report.schema.json","sha256":"949b4941ca80bb8cff6531a665c6084c0979577fbc965e4bbc6772366f784c07"},
+    "oracle":{"path":".ai/evaluations/reviewer/oracles/v6.json","sha256":"a585fe4578ab232ef45f179e39f148ca393676d59711c41aeec055bc4815e747"},
+    "cases":{"path":".ai/evaluations/reviewer/cases/v2.json","sha256":"6ec666cd4f2b192af261104f8ba2b747d8f8ff0ce7fa2dc01a384abe2580346e"}
+  },
+  "artifacts":[
+    {"case_id":"RV-01","kind":"git_diff","revision":"bc0f75f","sha256":"9c6e8f641d151a6e3492cac6ba9c5617a3a4006265b9f45336ba3cf9fca4924b"},
+    {"case_id":"RV-02","kind":"git_diff","revision":"6ed02f5","sha256":"79111656f75a2e8402abb661284e9865cc2cfdeabc14f3107c6f267c5fa6b0a0"},
+    {"case_id":"RV-03","kind":"git_diff","revision":"fdef871","sha256":"2e3bdd549fb161fb8f69c61626725350f2d687b6e5b2e6007f14e1fe15ce7f9c"},
+    {"case_id":"RV-04","kind":"git_diff","revision":"e91bf5d","sha256":"a8355058a8106e2b2f43f640fc082e5f9e3d3aa007d28e78f50a8e3da18e21c9"},
+    {"case_id":"RV-05","kind":"patch","path":".ai/evaluations/reviewer/patches/01-guardrails-bypass.diff","sha256":"7852179e59990b882d3d74e6969e19061d69fa13275952a75b195936a7af9f1a"},
+    {"case_id":"RV-05","kind":"patch","path":".ai/evaluations/reviewer/patches/02-duplicate-restart.diff","sha256":"ded6fc575a5eeb6b30db4cb9070d1ce3fc6bc577c4e1db88d1696764c9478efd"},
+    {"case_id":"RV-05","kind":"patch","path":".ai/evaluations/reviewer/patches/04-stale-state.diff","sha256":"1ebf9a5c51cc184d555e9b18046372e641623a709289a43b6d24953a4782037d"},
+    {"case_id":"RV-06","kind":"patch","path":".ai/evaluations/reviewer/patches/03-schema-unit.diff","sha256":"696a1486e060737aeb6e00043c4889a7eac18eb46e4744f205f447836f7d6938"},
+    {"case_id":"RV-06","kind":"patch","path":".ai/evaluations/reviewer/patches/05-fixture-mock.diff","sha256":"ee51fc6b90bc92e45cca74e0366d22b2e9a9e456d0a4176d78a266f7a5d3c96e"},
+    {"case_id":"RV-07","kind":"patch","path":".ai/evaluations/reviewer/patches/06-compose-export.diff","sha256":"7c36d85bba82d64d410c471b88b28005919220cbc8a147df51261e4782b58d37"},
+    {"case_id":"RV-08","kind":"patch","path":".ai/evaluations/reviewer/patches/07-secret-fixture.diff","sha256":"59cab4f695288f36dca45eb321206169433daeff7b43016ca2cc6218bbb91d69"},
+    {"case_id":"RV-09","kind":"patch","path":".ai/evaluations/reviewer/patches/08-llm-trust.diff","sha256":"9831c2effad5ee8a55f50e4d68c2d445d3f1516e7a5e6d3b019970815cb40e19"},
+    {"case_id":"RV-10","kind":"patch","path":".ai/evaluations/reviewer/patches/09-windows-path.diff","sha256":"dd1cfe2327ff083107333ad1d1322392107ca673940f0a834d348141ccaf32ea"},
+    {"case_id":"RV-10","kind":"patch","path":".ai/evaluations/reviewer/patches/10-docs-manual.diff","sha256":"fa26c5d0a770a436bb86158f301672c863ab330f0a907705402b81ac7681fa46"}
+  ]
+}

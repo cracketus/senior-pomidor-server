@@ -1,0 +1,64 @@
+{
+  "schema": "senior-pomidor.review-report.v1",
+  "title": "RV-04 review: Bounded local daily-story consumer",
+  "case_id": "RV-04",
+  "reviewer_version": "1.0",
+  "reviewer_hash": "d98d2797c73aaa71b6f2401541d4f7b3248dd033d141b639f48e95eaa5e9471b",
+  "verdict": "REQUEST CHANGES",
+  "rationale": "The local consumer remains separate from ingestion and actuation, but this diff changes an already-defined story column by editing its historical migration instead of adding forward migration DDL. It also injects a private environment object into a model prompt whose generated story is public without a semantic non-leak boundary, and it lacks the representative local-model acceptance required for the changed prompt/runtime/output budget.",
+  "classification": {
+    "task_classes": ["llm_vision", "schema_data_contract", "infrastructure_deployment"],
+    "risk_flags": ["data_loss_migration", "public_contract"],
+    "sp_fail_ids": ["SP-FAIL-005", "SP-FAIL-012", "SP-FAIL-013"]
+  },
+  "scope_architecture": "The worker is an optional bounded LLM consumer and no changed path reaches ingestion, control, Guardrails, Executor, or hardware. Its persistent run shape, public story response, prompt/context limits, and model runtime behavior nevertheless form schema and public-output contracts.",
+  "findings": [
+    {
+      "id": "rv04-story-column-no-forward-migration",
+      "severity": "HIGH",
+      "category": "correctness",
+      "location": "migrations/versions/0007_daily_story_runs.py:34",
+      "finding": "The diff changes the story column length by editing revision 0007, but the new forward revision only adds environment_context_jsonb and does not alter the existing column.",
+      "evidence": "An installation that already applied revision 0007 will not rerun its edited create-table statement. Revision 0008 adds only the context column, while the application now accepts stories through 32768 characters.",
+      "evidence_excerpt": "sa.Column(\"story\", sa.String(length=32768), nullable=True),",
+      "impact": "Upgraded databases can retain the prior shorter column and fail when the newly accepted long-form story is persisted, breaking the normal daily-story execution path.",
+      "required_change": "Add a new forward Alembic revision that alters the existing story column and test upgrade from a database already at revision 0007; do not rely on editing an applied migration.",
+      "suggested_test": "Run an upgrade from the pre-existing 0007 schema, persist a valid story longer than the old bound, and verify the stored value and API serialization."
+    },
+    {
+      "id": "rv04-private-context-can-reach-public-story",
+      "severity": "HIGH",
+      "category": "security",
+      "location": "app/daily_story.py:391",
+      "finding": "The worker serializes the whole private environment context into the model prompt but has no semantic validation that prevents that raw context from being echoed into the publishable story.",
+      "evidence": "The README describes the environment object as private and excluded from the public API, while the changed template injects it into model-visible text. _parse_story checks JSON shape, length, and a suffix only; the added tests do not inject a private marker and assert it cannot appear in the public story.",
+      "evidence_excerpt": "\"{{ENVIRONMENT_CONTEXT_JSON}}\": json.dumps(",
+      "impact": "A model can reproduce sensitive operator-maintained facts or prompt content in the story field even though the stored context column itself is omitted from the API.",
+      "required_change": "Pass only a deliberately public/sanitized projection to the model that creates public stories, or add a robust output privacy boundary and regression tests proving injected private markers cannot be returned.",
+      "suggested_test": "Test a generated response containing a unique private-context marker and verify the public story serialization rejects or redacts it."
+    },
+    {
+      "id": "rv04-missing-local-model-acceptance",
+      "severity": "HIGH",
+      "category": "tests",
+      "location": "implementation_report.manual_evidence",
+      "finding": "The supplied report marks manual evidence not applicable even though the diff changes the prompt, model request shape, fallback behavior, context/output budgets, and publishable output contract.",
+      "evidence": "The test matrix requires representative local-model acceptance when model/runtime behavior changes. The fixture reports only historical automated model-boundary/application tests and explicitly supplies no manual acceptance; fake-client tests do not establish that the configured model can complete the full bounded prompt safely.",
+      "evidence_excerpt": "NOT APPLICABLE: no physical or production action is in scope",
+      "impact": "A model/runtime-specific grammar, context, timeout, reasoning, or privacy failure can reach the optional worker without the required representative evidence.",
+      "required_change": "Record a representative local-model acceptance covering the full prompt/context, malformed and unavailable responses, semantic/privacy rejection, timeout behavior, and the configured output budget; classify the schema/public-output migration checks in the brief.",
+      "suggested_test": "Run the documented local daily-story acceptance with the configured model and a synthetic privacy marker, then verify bounded completion and public-output exclusion."
+    }
+  ],
+  "contract_consumer_review": "Changed consumers include the daily-story database row, migration chain, worker, Ollama client, private stored context, prompt templates, Compose environment, and public story API. Tests cover fake-client parsing and omission of the private database field, but not the upgraded database schema or an end-to-end model-output privacy boundary.",
+  "evidence_matrix": [
+    {"check": "Approved fixture brief and pinned diff identity", "status": "PASS", "manual": false},
+    {"check": "Historical model-boundary and application tests supplied in implementation report", "status": "PASS", "manual": false},
+    {"check": "Upgrade from existing daily_story_runs schema", "status": "NOT_RUN", "manual": false},
+    {"check": "Representative local-model acceptance and privacy check", "status": "NOT_RUN", "manual": true}
+  ],
+  "operations_safety_security_privacy": "No actuation path is introduced. The changed model consumer has a public-output privacy boundary and schema-migration risk that cannot be closed by fake-client tests alone.",
+  "documentation_assessment": "The documentation states that environment context is private and excluded from the API, but it does not reconcile that claim with supplying the full object to a model that produces the public story.",
+  "follow_ups": [],
+  "limitations": ["Review was restricted to the fixture brief/report, stable rules, and pinned diff; no local model, production data, private context, or external Ollama service was run.", "No assumptions were made about the contents of any operator-maintained runtime environment context."]
+}

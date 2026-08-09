@@ -1,0 +1,109 @@
+{
+  "schema": "senior-pomidor.review-report.v1",
+  "title": "Read-only action simulation boundary",
+  "case_id": "RV-01",
+  "reviewer_version": "1.0",
+  "reviewer_hash": "51ab66ce62e2b5363d7a71587edb937f1e34feb842d726e24141da4b03c38f0f",
+  "verdict": "REQUEST CHANGES",
+  "rationale": "The revision keeps simulation read-only, but the new Guardrails surface can report ALLOW with missing required health evidence and can retain cleared anomalies as active. The change also adds a durable table, public read contracts, and production worker-cadence behavior without the migration and availability evidence required by the independently selected classes and flags.",
+  "classification": {
+    "task_classes": [
+      "schema_data_contract",
+      "infrastructure_deployment",
+      "control_guardrails_executor"
+    ],
+    "risk_flags": [
+      "data_loss_migration",
+      "production_availability",
+      "public_contract"
+    ],
+    "sp_fail_ids": [
+      "SP-FAIL-002",
+      "SP-FAIL-005",
+      "SP-FAIL-011"
+    ]
+  },
+  "scope_architecture": "The changed paths add a versioned read-only Guardrails/action-simulation producer, persistence table and migration, API reads, Grafana consumers, worker cadence defaults, alerts, documentation, and tests. No adapter, GPIO, Executor, command delivery, or physical actuation path is added; physical_action is therefore not selected. The durable schema, public API/persisted payloads, and worker/startup behavior nevertheless require schema-data-contract and infrastructure-deployment review in addition to control_guardrails_executor.",
+  "findings": [
+    {
+      "id": "OBS-6398D9E-001",
+      "severity": "HIGH",
+      "category": "tests",
+      "location": "implementation_report.automated_checks",
+      "finding": "The supplied generic repository-test statement does not establish the required migration, restore, rollback, or production worker failure-path checks.",
+      "evidence": "The diff adds migration 0006, a new persisted table, public API reads, and changes the recurring worker interval. TEST_MATRIX requires isolated PostgreSQL migration/restore evidence for database migrations and startup/failure/recovery plus rollback evidence for production-availability changes; the supplied evidence names none of those checks.",
+      "evidence_excerpt": "PASS: repository tests recorded by historical change",
+      "impact": "An upgrade or worker restart can fail on the deployed PostgreSQL/startup path even though the historical unit suite is green, leaving state generation or read APIs unavailable without demonstrated recovery.",
+      "required_change": "Record an isolated PostgreSQL upgrade and restore rehearsal, worker startup/failure/recovery checks, and an owner-bound rollback with post-rollback health verification.",
+      "suggested_test": "Run the 0005-to-0006 upgrade against PostgreSQL, start the changed worker and API, inject migration and dependency failure, restore or roll back in isolation, and verify fresh state plus action-simulation reads."
+    },
+    {
+      "id": "OBS-6398D9E-002",
+      "severity": "MEDIUM",
+      "category": "safety",
+      "location": "app/state_estimator/decisions.py:83",
+      "finding": "Guardrails fail open when sensor-health data is absent or omits a required sensor.",
+      "evidence": "The only sensor checks iterate over an empty list when sensor_health is missing and only inspect required sensor types that are present. No blocking reason is added for a missing health snapshot or a missing required sensor entry, so an otherwise good state reaches allowed=true.",
+      "evidence_excerpt": "for sensor in (sensor_health or {}).get(\"sensors\", []):\n    sensor_type = str(sensor.get(\"sensor_type\") or \"\")\n    status = str(sensor.get(\"status\") or \"\")\n    if sensor_type in REQUIRED_SENSOR_TYPES and status in BLOCKING_SENSOR_STATUSES:\n        blocking.append(f\"required_sensor_{sensor_type.lower()}_{status.lower()}\")\n    if sensor_type in OPTIONAL_SENSOR_TYPES and status in {\"NOT_PRESENT\", \"DISCONNECTED\", \"STALE\"}:\n        caution.append(f\"optional_sensor_{sensor_type.lower()}_{status.lower()}\")\n\nblocking = sorted(set(blocking))\ncaution = sorted(set(caution))\nlevel = \"BLOCKED\" if blocking else \"CAUTION\" if caution else \"ALLOW\"",
+      "impact": "The new API and persisted simulation can present an unsafe confidence state as allowed, misleading operators and any later consumer of the read-only decision artifact.",
+      "required_change": "Block when sensor health is absent, malformed, stale, or lacks any required sensor type.",
+      "suggested_test": "Test missing sensor_health, an empty sensors array, each missing required type, stale health, and malformed health; assert every case is deterministically BLOCKED."
+    },
+    {
+      "id": "OBS-6398D9E-003",
+      "severity": "MEDIUM",
+      "category": "correctness",
+      "location": "app/api.py:334",
+      "finding": "The latest-active helper discards CLEARED rows before choosing the latest record per anomaly type.",
+      "evidence": "Filtering status to ACTIVE in SQL means an older ACTIVE row remains the selected record even after a newer CLEARED row for the same type. The new /guardrails/latest endpoint consumes this helper and can therefore continue blocking on a resolved anomaly.",
+      "evidence_excerpt": "records = db.scalars(\n    select(AnomalyRecord)\n    .where(AnomalyRecord.node_id == node_id, AnomalyRecord.status == \"ACTIVE\")\n    .order_by(desc(AnomalyRecord.ts))\n).all()\nlatest_by_type: dict[str, dict[str, Any]] = {}\nfor record in records:\n    latest_by_type.setdefault(record.type, record.payload_jsonb)\nreturn list(latest_by_type.values())",
+      "impact": "Operators see stale active anomalies and the Guardrails view can stay blocked indefinitely after recovery.",
+      "required_change": "Select the newest record for each anomaly type before retaining only records whose newest status is ACTIVE.",
+      "suggested_test": "Test an ACTIVE record followed by a newer CLEARED record and verify both /anomalies/active and /guardrails/latest exclude the resolved anomaly."
+    },
+    {
+      "id": "OBS-6398D9E-004",
+      "severity": "MEDIUM",
+      "category": "correctness",
+      "location": "app/state_estimator/decisions.py:153",
+      "finding": "The simulation primary key concatenates bounded identifiers into a value that is not bounded to the database column.",
+      "evidence": "simulation_id is stored in String(256), while the concatenation includes a timestamp, a node_id whose column permits 128 characters, and a state_id whose column permits 256 characters. The unit tests use short identifiers and SQLite does not enforce PostgreSQL varchar length.",
+      "evidence_excerpt": "simulation_id = f\"action_sim_{format_ts(now)}_{node_id}_{state_id or 'no_state'}\".replace(\":\", \"\").replace(\"+\", \"\")",
+      "impact": "A supported long identifier can make the estimator transaction fail and roll back the state, health, anomaly, diagnostic, and simulation writes together.",
+      "required_change": "Replace the concatenated primary key with a fixed-length deterministic digest or otherwise enforce a length that fits the persisted contract.",
+      "suggested_test": "Test maximum-length valid node and state identifiers against PostgreSQL and verify persistence succeeds without truncation or collision."
+    }
+  ],
+  "contract_consumer_review": "Inventoried contracts are guardrails_v1 and action_simulation_v1 payloads, the action_simulations table/migration, /guardrails/latest and action-simulation latest/range APIs, private JSONL, Grafana panels, alert cadence, and the Raspberry Pi runbook sampling guidance. Producers are State Estimator persistence and the API recomputation path; consumers are API clients, Grafana, private logs, and human edge operators. Version fields are present and actuation is explicitly false, but missing-health semantics, cleared-anomaly selection, identifier bounds, database upgrade evidence, and public-consumer compatibility are incomplete.",
+  "evidence_matrix": [
+    {
+      "check": "Supplied automated evidence: repository tests recorded by the historical change",
+      "status": "PASS",
+      "manual": false
+    },
+    {
+      "check": "Deterministic allowed/blocked Guardrails and read-only action-simulation tests visible in the pinned diff",
+      "status": "PASS",
+      "manual": false
+    },
+    {
+      "check": "Required isolated PostgreSQL migration/restore, worker failure/recovery, rollback, and post-rollback health evidence",
+      "status": "NOT_RUN",
+      "manual": true
+    },
+    {
+      "check": "Physical hardware procedure: NOT APPLICABLE because every emitted action is advisory and physical_actuation is false",
+      "status": "PASS",
+      "manual": true
+    }
+  ],
+  "operations_safety_security_privacy": "The implementation is read-only and contains no hardware adapter, actuator command, Executor, external export, production access, or secret material. Its operational inventory changes the estimator period to 600 seconds, collection window to 900 seconds, sensor/device age limits to 1200 seconds, telemetry alerts to 20 minutes, adds migration 0006 and action-simulation logs, and introduces new API/Grafana reads. SP-FAIL-002 applies to worker cadence/health, SP-FAIL-005 to the migration/restore path, and SP-FAIL-011 to exercising the new persisted API path rather than validators alone.",
+  "documentation_assessment": "The estimator specification, operations alert thresholds, Pi sampling guidance, and Grafana dashboards are updated consistently with the new cadence and advisory simulation. The documentation does not close the missing migration/rollback evidence or define complete consumer compatibility and fail-safe missing-health semantics.",
+  "follow_ups": [],
+  "limitations": [
+    "Reviewed only the supplied direct packet and complete pinned revision 6398d9e; no current worktree diff or later history was inspected.",
+    "The supplied artifact SHA-256 a0c4bf336229f3a048ec08984f8835c25545bc5bbfe74d52b1a04ace7d963f4b matched the exact git diff.",
+    "No production system, private infrastructure, real hardware, case registry, oracle, evaluator result, or prior report was accessed.",
+    "Historical test commands were not rerun; PASS reflects only the supplied evidence and code-visible tests."
+  ]
+}

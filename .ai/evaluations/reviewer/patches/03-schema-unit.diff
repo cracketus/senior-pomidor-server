@@ -1,0 +1,4 @@
+diff --git a/app/state_estimator/decisions.py b/app/state_estimator/decisions.py
+@@
++def is_dry(state, dry_below_percent=35):
++    return state["soil_moisture_ratio"] < dry_below_percent

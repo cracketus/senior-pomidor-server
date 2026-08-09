@@ -1,0 +1,122 @@
+{
+  "schema": "senior-pomidor.review-report.v1",
+  "title": "Secure multi-application production layout",
+  "case_id": "RV-03",
+  "reviewer_version": "1.0",
+  "reviewer_hash": "51ab66ce62e2b5363d7a71587edb937f1e34feb842d726e24141da4b03c38f0f",
+  "verdict": "REQUEST CHANGES",
+  "rationale": "The revision separates application and platform service lifecycles, but production target variables still have unsafe fallbacks, database credentials are expanded into command arguments, and the scheduled backup unit does not select the same Compose project as the application service. The supplied bounded review also does not constitute the required isolated availability/rollback rehearsal.",
+  "classification": {
+    "task_classes": [
+      "infrastructure_deployment"
+    ],
+    "risk_flags": [
+      "data_loss_migration",
+      "security_secrets",
+      "production_availability"
+    ],
+    "sp_fail_ids": [
+      "SP-FAIL-001",
+      "SP-FAIL-002",
+      "SP-FAIL-003",
+      "SP-FAIL-004",
+      "SP-FAIL-005",
+      "SP-FAIL-015"
+    ]
+  },
+  "scope_architecture": "The diff inventories production and local Compose overlays, an external platform network, systemd ownership, root-controlled releases, database preflight, backup/restore, migration paths, environment contracts, CI, release bundle contents, operator runbooks, and Windows backup tooling. Platform PostgreSQL, Grafana, and Ollama are removed from the application production lifecycle as required. Because restore targets, app data paths, release activation, and scheduled backup behavior change, data_loss_migration applies in addition to the supplied security_secrets and production_availability flags.",
+  "findings": [
+    {
+      "id": "OBS-BC16F24-001",
+      "severity": "HIGH",
+      "category": "security",
+      "location": "docker-compose.yml:11",
+      "finding": "Production database and platform target selection does not fail closed when required variables are missing.",
+      "evidence": "The application-only base supplies a complete default DATABASE_URL, and the production overlay and database scripts similarly default the platform network and PostgreSQL host/port. Under the production overlay, an omitted target variable can therefore select a reachable shared service instead of stopping configuration.",
+      "evidence_excerpt": "DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://senior_pomidor:senior_pomidor@postgres:5432/senior_pomidor}",
+      "impact": "A missing or misloaded production environment can migrate, read, back up, or restore the wrong reachable database rather than failing before any shared-platform access.",
+      "required_change": "Require DATABASE_URL, PLATFORM_DOCKER_NETWORK, POSTGRES_HOST, POSTGRES_PORT, and every production data target explicitly in the production overlay and operational scripts while retaining defaults only in the development overlay.",
+      "suggested_test": "Render the production Compose pair and run preflight, backup, and restore with each target variable individually absent; verify every path exits before network or database access."
+    },
+    {
+      "id": "OBS-BC16F24-002",
+      "severity": "HIGH",
+      "category": "security",
+      "location": "deploy/scripts/backup.sh:40",
+      "finding": "Operational scripts expose the PostgreSQL password in the docker client command line.",
+      "evidence": "backup.sh constructs docker run with the expanded secret as an argv value; database-preflight.sh and restore-migration.sh use the same pattern. On a normal host, process arguments can be observed while the client container is running.",
+      "evidence_excerpt": "pg_client=(docker run --rm --network \"$platform_network\" -e PGPASSWORD=\"$postgres_password\" postgres:16-alpine)",
+      "impact": "A local process observer can capture the application database credential, expanding compromise from one app into the shared platform database boundary.",
+      "required_change": "Pass the password without embedding its value in argv, and apply the same secret-safe mechanism to preflight, backup, and restore.",
+      "suggested_test": "Run each script with a synthetic sentinel password while inspecting process arguments and Docker metadata; verify the sentinel never appears in argv, logs, or retained container configuration."
+    },
+    {
+      "id": "OBS-BC16F24-003",
+      "severity": "HIGH",
+      "category": "operations",
+      "location": "deploy/scripts/backup.sh:39",
+      "finding": "The weekly backup script does not select the application service's Compose project before discovering and stopping writers.",
+      "evidence": "senior-pomidor.service sets COMPOSE_PROJECT_NAME=senior-pomidor only in that unit. The separate backup unit does not set it, and backup.sh invokes Compose from a directory named app without -p/--project-name. Its ps query can therefore inspect a different project, find no running writers, and archive live files.",
+      "evidence_excerpt": "compose=(docker compose --env-file \"$env_file\" -f docker-compose.yml -f docker-compose.prod.yml)\npg_client=(docker run --rm --network \"$platform_network\" -e PGPASSWORD=\"$postgres_password\" postgres:16-alpine)\n\nrestart_writers=false\nrunning_writers=()\nrestart_services() {\n  if [[ \"$restart_writers\" == true && \"${#running_writers[@]}\" -gt 0 ]]; then\n    (cd \"$app_dir\" && \"${compose[@]}\" up -d \"${running_writers[@]}\")\n  fi\n}\nif [[ \"$mode\" == weekly ]]; then\n  running_services=\"$(cd \"$app_dir\" && \"${compose[@]}\" ps --services --filter status=running)\"",
+      "impact": "The scheduled weekly set can combine a database dump with photos, estimator logs, and MQTT state captured while writers remain active, so checksum success does not imply a recoverable consistent backup.",
+      "required_change": "Set the same explicit Compose project identity in the backup unit and every lifecycle command, then abort when the expected running project cannot be identified.",
+      "suggested_test": "Run a weekly backup rehearsal with the real project name and a decoy project in the same app directory; verify only the intended writers stop, restart after success and injected failure, and the restored set is consistent."
+    },
+    {
+      "id": "OBS-BC16F24-004",
+      "severity": "HIGH",
+      "category": "tests",
+      "location": "implementation_report.manual_checks",
+      "finding": "The supplied bounded layout review is not the required isolated availability, failure-injection, and rollback rehearsal.",
+      "evidence": "production_availability and data_loss_migration require an isolated build/up/health/rollback rehearsal, observable injected failures, target isolation, and post-rollback health/data checks. The supplied statement records a review, not execution of those procedures.",
+      "evidence_excerpt": "PASS: historical bounded production-layout review is supplied by this fixture",
+      "impact": "The main startup, weekly backup, restore, and application-only rollback paths remain unproven under the failures that can cause outage or an unusable recovery set.",
+      "required_change": "Record an isolated candidate-bundle rehearsal covering startup, dependency failure, writer quiescence, backup restore, application-only rollback, and independent platform-service availability.",
+      "suggested_test": "manual: Rehearse the immutable bundle with isolated app paths and credentials, inject each named failure, confirm zero external export, and record app plus shared-platform health before and after rollback."
+    },
+    {
+      "id": "OBS-BC16F24-005",
+      "severity": "MEDIUM",
+      "category": "docs",
+      "location": "docs/Миграция-Senior-Pomidor-Server-с-Win.md:162",
+      "finding": "The newly added migration runbook describes release and backup artifacts that this same revision removes.",
+      "evidence": "The runbook says the runtime bundle contains docker/grafana and docker/postgres, while build-runtime-bundle.sh removes both. It also requires grafana.tar.gz even though tools/backup_data.ps1 stops producing it and restore explicitly ignores legacy Grafana state; the security checklist still names the superseded environment-file mode.",
+      "evidence_excerpt": "Bundle содержит:\n\n```text\ndocker-compose.yml\nmosquitto.conf\nVERSION\nsenior-pomidor.env.example\nconfig/daily_story/\ndocker/grafana/\ndocker/postgres/\ndeploy/apt/\ndeploy/systemd/\nscripts/\n```",
+      "impact": "An operator following the added runbook will reject a correct bundle/backup as incomplete or attempt an obsolete rehearsal, delaying or misdirecting a migration and recovery window.",
+      "required_change": "Update or remove the stale runbook so every required artifact, overlay command, ownership mode, rehearsal step, and acceptance item matches the new app/platform boundary.",
+      "suggested_test": "Verify every listed bundle and backup artifact against build-runtime-bundle.sh and backup_data.ps1, then walk through the documented rehearsal commands in an isolated environment."
+    }
+  ],
+  "contract_consumer_review": "The production contract now consists of docker-compose.yml plus docker-compose.prod.yml, an explicit external platform network, a root-owned runtime environment, systemd lifecycle units, release bundles, app-owned media/MQTT/log paths, and platform PostgreSQL interfaces used by migrate, preflight, backup, and restore. Local consumers use docker-compose.dev.yml and retain self-contained PostgreSQL/Grafana/Ollama. The lifecycle split is architecturally correct, but required target variables are not uniformly required, scheduled backup does not share project identity, and the added long-form migration guide contradicts the produced artifacts.",
+  "evidence_matrix": [
+    {
+      "check": "Supplied historical Compose, release, and security checks",
+      "status": "PASS",
+      "manual": false
+    },
+    {
+      "check": "Pinned diff tests inspect local/production service ownership, release assets, restore guards, and platform readiness text",
+      "status": "PASS",
+      "manual": false
+    },
+    {
+      "check": "Supplied bounded production-layout review",
+      "status": "PASS",
+      "manual": true
+    },
+    {
+      "check": "Required isolated startup/failure/recovery, consistent-backup restore, rollback, and post-rollback platform-health rehearsal",
+      "status": "NOT_RUN",
+      "manual": true
+    }
+  ],
+  "operations_safety_security_privacy": "The revision correctly prevents application Compose and restore from lifecycle-managing shared PostgreSQL, Grafana, and Ollama storage. It inventories a root-owned release symlink, secrets, backup classes, app data, private logs, scripts, external network, database settings, published API/MQTT ports, and optional cloud-export/daily-story profiles. SP-FAIL-001 applies to required target variables, SP-FAIL-002 to startup and writer health, SP-FAIL-003 to isolated rehearsal/export, SP-FAIL-004 to candidate-bundle parity, SP-FAIL-005 to recoverability, and SP-FAIL-015 to bundle/package contents. Unsafe target fallbacks, argv secret exposure, and mismatched Compose project identity prevent approval.",
+  "documentation_assessment": "README, the primary Ubuntu host guide, changelog, environment template, and concise Windows migration guide mostly describe the intended app/platform split and rollback boundary. The additional 1,280-line migration guide is internally stale relative to the same diff and must not remain an authoritative competing procedure.",
+  "follow_ups": [],
+  "limitations": [
+    "Reviewed only the supplied direct packet and complete pinned revision bc16f24; no current worktree diff or later history was inspected.",
+    "The supplied artifact SHA-256 70938dbc09fd668fcd7988276ec45bc6babe08dd4362d88690bd684049d95b7f matched the exact git diff.",
+    "No production host, secret, private infrastructure, case registry, oracle, evaluator result, or prior report was accessed.",
+    "Historical checks and the claimed manual review were not rerun; their PASS statuses reflect only the supplied evidence."
+  ]
+}

@@ -1,0 +1,133 @@
+{
+  "schema": "senior-pomidor.review-report.v1",
+  "title": "Review of RV-06 telemetry shape and ingestion test update",
+  "case_id": "RV-06",
+  "reviewer_version": "1.0",
+  "reviewer_hash": "51ab66ce62e2b5363d7a71587edb937f1e34feb842d726e24141da4b03c38f0f",
+  "verdict": "REQUEST CHANGES",
+  "rationale": "The telemetry fixture silently replaces a nested percent field with an unversioned flat ratio field, the decision code compares that ratio to a percent threshold, and the added test mocks the ingestion function it claims to exercise. Required old/current transport, consumer, and edge-canary evidence is absent.",
+  "classification": {
+    "task_classes": [
+      "schema_data_contract",
+      "edge_hardware_integration"
+    ],
+    "risk_flags": [
+      "edge_server_compatibility",
+      "public_contract"
+    ],
+    "sp_fail_ids": [
+      "SP-FAIL-009",
+      "SP-FAIL-010",
+      "SP-FAIL-011"
+    ]
+  },
+  "scope_architecture": "Changed-path inventory: tests/fixtures/contracts/telemetry.json replaces the persisted/public nested soil_moisture_percent value 42 with flat soil_moisture value 0.42; app/state_estimator/decisions.py adds a dry_below_percent runtime default of 35 while reading soil_moisture_ratio; tests/test_api.py adds a mocked test. No environment variable, migration revision, privilege boundary, or operating-system behavior changes are shown. The brief under-classifies the edge-consumed telemetry change by omitting edge_hardware_integration and edge_server_compatibility.",
+  "findings": [
+    {
+      "id": "OBS-RV06-001",
+      "severity": "BLOCKER",
+      "category": "correctness",
+      "location": "tests/fixtures/contracts/telemetry.json",
+      "finding": "The active telemetry fixture is silently changed from a nested percent field to a flat normalized field without a new version or compatibility path.",
+      "evidence": "The patch deletes state.soil_moisture_percent with value 42 and replaces it with soil_moisture with value 0.42; no old-version fixture, adapter, schema version, rollout order, or consumer migration is supplied.",
+      "evidence_excerpt": "  \"state\": {\"soil_moisture_percent\": 42}\n  \"soil_moisture\": 0.42",
+      "impact": "Existing edge, HTTP, MQTT, storage, dashboard, export, or public consumers can reject the payload or silently reinterpret its unit and shape.",
+      "required_change": "Version the new telemetry shape and unit, retain a tolerant old-version reader and fixture, define one owned conversion boundary, and coordinate every producer and consumer rollout.",
+      "suggested_test": "Replay old and new versioned telemetry fixtures through HTTP, MQTT, validation, persistence, readback, dashboard/export, and public serialization paths."
+    },
+    {
+      "id": "OBS-RV06-002",
+      "severity": "HIGH",
+      "category": "correctness",
+      "location": "app/state_estimator/decisions.py",
+      "finding": "A normalized moisture ratio is compared directly with a percent-valued threshold of 35.",
+      "evidence": "The function name and default identify a percent threshold, while the selected state field is soil_moisture_ratio; ordinary ratios from 0 through 1 therefore compare below 35.",
+      "evidence_excerpt": "def is_dry(state, dry_below_percent=35):\n    return state[\"soil_moisture_ratio\"] < dry_below_percent",
+      "impact": "Normal moisture values, including 0.42, are classified as dry, producing incorrect state decisions by a factor of 100.",
+      "required_change": "Convert the ratio to percent at the State Estimator boundary or rename and constrain the threshold as a 0..1 ratio, with explicit out-of-range rejection.",
+      "suggested_test": "Test 0, 0.01, 0.35, 0.5, 1, 50, and 100 inputs and reject values outside the selected unit range."
+    },
+    {
+      "id": "OBS-RV06-003",
+      "severity": "HIGH",
+      "category": "tests",
+      "location": "tests/test_api.py",
+      "finding": "The ingestion test replaces app.api.ingest_payload with a mock and then calls the mock itself.",
+      "evidence": "The asserted result is the configured mock return value, so request validation, transport normalization, authentication/topic handling, persistence, and readback never execute.",
+      "evidence_excerpt": "def test_ingestion(mocker):\n    ingest = mocker.patch(\"app.api.ingest_payload\", return_value={\"ok\": True})\n    assert ingest({\"soil_moisture\": 0.42}) == {\"ok\": True}",
+      "impact": "The test can pass while the real ingestion path remains incompatible or broken.",
+      "required_change": "Exercise the real public API ingestion boundary with only external dependencies substituted, then assert validation, persistence, and readback behavior.",
+      "suggested_test": "Test the actual FastAPI route with both telemetry versions and verify the stored and returned canonical moisture value."
+    },
+    {
+      "id": "OBS-RV06-004",
+      "severity": "HIGH",
+      "category": "tests",
+      "location": "implementation_report.manual_evidence",
+      "finding": "The report incorrectly treats manual evidence as not applicable even though the change alters an edge-consumed telemetry contract.",
+      "evidence": "edge_server_compatibility requires a named edge consumer, rollout order, and manual canary; absence of physical actuation does not remove that requirement.",
+      "evidence_excerpt": "NOT APPLICABLE: no physical action is in scope",
+      "impact": "A server-only change can be approved without confirming that deployed edge producers continue to interoperate.",
+      "required_change": "Identify the edge producer, define the compatible rollout order and rollback, and record a manual old/new telemetry canary result.",
+      "suggested_test": "manual: Have the edge owner send old and new telemetry through the canary path and verify server persistence/readback before and after rollback."
+    },
+    {
+      "id": "OBS-RV06-005",
+      "severity": "HIGH",
+      "category": "tests",
+      "location": "implementation_report.automated_evidence",
+      "finding": "The evidence claim omits old/current fixture replay and the required MQTT, storage, dashboard/export, and public-consumer checks.",
+      "evidence": "The report names only a schema fixture and API unit tests, and supplies no inspectable results for the accumulated schema_data_contract and edge_hardware_integration requirements.",
+      "evidence_excerpt": "PASS: schema fixture and API unit tests",
+      "impact": "Contract drift can escape unit coverage and break a real transport or downstream consumer.",
+      "required_change": "Run and report schema validation, serialization round-trip, old/current fixture replay, API, MQTT, storage, every named consumer, focused edge failures, and the full baseline checks.",
+      "suggested_test": "Run the contract, edge-integration, validation, API, and MQTT suites with both versions, then verify persistence and each dashboard/export/public consumer."
+    }
+  ],
+  "contract_consumer_review": "SP-FAIL-009 is present because the fixture changes nested versus flat shape without a versioned adapter; SP-FAIL-010 is present because ratio and percent units are compared directly; SP-FAIL-011 is present because the new API test mocks the ingestion unit instead of replaying through the public path. The producer is the external edge device; named consumers must include HTTP and MQTT validation, canonical storage/readback, State Estimator decisions, dashboards/export, and any public serializer. None has complete compatibility evidence in the supplied report.",
+  "evidence_matrix": [
+    {
+      "check": "Both patch artifact SHA-256 values match the case metadata",
+      "status": "PASS",
+      "manual": false
+    },
+    {
+      "check": "Reported schema fixture and API unit tests",
+      "status": "PASS",
+      "manual": false
+    },
+    {
+      "check": "Actual API ingestion behavior rather than a mocked ingestion function",
+      "status": "FAIL",
+      "manual": false
+    },
+    {
+      "check": "Schema validation, round-trip, old/current fixture replay, MQTT, storage, and every named consumer",
+      "status": "NOT_RUN",
+      "manual": false
+    },
+    {
+      "check": "Ratio/percent boundary and out-of-range tests",
+      "status": "NOT_RUN",
+      "manual": false
+    },
+    {
+      "check": "Full pytest and lint, format, and type baseline",
+      "status": "NOT_RUN",
+      "manual": false
+    },
+    {
+      "check": "Named edge-consumer old/new canary and rollback",
+      "status": "NOT_RUN",
+      "manual": true
+    }
+  ],
+  "operations_safety_security_privacy": "No physical action, credential, migration, external export, or production write is shown. Operational risk is compatibility: a deployed edge producer and downstream observability consumers can diverge from the unversioned fixture. Rollout and rollback evidence is missing.",
+  "documentation_assessment": "No schema, contract, unit, compatibility, consumer, or release-note update accompanies the fixture shape change. The documentation claim that the moisture contract remains compatible is not supported by the supplied artifacts.",
+  "follow_ups": [],
+  "limitations": [
+    "Review was limited to the approved evaluation case, mandatory stable rule pack, reviewer contract, report schema, and the two hash-verified named patch artifacts.",
+    "No schema files, transport implementations, consumer code, CI logs, edge repository, production data, or private infrastructure were inspected.",
+    "Reported PASS statuses reflect supplied claims only; no tests or edge canary were executed by the reviewer."
+  ]
+}

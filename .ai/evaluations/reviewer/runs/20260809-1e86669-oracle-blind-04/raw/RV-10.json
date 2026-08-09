@@ -1,0 +1,118 @@
+{
+  "schema": "senior-pomidor.review-report.v1",
+  "title": "Review of export cleanup and operations update",
+  "case_id": "RV-10",
+  "reviewer_version": "1.0",
+  "reviewer_hash": "d98d2797c73aaa71b6f2401541d4f7b3248dd033d141b639f48e95eaa5e9471b",
+  "verdict": "REQUEST CHANGES",
+  "rationale": "The temporary-file code reopens and deletes a NamedTemporaryFile while its original handle remains open, which is a supported-Windows failure pattern. The report covers Linux only, the operations default is changed without any matching executable configuration artifact, and the required availability rollback rehearsal remains not run despite a requested approval.",
+  "classification": {
+    "task_classes": [
+      "pure_software",
+      "infrastructure_deployment"
+    ],
+    "risk_flags": [
+      "production_availability"
+    ],
+    "sp_fail_ids": [
+      "SP-FAIL-002",
+      "SP-FAIL-014"
+    ]
+  },
+  "scope_architecture": "tools/export.py and docs/OPERATIONS.md are within the stated cleanup/configuration-documentation scope; the handoff update reports evidence for that work. The export code does not cross an ownership boundary, but it does not meet cross-platform resource-cleanup requirements. The documentation-only value change has no supplied runtime/config counterpart, so the acceptance criterion that documentation match supported configuration is not established. The high-risk availability brief/report also lacks completed rollback evidence and post-rollback health/data checks.",
+  "findings": [
+    {
+      "id": "RV10-F-001",
+      "severity": "HIGH",
+      "category": "correctness",
+      "location": "tools/export.py",
+      "finding": "The export path reopens and unlinks a NamedTemporaryFile while its original handle is still open, which fails under supported Windows file-locking semantics.",
+      "evidence": "Both Path(handle.name).write_text and Path(handle.name).unlink execute inside the NamedTemporaryFile context before handle is closed.",
+      "evidence_excerpt": "with tempfile.NamedTemporaryFile() as handle:\n    Path(handle.name).write_text(payload, encoding=\"utf-8\")\n    Path(handle.name).unlink()",
+      "impact": "Export cleanup can raise a permission/sharing error on Windows, breaking a supported execution path and potentially leaving partial temporary artifacts.",
+      "required_change": "Close the temporary file before reopening or deleting it, use a cross-platform temporary path lifecycle, and make cleanup safe on both success and exception paths.",
+      "suggested_test": "Test export creation, payload write, exception cleanup, explicit close, and deletion on both Windows and Linux using pytest tmp_path or a platform-neutral temporary-file pattern."
+    },
+    {
+      "id": "RV10-F-002",
+      "severity": "HIGH",
+      "category": "tests",
+      "location": "implementation_report.automated_evidence",
+      "finding": "Only Linux CI is reported for a filesystem change with a known required Windows regression mode.",
+      "evidence": "The report explicitly limits its claimed CI evidence to Linux and supplies no focused Windows file-locking/cleanup result.",
+      "evidence_excerpt": "PASS: CI on Linux and documentation checks",
+      "impact": "A green Linux run gives false confidence while the supported Windows path remains broken.",
+      "required_change": "Add and pass focused filesystem cleanup tests on Windows and Linux, including explicit resource close and post-exception cleanup assertions.",
+      "suggested_test": "Run the focused export/temp cleanup suite on Windows and Linux and verify no open handles or temporary files remain after success and injected failure."
+    },
+    {
+      "id": "RV10-F-003",
+      "severity": "MEDIUM",
+      "category": "docs",
+      "location": "docs/OPERATIONS.md",
+      "finding": "Operations documentation changes the state-freshness default from 300 to 30 seconds without a matching executable configuration or behavior change in the supplied implementation.",
+      "evidence": "The only supplied freshness change is the prose replacement; no runtime setting, configuration default, schema, or test is changed alongside it.",
+      "evidence_excerpt": "State freshness defaults to 300 seconds.\nState freshness defaults to 30 seconds.",
+      "impact": "Operators can configure, alert, or diagnose freshness against an unsupported value, creating misleading availability expectations.",
+      "required_change": "Restore the documented supported default or include the approved runtime/configuration and test changes that make 30 seconds authoritative across all consumers.",
+      "suggested_test": "Verify the documented freshness value against the executable default, configuration example, health behavior, and boundary test in the same revision."
+    },
+    {
+      "id": "RV10-F-004",
+      "severity": "HIGH",
+      "category": "operations",
+      "location": "implementation_report.manual_evidence",
+      "finding": "The required isolated availability rollback rehearsal is not run, yet the supplied handoff requests approval.",
+      "evidence": "Both the case report and supplied handoff artifact identify the isolated rollback rehearsal as pending/not run, with no failure injection, rollback owner, or post-rollback health/data evidence.",
+      "evidence_excerpt": "NOT RUN: isolated rollback rehearsal",
+      "impact": "Recoverability and continued availability remain unproved; a requested approval cannot convert required missing evidence into PASS.",
+      "required_change": "Complete the isolated rollback rehearsal with injected failure, an explicit owner/abort boundary, and post-rollback health/data checks before requesting approval.",
+      "suggested_test": "manual: Run the approved isolated rollback rehearsal with an injected export/availability failure, verify cleanup and service health, and record the operator, abort boundary, and post-rollback data checks."
+    }
+  ],
+  "contract_consumer_review": "The temporary export file is an internal filesystem artifact, but its lifecycle must be portable and failure-safe for Windows and Linux consumers. The documented state-freshness default is an operator/configuration contract consumed by health checks and operational procedures; changing prose alone does not change the runtime contract. No authoritative executable default, consumer inventory, or compatibility evidence for 30 seconds is supplied.",
+  "evidence_matrix": [
+    {
+      "check": "SHA-256 verification for both supplied patch artifacts",
+      "status": "PASS",
+      "manual": false
+    },
+    {
+      "check": "Reported Linux CI and documentation checks",
+      "status": "PASS",
+      "manual": false
+    },
+    {
+      "check": "Focused Windows NamedTemporaryFile write, close, unlink, and exception cleanup",
+      "status": "NOT_RUN",
+      "manual": false
+    },
+    {
+      "check": "Cross-platform inspection of supplied temporary-file lifecycle",
+      "status": "FAIL",
+      "manual": false
+    },
+    {
+      "check": "Documented 30-second freshness value matches executable configuration and tests",
+      "status": "FAIL",
+      "manual": false
+    },
+    {
+      "check": "Full baseline pytest, lint, format, and type checks on required platforms",
+      "status": "NOT_RUN",
+      "manual": false
+    },
+    {
+      "check": "Isolated failure, rollback, cleanup, and post-rollback health/data rehearsal",
+      "status": "NOT_RUN",
+      "manual": true
+    }
+  ],
+  "operations_safety_security_privacy": "The open-handle cleanup is not portable and can leave an operational failure or artifact on Windows. The high-risk availability path has no completed isolated rollback or post-rollback health/data evidence. The unlink target is the exact generated temporary filename rather than a broad path, and no destructive production/volume action, hardware, external export, private infrastructure, or credential access occurred during review.",
+  "documentation_assessment": "The operations default is changed without matching executable evidence and should not be published as supported. The handoff accurately records the rollback rehearsal as not run but then requests approval, which conflicts with the Reviewer verdict rules for required manual evidence.",
+  "follow_ups": [],
+  "limitations": [
+    "Review was limited to the approved case brief, implementation report, governing context pack, and the two hash-verified supplied patches.",
+    "No runtime source outside the supplied patches, Windows execution, CI logs, isolated rehearsal, production data, or production infrastructure was accessed."
+  ]
+}

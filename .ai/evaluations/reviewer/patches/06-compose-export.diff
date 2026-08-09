@@ -1,0 +1,10 @@
+diff --git a/docker-compose.yml b/docker-compose.yml
+@@
+-    image: ${APP_IMAGE:?APP_IMAGE is required}
++    image: ${APP_IMAGE:-latest}
+diff --git a/docker-compose.rehearsal.yml b/docker-compose.rehearsal.yml
+@@
++  grafana-cloud-exporter:
++    profiles: [rehearsal]
++    environment:
++      GRAFANA_CLOUD_EXPORT_ENABLED: "true"

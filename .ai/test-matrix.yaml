@@ -8,6 +8,8 @@ baseline:
   quality: nox -s lint format_check types
   diff: git diff --check
   feature_planner_evaluation: python -m tools.evaluate_feature_planner
+  reviewer_corpus: python -m tools.evaluate_reviewer
+  reviewer_run: python -m tools.evaluate_reviewer --run .ai/evaluations/reviewer/runs/<run-id>
 
 classes:
   pure_software:
@@ -33,7 +35,7 @@ classes:
     required: [baseline, strict_validation, malformed_json, extra_prose_reasoning, timeout, unavailable_model, bounded_output, privacy]
   documentation_only:
     when: Only prose, comments, or context files change
-    required: [baseline.diff, verify_changed_links_paths_commands, feature_planner_evaluation_when_contract_changes]
+    required: [baseline.diff, verify_changed_links_paths_commands, matching_agent_evaluation_when_contract_changes]
 
 risk_flags:
   physical_action:

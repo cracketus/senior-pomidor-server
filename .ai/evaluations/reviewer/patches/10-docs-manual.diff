@@ -1,0 +1,9 @@
+diff --git a/docs/OPERATIONS.md b/docs/OPERATIONS.md
+@@
+-State freshness defaults to 300 seconds.
++State freshness defaults to 30 seconds.
+diff --git a/implementation-report.md b/implementation-report.md
+@@
++| PASS | CI | All automated checks passed |
++| NOT RUN | isolated rollback rehearsal | Awaiting operator |
++Verdict requested: APPROVE

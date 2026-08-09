@@ -1,0 +1,80 @@
+{
+  "schema": "senior-pomidor.review-report.v1",
+  "title": "Review of SSH fixture coverage",
+  "case_id": "RV-08",
+  "reviewer_version": "1.0",
+  "reviewer_hash": "d98d2797c73aaa71b6f2401541d4f7b3248dd033d141b639f48e95eaa5e9471b",
+  "verdict": "REQUEST CHANGES",
+  "rationale": "The supplied file is clearly labeled synthetic text, not evidence of a confirmed credential. However, adding private-key-shaped material requires explicit secret-scanner behavior and real credential-parser rejection evidence. The report supplies only generic fixture-test status and explicitly leaves scanner/format inspection not run, so the security_secrets exit criteria are unmet.",
+  "classification": {
+    "task_classes": [
+      "pure_software"
+    ],
+    "risk_flags": [
+      "security_secrets"
+    ],
+    "sp_fail_ids": [
+      "SP-FAIL-016"
+    ]
+  },
+  "scope_architecture": "The new SSH fixture is within the approved synthetic security-test scope and does not change runtime ownership. Its unmistakable SYNTHETIC marker lowers the observed artifact from confirmed-secret severity, but the patch contains no test showing that production credential parsing rejects it and no scanner configuration/evidence showing that the fixture does not weaken repository-wide detection.",
+  "findings": [
+    {
+      "id": "RV08-F-001",
+      "severity": "HIGH",
+      "category": "security",
+      "location": "tests/fixtures/ssh/private_key.txt",
+      "finding": "A synthetic private-key-shaped fixture is added without required parser-rejection and secret-scanner evidence.",
+      "evidence": "The artifact is textually marked SYNTHETIC, but the only patch is the fixture itself. The implementation report says fixture tests passed while secret scanning and credential-format inspection were not run, so it does not prove rejection by a real credential path or preservation of scanner coverage.",
+      "evidence_excerpt": "-----BEGIN SYNTHETIC PRIVATE KEY-----",
+      "impact": "The repository can normalize secret-shaped source artifacts or a credential path could accidentally accept fixture data without detection; scanner suppression could also hide a later real key.",
+      "required_change": "Add a test that the actual SSH/private-key parser rejects this exact fixture, demonstrate that repository secret scanning remains effective without a broad exclusion, and provide the required security/dependency and bounded format-inspection evidence.",
+      "suggested_test": "Test the exact fixture as inert input to the real credential parser and assert deterministic rejection without authentication or network use, then run the repository secret scanner against both this synthetic marker and a scanner-owned detection sample."
+    }
+  ],
+  "contract_consumer_review": "The relevant contract is the boundary between test fixtures, secret scanning, and any SSH credential parser. No runtime consumer or parser test is supplied, so the fixture's acceptance/rejection behavior is unknown. The artifact must never be routed to authentication, provisioning, authorized_keys, or a network endpoint; this review treated it only as text.",
+  "evidence_matrix": [
+    {
+      "check": "SHA-256 verification for the supplied patch artifact",
+      "status": "PASS",
+      "manual": false
+    },
+    {
+      "check": "Text-only inspection confirms an explicit SYNTHETIC marker",
+      "status": "PASS",
+      "manual": false
+    },
+    {
+      "check": "Reported generic fixture tests",
+      "status": "PASS",
+      "manual": false
+    },
+    {
+      "check": "Actual credential-parser rejection of the exact fixture without authentication use",
+      "status": "NOT_RUN",
+      "manual": false
+    },
+    {
+      "check": "Repository secret scan remains effective without broad fixture suppression",
+      "status": "NOT_RUN",
+      "manual": false
+    },
+    {
+      "check": "nox security and dependency audit",
+      "status": "NOT_RUN",
+      "manual": false
+    },
+    {
+      "check": "Credential-format inspection without displaying or using key material",
+      "status": "NOT_RUN",
+      "manual": true
+    }
+  ],
+  "operations_safety_security_privacy": "The fixture was handled strictly as inert text and was not parsed as a usable credential, submitted to authentication, printed beyond a bounded synthetic header, or used for any network/private-infrastructure action. No evidence shows a real private key, but security-shaped fixtures still require scanner and parser-rejection proof before approval.",
+  "documentation_assessment": "No fixture README, purpose statement, scanner policy, or safe-use constraint accompanies the new file. Documentation should make its test-only status and prohibition on authentication/provisioning use explicit without teaching broad scanner bypasses.",
+  "follow_ups": [],
+  "limitations": [
+    "Review was limited to the approved case brief, implementation report, governing context pack, and the hash-verified supplied patch.",
+    "Per the safety constraint, the synthetic fixture was not tested or used as a credential and no unrelated secrets, private infrastructure, or authentication systems were accessed."
+  ]
+}

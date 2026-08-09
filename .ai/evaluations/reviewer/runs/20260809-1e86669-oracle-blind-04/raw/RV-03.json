@@ -1,0 +1,52 @@
+{
+  "schema": "senior-pomidor.review-report.v1",
+  "title": "RV-03 review: Secure multi-application production layout",
+  "case_id": "RV-03",
+  "reviewer_version": "1.0",
+  "reviewer_hash": "d98d2797c73aaa71b6f2401541d4f7b3248dd033d141b639f48e95eaa5e9471b",
+  "verdict": "REQUEST CHANGES",
+  "rationale": "The layout correctly separates application Compose services from shared platform services, but the backup implementation requests a global PostgreSQL dump using only the application runtime role and the changed migration instructions omit the required isolated rehearsal before restoring production targets. Both gaps affect a production-availability/data-preservation change.",
+  "classification": {
+    "task_classes": ["infrastructure_deployment", "schema_data_contract"],
+    "risk_flags": ["security_secrets", "production_availability", "data_loss_migration"],
+    "sp_fail_ids": ["SP-FAIL-001", "SP-FAIL-002", "SP-FAIL-003", "SP-FAIL-004", "SP-FAIL-005"]
+  },
+  "scope_architecture": "The Compose split, release installation, backup/restore scripts, systemd units, and migration runbooks all change production topology and durable-data recovery behavior. Keeping PostgreSQL, Grafana, and Ollama platform-owned is architecturally correct, but it raises the required availability and recovery evidence rather than removing it.",
+  "findings": [
+    {
+      "id": "rv03-backup-requires-global-role-access",
+      "severity": "HIGH",
+      "category": "operations",
+      "location": "deploy/scripts/backup.sh:65",
+      "finding": "The application backup invokes pg_dumpall for global objects using the application runtime environment, although the new production layout intentionally supplies only a dedicated application database role.",
+      "evidence": "The runbook assigns the application database/role to the application and keeps shared platform administration separate. pg_dumpall --globals-only reads cluster-global roles and configuration, which an application role is not expected to administer; no separate approved platform backup credential or platform-owned backup path is supplied.",
+      "evidence_excerpt": "\"${pg_client[@]}\" pg_dumpall --globals-only --no-role-passwords \\",
+      "impact": "Daily and weekly backup runs can fail before producing a verified recovery set, leaving the deployment without the backup evidence required for migration and availability changes.",
+      "required_change": "Remove the global dump from the application-owned backup or make it an explicitly platform-owned operation with its own approved least-privilege execution path; exercise the selected path with the actual application role.",
+      "suggested_test": "Run the daily and weekly backup commands against an isolated shared-platform PostgreSQL instance using the configured application role, then verify SHA256SUMS and the resulting restore set."
+    },
+    {
+      "id": "rv03-migration-runbook-skips-isolated-rehearsal",
+      "severity": "HIGH",
+      "category": "operations",
+      "location": "docs/MIGRATION_WINDOWS_TO_UBUNTU.md:53",
+      "finding": "The changed migration runbook proceeds from empty production targets directly to restore and service startup without an isolated rehearsal procedure or recorded rehearsal result.",
+      "evidence": "The diff's migration section says to confirm the target directories and database are empty and then run restore/start. The task has production_availability and data_loss_migration flags, for which the matrix requires isolated recovery/rehearsal, rollback, and post-rollback health/data evidence; the fixture supplies only a generic bounded review.",
+      "evidence_excerpt": "no user tables. Then run:",
+      "impact": "A first recovery attempt can discover an incompatible dump, permissions, network, Compose, or startup failure against the production target, risking extended outage or loss of the safe rollback boundary.",
+      "required_change": "Add a bounded, isolated rehearsal procedure using separate project, paths, credentials, loopback ports, and disabled external export; record its restore, health, data comparison, rollback, and shared-service non-interference results before cutover.",
+      "suggested_test": "Run an isolated migration rehearsal from a checksummed candidate set and verify restore counts, representative hashes, readiness, rollback, and zero external export."
+    }
+  ],
+  "contract_consumer_review": "The changed consumers are application Compose, systemd, release installation, migration/backup tooling, the application database role, and platform-owned services. The diff removes application lifecycle management for shared services, but backup and recovery remain cross-owner contracts and must be tested with the actual separation.",
+  "evidence_matrix": [
+    {"check": "Approved fixture brief and pinned diff identity", "status": "PASS", "manual": false},
+    {"check": "Historical Compose, release, and security checks supplied in implementation report", "status": "PASS", "manual": false},
+    {"check": "Application-role backup and isolated restore rehearsal", "status": "NOT_RUN", "manual": true},
+    {"check": "Rollback and shared-service non-interference verification", "status": "NOT_RUN", "manual": true}
+  ],
+  "operations_safety_security_privacy": "The intended ownership boundary avoids application management of shared services and keeps the runtime secret separate. The missing executable backup/rehearsal proof remains a high-risk operational gap; no production access was used to infer success.",
+  "documentation_assessment": "The revised runbook documents checksums and rollback intent, but it lacks the required isolated rehearsal gate before the production restore/start commands.",
+  "follow_ups": [],
+  "limitations": ["Historical automated/manual PASS statements were reviewed as supplied; no production credentials, service topology, backup archive, or rehearsal environment was accessed.", "The review did not execute destructive restore or Compose operations."]
+}

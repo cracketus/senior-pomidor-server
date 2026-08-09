@@ -1,0 +1,24 @@
+{
+  "schema":"senior-pomidor.reviewer-mapping.v1",
+  "mappings":[
+    {"observed_finding_id":"OBS-CONTROL-BYPASS-001","oracle_finding_id":"RF-001"},
+    {"observed_finding_id":"OBS-EXECUTOR-RESTART-001","oracle_finding_id":"RF-002"},
+    {"observed_finding_id":"OBS-GUARDRAILS-FRESHNESS-001","oracle_finding_id":"RF-004"},
+    {"observed_finding_id":"OBS-PHYSICAL-EVIDENCE-001","oracle_finding_id":"RF-018"},
+    {"observed_finding_id":"OBS-TELEMETRY-CONTRACT-001","oracle_finding_id":"RF-005"},
+    {"observed_finding_id":"OBS-MOISTURE-UNITS-001","oracle_finding_id":"RF-003"},
+    {"observed_finding_id":"OBS-API-SELF-MOCK-001","oracle_finding_id":"RF-006"},
+    {"observed_finding_id":"OBS-EDGE-CANARY-001","oracle_finding_id":"RF-019"},
+    {"observed_finding_id":"OBS-REHEARSAL-EXPORT-001","oracle_finding_id":"RF-008"},
+    {"observed_finding_id":"OBS-COMPOSE-IMAGE-001","oracle_finding_id":"RF-007"},
+    {"observed_finding_id":"OBS-REHEARSAL-EVIDENCE-001","oracle_finding_id":"RF-020"},
+    {"observed_finding_id":"OBS-SSH-FIXTURE-001","oracle_finding_id":"RF-009"},
+    {"observed_finding_id":"OBS-SSH-EVIDENCE-001","oracle_finding_id":"RF-027"},
+    {"observed_finding_id":"OBS-DAILY-STORY-RAW-001","oracle_finding_id":"RF-010"},
+    {"observed_finding_id":"OBS-DAILY-STORY-EVIDENCE-001","oracle_finding_id":"RF-021"},
+    {"observed_finding_id":"OBS-EXPORT-WINDOWS-001","oracle_finding_id":"RF-011"},
+    {"observed_finding_id":"OBS-WINDOWS-EVIDENCE-001","oracle_finding_id":"RF-033"},
+    {"observed_finding_id":"OBS-ROLLBACK-EVIDENCE-001","oracle_finding_id":"RF-013"},
+    {"observed_finding_id":"OBS-FRESHNESS-DOC-001","oracle_finding_id":"RF-012"}
+  ]
+}

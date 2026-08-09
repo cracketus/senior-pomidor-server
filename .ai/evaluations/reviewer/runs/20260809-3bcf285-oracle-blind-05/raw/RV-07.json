@@ -1,0 +1,131 @@
+{
+  "schema": "senior-pomidor.review-report.v1",
+  "title": "Review of RV-07 Compose image and rehearsal profile update",
+  "case_id": "RV-07",
+  "reviewer_version": "1.0",
+  "reviewer_hash": "51ab66ce62e2b5363d7a71587edb937f1e34feb842d726e24141da4b03c38f0f",
+  "verdict": "REQUEST CHANGES",
+  "rationale": "The rehearsal profile explicitly enables external export, which violates the isolated-rehearsal boundary, and the application image contract now silently falls back to latest. Required security, missing-variable, isolated rehearsal, external-write, rollback, and recovery evidence is absent.",
+  "classification": {
+    "task_classes": [
+      "infrastructure_deployment"
+    ],
+    "risk_flags": [
+      "production_availability",
+      "security_secrets"
+    ],
+    "sp_fail_ids": [
+      "SP-FAIL-001",
+      "SP-FAIL-003"
+    ]
+  },
+  "scope_architecture": "Changed-path inventory: docker-compose.yml changes APP_IMAGE from a required environment variable to an optional variable with implicit latest runtime default; docker-compose.rehearsal.yml adds a grafana-cloud-exporter service to the rehearsal profile and sets its external-write enable flag true. This crosses the rehearsal external-network/credential privilege boundary. No migration revision, persisted/public field, or operating-system-specific behavior is shown. SP-FAIL-001 and SP-FAIL-003 directly apply and are not covered by the supplied evidence.",
+  "findings": [
+    {
+      "id": "OBS-RV07-001",
+      "severity": "BLOCKER",
+      "category": "operations",
+      "location": "docker-compose.rehearsal.yml",
+      "finding": "The rehearsal profile explicitly enables the Grafana Cloud exporter and remote writes.",
+      "evidence": "The new service is attached to the rehearsal profile and GRAFANA_CLOUD_EXPORT_ENABLED is set to true, contradicting the mandatory external-export-off rehearsal boundary.",
+      "evidence_excerpt": "grafana-cloud-exporter:\n    profiles: [rehearsal]\n    environment:\n      GRAFANA_CLOUD_EXPORT_ENABLED: \"true\"",
+      "impact": "A rehearsal can send data or duplicate metrics to an external service and can require real external credentials, breaching isolation and public-data boundaries.",
+      "required_change": "Remove the cloud exporter from every rehearsal profile and enforce an explicit disabled external-export setting with zero remote-write targets.",
+      "suggested_test": "Render the exact rehearsal Compose configuration and verify the exporter service, cloud-export profile, remote-write targets, and external credentials are absent."
+    },
+    {
+      "id": "OBS-RV07-002",
+      "severity": "HIGH",
+      "category": "operations",
+      "location": "docker-compose.yml",
+      "finding": "APP_IMAGE silently falls back to the ambiguous latest tag instead of failing when the required image is absent.",
+      "evidence": "The required-variable interpolation is replaced by a default that can select an unintended mutable image.",
+      "evidence_excerpt": "image: ${APP_IMAGE:-latest}",
+      "impact": "Local, CI, rehearsal, or release configuration can start an unpinned or stale image and produce non-reproducible availability behavior.",
+      "required_change": "Restore fail-fast APP_IMAGE interpolation and require a non-empty, explicit immutable candidate tag or digest in every rendered topology.",
+      "suggested_test": "Render Compose with APP_IMAGE missing, empty, and explicitly pinned and verify only the pinned configuration succeeds."
+    },
+    {
+      "id": "OBS-RV07-003",
+      "severity": "HIGH",
+      "category": "tests",
+      "location": "implementation_report.manual_evidence",
+      "finding": "The required isolated rehearsal and external-write inspection are explicitly NOT RUN.",
+      "evidence": "production_availability requires an isolated build/up/health/rollback rehearsal, and SP-FAIL-003 requires confirmation that the exporter is absent and remote writes are zero.",
+      "evidence_excerpt": "NOT RUN: isolated rehearsal and external-write inspection",
+      "impact": "The unsafe topology, recovery behavior, and possible remote writes have not been measured in the environment the change targets.",
+      "required_change": "Complete an isolated rehearsal with distinct project, credentials, loopback ports, paths and networks, verify zero external writes, exercise rollback, and record post-rollback health.",
+      "suggested_test": "manual: Have the operations owner inspect the rendered isolated topology, start it without external credentials, confirm zero remote writes, inject failure, roll back, and verify fresh healthy output."
+    },
+    {
+      "id": "OBS-RV07-004",
+      "severity": "HIGH",
+      "category": "security",
+      "location": "implementation_report.automated_evidence",
+      "finding": "No security scan, dependency audit, threat review, or secret-safe rollback evidence is supplied for the security_secrets flag.",
+      "evidence": "The automated report names only Compose config and CI; it does not name nox security, nox deps_audit, credential isolation, or threat/rollback review.",
+      "evidence_excerpt": "PASS: Compose config and CI",
+      "impact": "An external-export configuration can introduce credential exposure or dependency risk without the required security gate.",
+      "required_change": "Run the security and dependency-audit sessions and document the exporter credential boundary, threat analysis, and secret-safe rollback.",
+      "suggested_test": "Run nox -s security deps_audit and verify the rendered rehearsal configuration contains no credential values or external endpoints."
+    },
+    {
+      "id": "OBS-RV07-005",
+      "severity": "HIGH",
+      "category": "tests",
+      "location": "implementation_report.automated_evidence",
+      "finding": "The generic Compose claim does not prove missing APP_IMAGE fails or that all rehearsal profiles exclude external export.",
+      "evidence": "No inspectable command or result covers the two SP-FAIL regression conditions introduced by the patch.",
+      "evidence_excerpt": "PASS: Compose config and CI",
+      "impact": "A green configuration render can accept the unsafe fallback and enabled exporter without detecting either regression.",
+      "required_change": "Add explicit negative configuration tests for absent and empty APP_IMAGE and for any exporter or remote-write presence in rehearsal.",
+      "suggested_test": "Verify missing and empty APP_IMAGE fail clearly, then render every rehearsal profile and assert cloud export and remote-write configuration are absent."
+    }
+  ],
+  "contract_consumer_review": "APP_IMAGE is an environment contract consumed by every Compose invocation; SP-FAIL-001 requires fail-fast behavior and an explicit image. The rehearsal profile is consumed by operators and CI/release procedures; SP-FAIL-003 requires isolated project, paths, ports, credentials, networks, and disabled external export. No public schema or database migration is changed, but exporter data and credentials cross a security/public boundary if enabled.",
+  "evidence_matrix": [
+    {
+      "check": "Patch artifact SHA-256 matches the case metadata",
+      "status": "PASS",
+      "manual": false
+    },
+    {
+      "check": "Reported Compose config and CI",
+      "status": "PASS",
+      "manual": false
+    },
+    {
+      "check": "Missing and empty APP_IMAGE fail clearly",
+      "status": "FAIL",
+      "manual": false
+    },
+    {
+      "check": "Rehearsal configuration excludes cloud exporter and all remote writes",
+      "status": "FAIL",
+      "manual": false
+    },
+    {
+      "check": "Security scan and dependency audit",
+      "status": "NOT_RUN",
+      "manual": false
+    },
+    {
+      "check": "Full pytest and lint, format, and type baseline",
+      "status": "NOT_RUN",
+      "manual": false
+    },
+    {
+      "check": "Isolated rehearsal, failure recovery, rollback, external-write inspection, and post-rollback health",
+      "status": "NOT_RUN",
+      "manual": true
+    }
+  ],
+  "operations_safety_security_privacy": "The rehearsal boundary is directly violated by an enabled external exporter. The image becomes mutable and non-reproducible when APP_IMAGE is absent. No migration or physical action is involved, but availability, isolation, credentials, and data egress require the missing high-risk evidence and human-owned rollback.",
+  "documentation_assessment": "No operator documentation, environment example, isolation proof, rollback procedure, or release note accompanies the changed APP_IMAGE contract or rehearsal profile. The requested rehearsal observability conflicts with the stable rule that rehearsal must not enable Grafana Cloud export.",
+  "follow_ups": [],
+  "limitations": [
+    "Review was limited to the approved evaluation case, mandatory stable rule pack, reviewer contract, report schema, and the hash-verified named patch artifact.",
+    "No rendered Compose output, CI logs, credentials, network endpoints, production infrastructure, or private data were inspected.",
+    "Reported PASS statuses reflect supplied claims only; no Compose stack, network operation, or rehearsal was executed by the reviewer."
+  ]
+}

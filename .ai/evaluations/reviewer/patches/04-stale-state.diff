@@ -1,0 +1,5 @@
+diff --git a/app/guardrails.py b/app/guardrails.py
+@@
++def state_is_fresh(state, now):
++    age_seconds = (now - state["observed_at"]).total_seconds() if state.get("observed_at") else 0
++    return age_seconds <= 300

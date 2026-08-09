@@ -1,0 +1,113 @@
+{
+  "schema": "senior-pomidor.review-report.v1",
+  "title": "Review of physical action execution refactor",
+  "case_id": "RV-05",
+  "reviewer_version": "1.0",
+  "reviewer_hash": "d98d2797c73aaa71b6f2401541d4f7b3248dd033d141b639f48e95eaa5e9471b",
+  "verdict": "REQUEST CHANGES",
+  "rationale": "The proposed physical-action path directly calls an adapter without deterministic Guardrails or the Executor, loses idempotency across restart, and treats a missing observation timestamp as fresh. These are reachable physical-safety failures. Required named simulation, restart, failure-injection, rollback, and supervised hardware evidence is also unavailable, so the reported generic fake-adapter CI cannot support approval.",
+  "classification": {
+    "task_classes": [
+      "control_guardrails_executor",
+      "edge_hardware_integration"
+    ],
+    "risk_flags": [
+      "physical_action",
+      "production_availability"
+    ],
+    "sp_fail_ids": [
+      "SP-FAIL-002"
+    ]
+  },
+  "scope_architecture": "The three changed modules are within the stated watering-execution and freshness scope, but the implementation does not satisfy the architecture boundary. app/control.py performs adapter I/O itself, app/executor.py supplies only process-local deduplication rather than an idempotent state machine, and app/guardrails.py fails open on missing freshness data. The brief also omits an explicit abort/rollback boundary and the applicable failure-regression mapping required for a high-risk physical-action change.",
+  "findings": [
+    {
+      "id": "RV05-F-001",
+      "severity": "BLOCKER",
+      "category": "safety",
+      "location": "app/control.py",
+      "finding": "The control function sends watering directly to the adapter, bypassing deterministic Guardrails and the Executor.",
+      "evidence": "The added water branch invokes adapter.water directly and contains no Guardrails decision or Executor transition.",
+      "evidence_excerpt": "if suggestion[\"action\"] == \"water\":\n    adapter.water(seconds=suggestion[\"seconds\"])",
+      "impact": "An unvalidated suggestion can cause a real watering action without freshness, bounds, confidence, audit, idempotency, or safe-failure enforcement.",
+      "required_change": "Route every candidate action through deterministic Guardrails and an idempotent Executor using an approved or fake adapter; Control must not perform adapter I/O.",
+      "suggested_test": "Simulate allowed and rejected watering candidates through the complete Control-to-Guardrails-to-Executor-to-fake-adapter path and assert no adapter call on invalid, stale, missing, or low-confidence input."
+    },
+    {
+      "id": "RV05-F-002",
+      "severity": "BLOCKER",
+      "category": "safety",
+      "location": "app/executor.py",
+      "finding": "Execution idempotency exists only in process memory and a send is marked acknowledged without durable acknowledgement state.",
+      "evidence": "ACKNOWLEDGED is a module-level set; execute sends first and then adds the identifier to that volatile set. Restart clears it, and no durable pending, uncertain, or acknowledged transition is recorded.",
+      "evidence_excerpt": "ACKNOWLEDGED = set()\ndef execute(adapter, command):\n    if command.id not in ACKNOWLEDGED:\n        adapter.send(command)\n        ACKNOWLEDGED.add(command.id)",
+      "impact": "Redelivery after restart can repeat watering, while a timeout or uncertain acknowledgement can be falsely treated as safely completed.",
+      "required_change": "Persist idempotency keys and explicit execution transitions before/after adapter interaction, and fail safe for timeout, restart, uncertain state, and late acknowledgement.",
+      "suggested_test": "Simulate duplicate delivery, process restart, timeout, late acknowledgement, and storage failure with one command identifier and assert at-most-once physical dispatch plus an observable safe state."
+    },
+    {
+      "id": "RV05-F-003",
+      "severity": "BLOCKER",
+      "category": "safety",
+      "location": "app/guardrails.py",
+      "finding": "A state with no observed_at timestamp is assigned age zero and therefore accepted as fresh.",
+      "evidence": "The conditional expression uses 0 when observed_at is absent, and the following comparison accepts that value.",
+      "evidence_excerpt": "age_seconds = (now - state[\"observed_at\"]).total_seconds() if state.get(\"observed_at\") else 0\nreturn age_seconds <= 300",
+      "impact": "Missing or unknown-age telemetry can authorize a physical watering action instead of failing safe.",
+      "required_change": "Reject missing, malformed, future, naive/incompatible, or stale timestamps and use an explicit timezone-aware UTC freshness check before authorization.",
+      "suggested_test": "Test missing, null, malformed, future, timezone-naive, boundary-age, and stale observed_at values and assert only valid timezone-aware fresh state is accepted."
+    },
+    {
+      "id": "RV05-F-004",
+      "severity": "HIGH",
+      "category": "tests",
+      "location": "implementation_report.manual_evidence",
+      "finding": "Required physical-action simulation, restart/failure-injection, supervised hardware, and availability rehearsal evidence is missing.",
+      "evidence": "The report states only generic unit/fake-adapter CI and explicitly records the supervised safe-hardware and restart rehearsal as not run; it does not identify the mandatory duplicate, retry, timeout, late-acknowledgement, restart, stale, Guardrails, storage-failure, abort, or rollback checks.",
+      "evidence_excerpt": "NOT RUN: supervised safe-hardware and restart rehearsal",
+      "impact": "The high-risk exit criteria remain open, so neither safe physical behavior nor recoverability is established even if generic CI passed.",
+      "required_change": "Provide PASS evidence for every required deterministic fake-path check and an explicit human-owned safe-hardware, abort, rollback, and restart rehearsal, or keep the change unapproved until that evidence exists.",
+      "suggested_test": "manual: Run the approved supervised safe-hardware and restart/rollback procedure with a human safety owner, bounded action, manual abort, and recorded post-rollback health."
+    }
+  ],
+  "contract_consumer_review": "The proposed command/suggestion fields have no explicit version, units, ranges, identifier semantics, producer, or consumer list. The adapter path bypasses the required cross-owner Control candidate -> Guardrails -> Executor contract, and the command identifier is not shown to persist across restart. No old/current replay or approved edge-adapter compatibility evidence is supplied.",
+  "evidence_matrix": [
+    {
+      "check": "SHA-256 verification for all three supplied patch artifacts",
+      "status": "PASS",
+      "manual": false
+    },
+    {
+      "check": "Reported generic unit tests and fake-adapter CI",
+      "status": "PASS",
+      "manual": false
+    },
+    {
+      "check": "Full baseline pytest, lint, format, and type checks",
+      "status": "NOT_RUN",
+      "manual": false
+    },
+    {
+      "check": "Named Guardrails, duplicate, retry, timeout, late-acknowledgement, restart, stale/low-confidence, and storage-failure simulations",
+      "status": "NOT_RUN",
+      "manual": false
+    },
+    {
+      "check": "Architecture and fail-safe inspection of the supplied execution path",
+      "status": "FAIL",
+      "manual": false
+    },
+    {
+      "check": "Supervised safe-hardware, abort, restart, and rollback evidence",
+      "status": "NOT_RUN",
+      "manual": true
+    }
+  ],
+  "operations_safety_security_privacy": "The patch is unsafe for physical execution: it creates a direct adapter path, volatile deduplication, false acknowledgement semantics, and fail-open freshness. There is no bounded retry/timeout policy, durable audit transition, storage-failure behavior, manual override, abort boundary, rollback owner, or post-restart health evidence. No production access or real hardware was used during this review.",
+  "documentation_assessment": "No versioned action contract, operator procedure, abort/rollback instruction, or current-state update is included. The brief's claim that repeated commands and freshness are handled safely is contradicted by the patch, and its high-risk evidence plan is incomplete.",
+  "follow_ups": [],
+  "limitations": [
+    "Review was limited to the approved case brief, implementation report, governing context pack, and the three hash-verified supplied patches.",
+    "No runtime source outside the supplied patches, CI logs, hardware evidence, production infrastructure, or production secrets were inspected."
+  ]
+}

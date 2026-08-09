@@ -1,0 +1,119 @@
+{
+  "schema": "senior-pomidor.review-report.v1",
+  "title": "Review of Compose image and rehearsal profile update",
+  "case_id": "RV-07",
+  "reviewer_version": "1.0",
+  "reviewer_hash": "d98d2797c73aaa71b6f2401541d4f7b3248dd033d141b639f48e95eaa5e9471b",
+  "verdict": "REQUEST CHANGES",
+  "rationale": "The Compose change replaces a required immutable application image with an implicit latest fallback and explicitly enables Grafana Cloud export in the rehearsal profile. Active external export from rehearsal is prohibited and is a release blocker. Generic Compose/CI evidence, with the isolated rehearsal and external-write inspection not run, does not establish security, isolation, rollback, or availability safety.",
+  "classification": {
+    "task_classes": [
+      "infrastructure_deployment"
+    ],
+    "risk_flags": [
+      "production_availability",
+      "security_secrets"
+    ],
+    "sp_fail_ids": [
+      "SP-FAIL-001",
+      "SP-FAIL-003",
+      "SP-FAIL-004"
+    ]
+  },
+  "scope_architecture": "Both changed Compose files are within the stated image/rehearsal scope, but neither behavior is acceptable under the operational invariants. Convenience cannot replace the required APP_IMAGE contract, and rehearsal observability must remain local with cloud-export absent. The brief lacks an explicit isolated target, zero-remote-write acceptance criterion, failure injection, rollback owner, and post-rollback health check for its high-risk flags.",
+  "findings": [
+    {
+      "id": "RV07-F-001",
+      "severity": "HIGH",
+      "category": "operations",
+      "location": "docker-compose.yml",
+      "finding": "APP_IMAGE no longer fails when missing and silently falls back to the mutable latest tag.",
+      "evidence": "The required-variable interpolation is replaced by a default value of latest.",
+      "evidence_excerpt": "image: ${APP_IMAGE:-latest}",
+      "impact": "Local, CI, rehearsal, or release commands can run an unintended image, making evidence non-reproducible and risking candidate/production drift.",
+      "required_change": "Restore a clear required APP_IMAGE failure and use an explicit immutable candidate tag or digest in every rendered configuration and rehearsal record.",
+      "suggested_test": "Render the exact Compose overlays and profiles with APP_IMAGE absent and assert a clear failure, then render with an explicit candidate image and verify the resolved image identity."
+    },
+    {
+      "id": "RV07-F-002",
+      "severity": "BLOCKER",
+      "category": "operations",
+      "location": "docker-compose.rehearsal.yml",
+      "finding": "The rehearsal profile explicitly enables the Grafana Cloud exporter.",
+      "evidence": "The added rehearsal service sets GRAFANA_CLOUD_EXPORT_ENABLED to true.",
+      "evidence_excerpt": "grafana-cloud-exporter:\n  profiles: [rehearsal]\n  environment:\n    GRAFANA_CLOUD_EXPORT_ENABLED: \"true\"",
+      "impact": "An isolated rehearsal can transmit data externally, duplicate public metrics, consume production-like credentials, and violate the hard boundary that remote writes remain zero.",
+      "required_change": "Remove cloud-export from the rehearsal topology and enforce external export disabled in rendered config and runtime verification.",
+      "suggested_test": "Render the rehearsal profile and verify the cloud exporter is absent, no cloud credential variables are consumed, and a bounded isolated rehearsal records zero remote writes."
+    },
+    {
+      "id": "RV07-F-003",
+      "severity": "HIGH",
+      "category": "tests",
+      "location": "implementation_report.manual_evidence",
+      "finding": "Required isolated rehearsal, failure/recovery, rollback, and zero-external-write evidence is explicitly missing.",
+      "evidence": "The implementation report records the isolated rehearsal and external-write inspection as not run, despite the production_availability risk and the patch's direct rehearsal-topology change.",
+      "evidence_excerpt": "NOT RUN: isolated rehearsal and external-write inspection",
+      "impact": "Availability, isolation, recovery, and export containment are unproved for a high-risk topology change.",
+      "required_change": "Run the approved isolated candidate rehearsal with local-only targets, failure injection, rollback, post-rollback health/data checks, and recorded zero remote writes.",
+      "suggested_test": "manual: Rehearse the immutable candidate in a distinct Compose project with loopback ports, isolated paths and credentials, external export disabled, injected startup failure, rollback, and post-rollback health verification."
+    },
+    {
+      "id": "RV07-F-004",
+      "severity": "HIGH",
+      "category": "security",
+      "location": "implementation_report.automated_evidence",
+      "finding": "The security_secrets flag has no reported security, dependency-audit, secret-safe diff, or threat/rollback evidence.",
+      "evidence": "The only automated statement is generic Compose config and CI; no named nox security or dependency audit result is supplied, while the patch adds an external exporter path.",
+      "evidence_excerpt": "PASS: Compose config and CI",
+      "impact": "Credential handling, accidental inclusion, dependency exposure, and external-surface rollback remain unchecked.",
+      "required_change": "Provide explicit PASS results for the required security and dependency audit commands plus a secret-safe diff/evidence review and threat/rollback assessment.",
+      "suggested_test": "Run nox -s security deps_audit and verify the rendered rehearsal configuration contains no credential values or external-export endpoint."
+    }
+  ],
+  "contract_consumer_review": "APP_IMAGE is an environment/deployment contract consumed by every Compose invocation, CI job, local operator, rehearsal, and release workflow; changing it to latest is an unsafe compatibility change without a rollout or release note. The rehearsal exporter addition affects metrics/export consumers and credential inputs, but no bounded projection, consumer inventory, or explicit zero-write compatibility behavior is provided.",
+  "evidence_matrix": [
+    {
+      "check": "SHA-256 verification for the supplied patch artifact",
+      "status": "PASS",
+      "manual": false
+    },
+    {
+      "check": "Reported generic Compose config and CI",
+      "status": "PASS",
+      "manual": false
+    },
+    {
+      "check": "Missing APP_IMAGE fails clearly and explicit candidate image resolves immutably",
+      "status": "FAIL",
+      "manual": false
+    },
+    {
+      "check": "Rendered rehearsal excludes cloud-export and remote writes",
+      "status": "FAIL",
+      "manual": false
+    },
+    {
+      "check": "Full baseline pytest, quality checks, and exact changed-overlay/profile validation",
+      "status": "NOT_RUN",
+      "manual": false
+    },
+    {
+      "check": "nox security and dependency audit with secret-safe diff review",
+      "status": "NOT_RUN",
+      "manual": false
+    },
+    {
+      "check": "Isolated candidate rehearsal, failure recovery, rollback, health, and zero remote writes",
+      "status": "NOT_RUN",
+      "manual": true
+    }
+  ],
+  "operations_safety_security_privacy": "The change violates two explicit operational safeguards: image identity must be required and deterministic, and rehearsal must not enable external export. No proof is supplied for distinct project identity, loopback-only ports, isolated paths/credentials, absent production targets, failure recovery, rollback, post-rollback health, or zero remote writes. The application must not manage shared platform services. No production credentials or private infrastructure were accessed in this review.",
+  "documentation_assessment": "No operator/rehearsal documentation, environment-contract update, threat analysis, rollback instructions, or release note accompanies the behavior changes. The stated goal of rehearsal observability does not authorize remote export and should be documented as local-only.",
+  "follow_ups": [],
+  "limitations": [
+    "Review was limited to the approved case brief, implementation report, governing context pack, and the hash-verified supplied patch.",
+    "No Compose runtime, network traffic, CI logs, credentials, production infrastructure, or external service was accessed."
+  ]
+}
