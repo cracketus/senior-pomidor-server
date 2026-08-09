@@ -84,8 +84,12 @@ def _sha256(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def _text_artifact_bytes(path: Path) -> bytes:
+    return path.read_bytes().replace(b"\r\n", b"\n")
+
+
 def _file_sha256(path: Path) -> str:
-    return _sha256(path.read_bytes())
+    return _sha256(_text_artifact_bytes(path))
 
 
 def _repo_path(value: str) -> Path:
@@ -115,7 +119,7 @@ def _artifact_bytes(artifact: dict[str, Any], *, label: str) -> bytes:
         path = _repo_path(_string(artifact, "path", label=label))
         if not path.is_file():
             raise ValueError(f"Missing patch artifact: {path.relative_to(ROOT)}")
-        return path.read_bytes()
+        return _text_artifact_bytes(path)
     if kind == "git_diff":
         return _git_diff(_string(artifact, "revision", label=label))
     raise ValueError(f"{label}.kind must be patch or git_diff")

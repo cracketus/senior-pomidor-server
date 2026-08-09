@@ -1,0 +1,93 @@
+version: 1
+core_file: .ai/CORE_INVARIANTS.md
+full_context_files:
+  - .ai/PROJECT.md
+  - .ai/CURRENT_STATE.md
+  - .ai/ARCHITECTURE_RULES.md
+  - .ai/SAFETY_RULES.md
+  - .ai/DEVELOPMENT_RULES.md
+  - .ai/KNOWN_FAILURES.md
+  - .ai/known-failures.yaml
+  - .ai/TEST_MATRIX.md
+  - .ai/test-matrix.yaml
+role_files:
+  planner: .ai/agents/feature-planner.md
+  coder: .ai/agents/coding-agent.md
+  reviewer: .ai/agents/reviewer.md
+full_context_flags:
+  - physical_action
+  - data_loss_migration
+  - security_secrets
+  - edge_server_compatibility
+  - production_availability
+  - public_contract
+task_class_context:
+  pure_software: [.ai/DEVELOPMENT_RULES.md]
+  schema_data_contract: [.ai/ARCHITECTURE_RULES.md, docs/CONTRACTS.md]
+  infrastructure_deployment: [.ai/SAFETY_RULES.md, docs/OPERATIONS.md]
+  edge_hardware_integration: [.ai/ARCHITECTURE_RULES.md, .ai/SAFETY_RULES.md, docs/PI_INTEGRATION_RUNBOOK.md]
+  control_guardrails_executor: [.ai/ARCHITECTURE_RULES.md, .ai/SAFETY_RULES.md]
+  llm_vision: [.ai/SAFETY_RULES.md, docs/PUBLIC_DATA_POLICY.md]
+  documentation_only: [.ai/DEVELOPMENT_RULES.md]
+risk_flag_context:
+  physical_action: [.ai/ARCHITECTURE_RULES.md, .ai/SAFETY_RULES.md]
+  data_loss_migration: [.ai/SAFETY_RULES.md, docs/OPERATIONS.md]
+  security_secrets: [.ai/SAFETY_RULES.md]
+  edge_server_compatibility: [.ai/ARCHITECTURE_RULES.md, docs/CONTRACTS.md]
+  production_availability: [.ai/SAFETY_RULES.md, docs/OPERATIONS.md]
+  public_contract: [.ai/ARCHITECTURE_RULES.md, docs/PUBLIC_DATA_POLICY.md]
+path_rules:
+  - id: agent_contracts
+    patterns: [AGENTS.md, .ai/**, docs/AGENT_TASK_WORKFLOW.md]
+    task_classes: [pure_software]
+    include: [.ai/DEVELOPMENT_RULES.md]
+    known_failures: [SP-FAIL-014, SP-FAIL-015]
+  - id: python_tools_tests
+    patterns: [tools/**, tests/**, noxfile.py, pyproject.toml]
+    task_classes: [pure_software]
+    include: [.ai/DEVELOPMENT_RULES.md]
+    known_failures: [SP-FAIL-014, SP-FAIL-015]
+  - id: application_python
+    patterns: [app/**]
+    task_classes: [pure_software]
+    include: [.ai/PROJECT.md, .ai/DEVELOPMENT_RULES.md]
+  - id: schema_contract
+    patterns: [docs/schemas/**, tests/fixtures/contracts/**, app/validation.py, app/telemetry.py]
+    task_classes: [schema_data_contract]
+    risk_flags: [public_contract, edge_server_compatibility]
+    known_failures: [SP-FAIL-009, SP-FAIL-010, SP-FAIL-011]
+  - id: durable_data
+    patterns: [migrations/**, app/models.py, app/db.py, deploy/scripts/backup*, deploy/scripts/restore*]
+    task_classes: [schema_data_contract, infrastructure_deployment]
+    risk_flags: [data_loss_migration, production_availability]
+    known_failures: [SP-FAIL-004, SP-FAIL-005]
+  - id: infrastructure
+    patterns: [.github/**, docker/**, docker-compose*.yml, deploy/**]
+    task_classes: [infrastructure_deployment]
+    risk_flags: [production_availability]
+    known_failures: [SP-FAIL-001, SP-FAIL-002, SP-FAIL-003, SP-FAIL-004]
+  - id: security
+    patterns: [app/auth*, deploy/scripts/provision*, requirements*.txt, pyproject.toml]
+    task_classes: [pure_software]
+    risk_flags: [security_secrets]
+    known_failures: [SP-FAIL-016]
+  - id: edge
+    patterns: [app/mqtt_worker.py, tools/edge_readiness.py, tools/pi_camera_smoke_test.py, docs/PI_INTEGRATION_RUNBOOK.md]
+    task_classes: [edge_hardware_integration]
+    risk_flags: [edge_server_compatibility]
+    known_failures: [SP-FAIL-006, SP-FAIL-007, SP-FAIL-008, SP-FAIL-017]
+  - id: control
+    patterns: [app/control/**, app/guardrails/**, app/executor/**, app/action_simulation.py]
+    task_classes: [control_guardrails_executor]
+    risk_flags: [physical_action]
+  - id: model_output
+    patterns: [app/ollama.py, app/ai_analysis.py, app/daily_story*, app/assistant/**]
+    task_classes: [llm_vision]
+    known_failures: [SP-FAIL-012, SP-FAIL-013]
+  - id: documentation
+    patterns: [README.md, docs/**, '*.md']
+    task_classes: [documentation_only]
+unknown_path:
+  task_classes: [pure_software]
+  force_full_context: true
+  reason: unknown_path_fail_safe

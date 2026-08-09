@@ -552,7 +552,16 @@ FINDINGS: dict[str, list[tuple[str, dict[str, str]]]] = {
 
 
 def _hash(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    return hashlib.sha256(path.read_bytes().replace(b"\r\n", b"\n")).hexdigest()
+
+
+def test_reviewer_text_hashes_are_stable_across_line_endings(tmp_path: Path) -> None:
+    lf = tmp_path / "lf.json"
+    crlf = tmp_path / "crlf.json"
+    lf.write_bytes(b'{"value": 1}\n')
+    crlf.write_bytes(b'{"value": 1}\r\n')
+
+    assert _hash(lf) == _hash(crlf)
 
 
 def _write_json(path: Path, value: Any) -> None:

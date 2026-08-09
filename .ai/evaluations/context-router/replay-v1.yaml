@@ -1,0 +1,14 @@
+version: 1
+source_revision: fdd8aa9addd4398fc9db64b8de012782850f103e
+measurement: Unicode characters in selected files plus compact selected check/failure records
+cases:
+  - id: reviewer_129_130_session
+    role: reviewer
+    changed_files:
+      - .ai/evaluations/reviewer/cases/v2.json
+      - .ai/evaluations/reviewer/oracles/v6.json
+      - tests/test_reviewer_evaluation.py
+      - tools/evaluate_reviewer.py
+    legacy_full_context_characters: 73925
+    minimum_reduction_fraction: 0.35
+    notes: Baseline is the merged full Reviewer context pack before TOMATO-AI-40 deduplication.
