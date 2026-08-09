@@ -1,0 +1,55 @@
+name: Feature request requiring planning
+description: Propose a bounded feature that needs a Planner brief before coding.
+title: "[Feature]: "
+labels:
+  - "workflow:feature"
+  - "status:needs-planning"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe the observable outcome. Coding starts only after a human-approved Implementation Brief.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem and desired outcome
+      description: What is wrong or missing, who is affected, and what measurable behavior should change?
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Current behavior and evidence
+      description: Link logs, tests, files, issues, or reproducible steps. Do not include secrets or private data.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Affected environment and consumers
+      description: Identify server, edge, API/MQTT, storage, dashboard, export, or documentation consumers; use Unknown when unverified.
+    validations:
+      required: true
+  - type: checkboxes
+    id: risks
+    attributes:
+      label: Risk flags
+      options:
+        - label: physical action or hardware
+        - label: data loss or migration
+        - label: public/schema contract
+        - label: security or secrets
+        - label: deployment or production availability
+  - type: input
+    id: brief
+    attributes:
+      label: Implementation Brief link
+      description: Link the approved brief when planning is complete; leave empty while requesting planning.
+      placeholder: https://github.com/cracketus/senior-pomidor-server/issues/...
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: List observable PASS/FAIL criteria, required tests, manual evidence, rollback, and documentation.
+    validations:
+      required: true

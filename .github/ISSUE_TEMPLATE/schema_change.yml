@@ -1,0 +1,52 @@
+name: Schema or contract change
+description: Propose a versioned API, MQTT, storage, fixture, or public-data contract change.
+title: "[Schema]: "
+labels:
+  - "workflow:schema"
+  - "risk:schema"
+  - "status:needs-planning"
+body:
+  - type: textarea
+    id: contract
+    attributes:
+      label: Contract and desired change
+      description: Name the schema/version, producer, consumers, units, ranges, timezone, and optional fields.
+    validations:
+      required: true
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Compatibility and rollout
+      description: Describe old fixtures/data, mixed-version behavior, edge/API/storage/dashboard/export consumers, and retirement plan.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Current evidence
+      description: Link schemas, fixtures, transport tests, and known failures. Mark unavailable consumers Unknown.
+    validations:
+      required: true
+  - type: checkboxes
+    id: risks
+    attributes:
+      label: Additional risks
+      options:
+        - label: data loss or migration
+        - label: edge compatibility
+        - label: public contract
+        - label: security or secrets
+  - type: input
+    id: brief
+    attributes:
+      label: Approved Implementation Brief
+      description: Required before coding.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria and rollback
+      description: Include transport/persistence/consumer tests, manual evidence, migration checks, and rollback.
+    validations:
+      required: true

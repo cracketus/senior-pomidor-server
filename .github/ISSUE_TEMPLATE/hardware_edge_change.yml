@@ -1,0 +1,44 @@
+name: Hardware or edge integration
+description: Propose a Raspberry Pi, sensor, camera, network, GPIO, or actuator integration change.
+title: "[Edge]: "
+labels:
+  - "workflow:hardware"
+  - "area:edge"
+  - "risk:physical"
+  - "status:needs-planning"
+body:
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Desired behavior and physical boundary
+      description: Identify the edge/server contract and explicitly state whether any physical action is involved.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Reproduction and evidence
+      description: Include safe fixture IDs, layer-by-layer network evidence, fake-hardware tests, and manual observations when available.
+    validations:
+      required: true
+  - type: textarea
+    id: safety
+    attributes:
+      label: Safety, abort, and rollback
+      description: State stale/missing input behavior, supervision owner, manual abort, safe default, rollback, and what CI cannot prove.
+    validations:
+      required: true
+  - type: input
+    id: brief
+    attributes:
+      label: Approved Implementation Brief
+      description: Required before coding.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Separate automated, rehearsal, and supervised physical evidence; mark unavailable evidence NOT RUN.
+    validations:
+      required: true

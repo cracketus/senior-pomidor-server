@@ -1,0 +1,63 @@
+name: Bug or incident
+description: Report a reproducible defect or incident with bounded evidence.
+title: "[Bug]: "
+labels:
+  - "workflow:bugfix"
+  - "status:needs-planning"
+body:
+  - type: textarea
+    id: observed
+    attributes:
+      label: Observed behavior
+      description: What happened? Include timestamps in UTC and safe, redacted evidence.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction and evidence
+      description: Exact bounded commands, fixture IDs, tests, logs, or screenshots. Never include secrets.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Affected environment
+      description: OS, component, version/commit, edge or server surface, and whether production is involved. Mark unknown facts Unknown.
+    validations:
+      required: true
+  - type: checkboxes
+    id: risks
+    attributes:
+      label: Risk flags
+      options:
+        - label: physical action or hardware
+        - label: data loss or migration
+        - label: public/schema contract
+        - label: security or secrets
+        - label: deployment or production availability
+  - type: textarea
+    id: mitigation
+    attributes:
+      label: Safe mitigation and rollback
+      description: State current safe behavior, abort boundary, rollback, and owner. Do not propose production access for an agent.
+    validations:
+      required: true
+  - type: input
+    id: brief
+    attributes:
+      label: Implementation Brief link
+      description: Link the approved brief before coding.
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: List the regression test, manual evidence, rollback, and documentation required to close the bug.
+    validations:
+      required: true
