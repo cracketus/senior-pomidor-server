@@ -11,10 +11,13 @@ import socket
 # This bounded local workflow intentionally invokes only Git and Docker argv lists.
 import subprocess  # nosec B404
 import sys
+import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+
+from tools.agent_context import RISK_FLAGS, TASK_CLASSES
 
 ISSUE_RE = re.compile(r"[A-Z][A-Z0-9-]*-\d+")
 SLUG_RE = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
@@ -117,6 +120,40 @@ def ensure_clean_worktree(path: Path) -> None:
     status = _run(["git", "status", "--porcelain"], cwd=path).stdout.strip()
     if status:
         raise AgentTaskError(f"worktree is dirty; commit, stash, or explicitly handle changes first: {path}")
+
+
+def _branch_exists(context: RepositoryContext, branch: str) -> bool:
+    return (
+        _run(["git", "show-ref", "--verify", f"refs/heads/{branch}"], cwd=context.checkout_root, check=False).returncode
+        == 0
+    )
+
+
+def _preflight_git_write(context: RepositoryContext) -> None:
+    """Prove local ref-lock writability before allocating ports or creating task metadata."""
+    refs = context.git_common_dir / "refs" / "heads"
+    probe = refs / f".agent-task-write-probe-{os.getpid()}-{uuid.uuid4().hex}.lock"
+    descriptor: int | None = None
+    try:
+        descriptor = os.open(probe, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    except OSError as exc:
+        raise AgentTaskError("Git refs are not writable; no task allocation was created") from exc
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
+            try:
+                probe.unlink()
+            except OSError as exc:
+                raise AgentTaskError(
+                    "Git write probe could not be removed; inspect the repository before retrying"
+                ) from exc
+
+
+def _validate_classification(values: tuple[str, ...], allowed: tuple[str, ...], label: str) -> tuple[str, ...]:
+    unknown = set(values) - set(allowed)
+    if unknown:
+        raise AgentTaskError(f"unknown {label}: {sorted(unknown)[0]}")
+    return tuple(dict.fromkeys(values))
 
 
 def _state_root(context: RepositoryContext) -> Path:
@@ -257,9 +294,18 @@ def _creation_checkpoint(stage: str) -> None:
 
 
 def create_task(
-    context: RepositoryContext, issue: str, slug: str, kind: str, *, worktree: bool = True
+    context: RepositoryContext,
+    issue: str,
+    slug: str,
+    kind: str,
+    *,
+    worktree: bool = True,
+    task_classes: tuple[str, ...] = (),
+    risk_flags: tuple[str, ...] = (),
 ) -> dict[str, Any]:
     issue, slug = validate_identity(issue, slug, kind)
+    task_classes = _validate_classification(task_classes, TASK_CLASSES, "task class")
+    risk_flags = _validate_classification(risk_flags, RISK_FLAGS, "risk flag")
     ensure_clean_worktree(context.checkout_root)
     key = task_key(issue, slug)
     state_root = _state_root(context)
@@ -267,7 +313,11 @@ def create_task(
     if task_dir.exists():
         raise AgentTaskError(f"agent task already exists: {key}")
     branch = f"{kind}/{issue}-{slug}"
+    if _branch_exists(context, branch):
+        raise AgentTaskError(f"branch already exists: {branch}")
+    _preflight_git_write(context)
     worktree_path = context.control_root / ".agent-worktrees" / key if worktree else context.checkout_root
+    source_head = _run(["git", "rev-parse", "HEAD"], cwd=context.checkout_root).stdout.strip()
     port_base, allocation = _allocate_port_block(state_root, key)
     task_dir.mkdir(parents=True)
     metadata: dict[str, Any] = {
@@ -283,6 +333,9 @@ def create_task(
         "port_base": port_base,
         "allocation_file": str(allocation.resolve()),
         "created_at_utc": datetime.now(UTC).isoformat(),
+        "source_head": source_head,
+        "task_classes": list(task_classes),
+        "risk_flags": list(risk_flags),
         "compose_running": False,
         "status": "creating",
         "creation_stage": "metadata",
@@ -307,12 +360,7 @@ def create_task(
         stage = "branch-check"
         metadata["creation_stage"] = stage
         _write_metadata(task_dir, metadata)
-        if (
-            _run(
-                ["git", "show-ref", "--verify", f"refs/heads/{branch}"], cwd=context.checkout_root, check=False
-            ).returncode
-            == 0
-        ):
+        if _branch_exists(context, branch):
             raise AgentTaskError(f"branch already exists: {branch}")
         stage = "branch"
         metadata["creation_stage"] = stage
@@ -346,8 +394,8 @@ def create_task(
         stage = "finalize"
         metadata["creation_stage"] = stage
         _write_metadata(task_dir, metadata)
-        head = _run(["git", "rev-parse", "HEAD"], cwd=context.checkout_root).stdout.strip()
-        metadata["source_head"] = head
+        task_checkout = worktree_path if worktree else context.checkout_root
+        metadata["task_head"] = _run(["git", "rev-parse", "HEAD"], cwd=task_checkout).stdout.strip()
         metadata["status"] = "active"
         metadata["creation_stage"] = "complete"
         _write_metadata(task_dir, metadata)
@@ -364,6 +412,100 @@ def create_task(
             )
         if worktree and stage in {"worktree", "environment", "finalize"}:
             metadata["resources"]["worktree_created"] = worktree_path.is_dir()
+        metadata["status"] = "creation_failed"
+        metadata["creation_stage"] = stage
+        metadata["creation_failed_at_utc"] = datetime.now(UTC).isoformat()
+        metadata["creation_error"] = f"{type(exc).__name__}: {exc}"
+        _write_metadata(task_dir, metadata)
+        raise
+
+
+def resume_task(
+    context: RepositoryContext,
+    key: str,
+    *,
+    use_current_checkout: bool = False,
+    task_classes: tuple[str, ...] = (),
+    risk_flags: tuple[str, ...] = (),
+) -> dict[str, Any]:
+    """Safely reconcile and finish a task whose creation stopped partway."""
+    task_dir, metadata = load_task(context, key)
+    task_classes = _validate_classification(task_classes, TASK_CLASSES, "task class")
+    risk_flags = _validate_classification(risk_flags, RISK_FLAGS, "risk flag")
+    metadata["task_classes"] = sorted(set(metadata.get("task_classes", ())) | set(task_classes))
+    metadata["risk_flags"] = sorted(set(metadata.get("risk_flags", ())) | set(risk_flags))
+    if metadata.get("status") == "active":
+        _write_metadata(task_dir, metadata)
+        return metadata
+    if metadata.get("status") not in {"creating", "creation_failed"}:
+        raise AgentTaskError("only a creating or creation_failed task can be resumed")
+    use_current_checkout = use_current_checkout or metadata.get("uses_worktree") is False
+    branch = metadata.get("branch")
+    port_base = metadata.get("port_base")
+    if not isinstance(branch, str) or not isinstance(port_base, int):
+        raise AgentTaskError("partial task metadata has no valid branch or port allocation")
+    allocation = _allocation_path(_state_root(context), port_base)
+    if not allocation.is_file() or _allocation_owner(allocation) != key:
+        raise AgentTaskError("partial task allocation is missing or belongs to another task")
+    recorded_allocation = metadata.get("allocation_file")
+    if recorded_allocation and Path(recorded_allocation).resolve() != allocation.resolve():
+        raise AgentTaskError("partial task allocation path is inconsistent")
+
+    stage = "resume"
+    metadata["status"] = "creating"
+    metadata["resumed_at_utc"] = datetime.now(UTC).isoformat()
+    _write_metadata(task_dir, metadata)
+    try:
+        current_branch = _run(["git", "branch", "--show-current"], cwd=context.checkout_root).stdout.strip()
+        if not _branch_exists(context, branch):
+            _preflight_git_write(context)
+            source_head = metadata.get("source_head", "HEAD")
+            _run(["git", "branch", branch, str(source_head)], cwd=context.checkout_root)
+            metadata.setdefault("resources", {})["branch_created"] = True
+        elif not metadata.get("resources", {}).get("branch_created"):
+            if not use_current_checkout or current_branch != branch:
+                raise AgentTaskError(
+                    "existing branch is not proven task-owned; use the exact checked-out branch explicitly"
+                )
+            metadata.setdefault("resources", {})["branch_created"] = True
+
+        if use_current_checkout:
+            if current_branch != branch:
+                ensure_clean_worktree(context.checkout_root)
+                _run(["git", "switch", branch], cwd=context.checkout_root)
+            metadata["uses_worktree"] = False
+            metadata["worktree"] = str(context.checkout_root.resolve())
+            metadata["resources"]["worktree_created"] = False
+            task_checkout = context.checkout_root
+        else:
+            task_checkout = Path(metadata["worktree"])
+            if task_checkout.is_dir():
+                observed = _run(["git", "branch", "--show-current"], cwd=task_checkout).stdout.strip()
+                if observed != branch:
+                    raise AgentTaskError("existing partial worktree belongs to another branch")
+            else:
+                if current_branch == branch:
+                    raise AgentTaskError(
+                        "task branch is checked out in the control checkout; resume with --no-worktree"
+                    )
+                task_checkout.parent.mkdir(parents=True, exist_ok=True)
+                _run(["git", "worktree", "add", str(task_checkout), branch], cwd=context.checkout_root)
+            metadata["resources"]["worktree_created"] = True
+
+        stage = "environment"
+        environment = build_environment(task_dir, key, port_base)
+        env_path = task_dir / "agent.env"
+        _write_env(env_path, environment)
+        metadata["env_file"] = str(env_path.resolve())
+        metadata["resources"]["environment_created"] = True
+        metadata["task_head"] = _run(["git", "rev-parse", "HEAD"], cwd=task_checkout).stdout.strip()
+        metadata["status"] = "active"
+        metadata["creation_stage"] = "complete"
+        metadata.pop("creation_error", None)
+        metadata.pop("creation_failed_at_utc", None)
+        _write_metadata(task_dir, metadata)
+        return metadata
+    except Exception as exc:
         metadata["status"] = "creation_failed"
         metadata["creation_stage"] = stage
         metadata["creation_failed_at_utc"] = datetime.now(UTC).isoformat()
@@ -711,6 +853,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     create.add_argument("--slug", required=True)
     create.add_argument("--kind", choices=("feature", "fix"), default="feature")
     create.add_argument("--no-worktree", action="store_true")
+    create.add_argument("--task-class", action="append", choices=TASK_CLASSES, default=[])
+    create.add_argument("--risk-flag", action="append", choices=RISK_FLAGS, default=[])
+    resume = subparsers.add_parser("resume", help="safely finish a partial task creation")
+    resume.add_argument("task_key")
+    resume.add_argument("--no-worktree", action="store_true")
+    resume.add_argument("--task-class", action="append", choices=TASK_CLASSES, default=[])
+    resume.add_argument("--risk-flag", action="append", choices=RISK_FLAGS, default=[])
     inspect = subparsers.add_parser("inspect", help="print secret-free task metadata")
     inspect.add_argument("task_key")
     compose = subparsers.add_parser("compose", help="run one bounded local Compose action")
@@ -732,7 +881,23 @@ def main(argv: list[str] | None = None) -> int:
         args = parse_args(argv)
         context = repository_context()
         if args.command == "create":
-            result = create_task(context, args.issue, args.slug, args.kind, worktree=not args.no_worktree)
+            result = create_task(
+                context,
+                args.issue,
+                args.slug,
+                args.kind,
+                worktree=not args.no_worktree,
+                task_classes=tuple(args.task_class),
+                risk_flags=tuple(args.risk_flag),
+            )
+        elif args.command == "resume":
+            result = resume_task(
+                context,
+                args.task_key,
+                use_current_checkout=args.no_worktree,
+                task_classes=tuple(args.task_class),
+                risk_flags=tuple(args.risk_flag),
+            )
         elif args.command == "inspect":
             _, result = load_task(context, args.task_key)
         elif args.command == "compose":

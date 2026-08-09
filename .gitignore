@@ -17,6 +17,7 @@ backups/
 .agent-tasks/
 .agent-worktrees/
 .agent-usage/
+.agent-validation-tmp-*/
 /migration-rehearsal/
 /journalctl_outage.txt
 /docs/migration-check.txt
