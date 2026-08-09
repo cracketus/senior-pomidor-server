@@ -16,6 +16,7 @@ backups/
 .codex-pi-key*
 .agent-tasks/
 .agent-worktrees/
+.agent-usage/
 /migration-rehearsal/
 /journalctl_outage.txt
 /docs/migration-check.txt

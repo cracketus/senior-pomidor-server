@@ -23,7 +23,7 @@ Owner: repository maintainer. Review with CI/tooling changes and quarterly. The 
 
 ## Validation and handoff
 
-- Run every required check selected by [`TEST_MATRIX.md`](TEST_MATRIX.md), plus focused tests during iteration.
+- Run every required check selected by canonical [`test-matrix.yaml`](test-matrix.yaml), plus focused tests during iteration.
 - Report exact commands and outcomes. Label checks `PASS`, `FAIL`, or `NOT RUN` with a reason; never imply manual/physical success from CI.
 - Review the final diff for debug artifacts, accidental secrets, unrelated files, contract drift, rollback gaps, and known-failure regressions.
 - Reviewer follows [`agents/reviewer.md`](agents/reviewer.md) in a separate read-only session/context,
@@ -38,8 +38,10 @@ Owner: repository maintainer. Review with CI/tooling changes and quarterly. The 
 | --- | --- |
 | `PROJECT.md`, `ARCHITECTURE_RULES.md`, `SAFETY_RULES.md` | approved stable architecture/safety decision; quarterly verification |
 | `CURRENT_STATE.md` | release, topology/contract/subsystem/season/rehearsal change; monthly in active season |
-| `KNOWN_FAILURES.md` | incident or newly validated resolution; review during each related brief |
-| `TEST_MATRIX.md` and YAML | test/CI/risk change; keep both representations in the same change |
+| `known-failures.yaml` | incident or validated resolution; regenerate the compact Markdown index |
+| `test-matrix.yaml` | test/CI/risk change; regenerate the Markdown summary |
 | `AGENTS.md`, agent/workflow/template files | routing or planning-contract change; keep links and evaluation fixtures synchronized |
 
 Changes to the context pack receive the same review as code. Do not place transient chat context or sensitive operational values in it.
+Run `python -m tools.ai_context_docs` to reject generated-summary drift. Legacy full-pack integrations
+remain supported for one release cycle through `tools.agent_context --full`.

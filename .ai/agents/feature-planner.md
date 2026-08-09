@@ -8,7 +8,9 @@ Convert an unstructured feature, bug, incident, schema, infrastructure, or hardw
 
 ## Mandatory inputs and reading order
 
-1. Read root [`AGENTS.md`](../../AGENTS.md) and the complete context-pack order it defines.
+1. Read root [`AGENTS.md`](../../AGENTS.md), [`CORE_INVARIANTS.md`](../CORE_INVARIANTS.md), and every
+   file/record selected by `python -m tools.agent_context --role planner --changed-files <file...>`.
+   Use `--full` while proposed paths are unknown.
 2. Read the request and select the matching workflow under [`.ai/workflows/`](../workflows/README.md).
 3. Inspect relevant repository code, tests, fixtures, schemas, deployment files, and authoritative docs read-only.
 4. Inspect related issues/PRs/commits when available. Distinguish facts inspected now from historical hints.
@@ -32,6 +34,10 @@ If required evidence is unavailable, write `Unknown` and turn it into a blocking
 12. Run the self-check below and output only the brief plus references.
 
 ## Mandatory special gates
+
+Shared safety, architecture, contract, unit/time, authorization, and evidence invariants live in
+[`CORE_INVARIANTS.md`](../CORE_INVARIANTS.md). The role-specific questions below add detail and never
+replace a selected canonical document.
 
 ### Schema/data contract
 
@@ -86,3 +92,6 @@ No preamble, production patch, code block pretending to be an implementation, or
 Human architecture/safety approval is mandatory when electrical limits are unknown; physical action can harm equipment/people/plants; production topology or recovery state cannot be inspected safely; a destructive migration lacks representative restore evidence; contract ownership/edge repository is unknown; requirements conflict with safety rules; or a choice changes public/privacy policy. The planner exposes these as blocking questions rather than selecting an answer.
 
 Evaluation artifacts and examples across ten task categories are in [`.ai/evaluations/feature-planner/`](../evaluations/feature-planner/README.md).
+
+During the one-release-cycle transition, older full-pack invocations remain valid through
+`tools.agent_context --full`.

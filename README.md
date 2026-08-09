@@ -4,9 +4,18 @@ Server implementation for the Senior Pomidor project.
 
 ## Development Agent Context
 
-Development agents and reviewers must start with [AGENTS.md](AGENTS.md). It routes to the
-version-controlled [`.ai` context pack](.ai/PROJECT.md), including current state, architecture and
-safety invariants, known failures, task classification, and risk-based validation requirements.
+Development agents and reviewers start with [AGENTS.md](AGENTS.md) and
+[`.ai/CORE_INVARIANTS.md`](.ai/CORE_INVARIANTS.md), then use the read-only selector:
+
+```powershell
+python -m tools.agent_context --role coder --changed-files tools/agent_context.py --format json
+```
+
+Canonical routing lives in `.ai/context-manifest.yaml`, test routing in `.ai/test-matrix.yaml`, and
+known failures in `.ai/known-failures.yaml`. Repeatable `--task-class` and `--risk-flag` inputs are
+additive; they cannot remove path-selected context. Unknown paths and risk flags fail safe to the full pack.
+Run `python -m tools.ai_context_docs` to verify generated Markdown summaries. Legacy full-pack usage is
+available through `--full` for one release cycle.
 Use the read-only [Feature Planner](.ai/agents/feature-planner.md) and
 [Implementation Brief template](.ai/templates/implementation-brief.md) when an approved issue does
 not already provide equivalent scope, evidence, risks, validation, and acceptance criteria.

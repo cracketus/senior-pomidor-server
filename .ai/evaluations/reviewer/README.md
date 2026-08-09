@@ -6,7 +6,8 @@ external export, or uses hardware. Owner: development/safety maintainer.
 
 ## Immutable layout
 
-- [`cases/v2.json`](cases/v2.json) contains only case descriptions and hash-pinned artifacts. It does
+- [`cases/v2.json`](cases/v2.json) contains only case descriptions and hash-pinned artifacts. Text
+  hashes use canonical LF line endings so immutable runs verify identically on Windows and Linux. It does
   not contain oracle IDs.
 - [`oracles/v6.json`](oracles/v6.json) is the current versioned answer set. Changing it requires a new oracle
   version, rationale, and a completely new blind run.

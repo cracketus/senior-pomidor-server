@@ -1,31 +1,34 @@
 # Senior Pomidor agent router
 
-Before planning, editing, or reviewing, read in this order:
-
-1. [`.ai/PROJECT.md`](.ai/PROJECT.md) — stable purpose and ownership boundaries.
-2. [`.ai/CURRENT_STATE.md`](.ai/CURRENT_STATE.md) — what is deployed and what is not.
-3. [`.ai/ARCHITECTURE_RULES.md`](.ai/ARCHITECTURE_RULES.md) and [`.ai/SAFETY_RULES.md`](.ai/SAFETY_RULES.md).
-4. [`.ai/DEVELOPMENT_RULES.md`](.ai/DEVELOPMENT_RULES.md).
-5. [`.ai/KNOWN_FAILURES.md`](.ai/KNOWN_FAILURES.md) and [`.ai/TEST_MATRIX.md`](.ai/TEST_MATRIX.md).
-
-Work only from an approved Implementation Brief: an accepted issue with explicit scope and acceptance criteria, or a human-approved copy of [`.ai/templates/implementation-brief.md`](.ai/templates/implementation-brief.md). Use the read-only [Feature Planner](.ai/agents/feature-planner.md) and matching workflow when a request needs planning. Classify the task and its risk flags using `TEST_MATRIX.md`; record applicable known-failure IDs and required checks in the brief before implementation.
-
-Approved implementation work follows the [Coding Agent](.ai/agents/coding-agent.md), uses the
-[isolated task workflow](docs/AGENT_TASK_WORKFLOW.md) for branches/worktrees or Compose mutation, and
-returns [`.ai/templates/implementation-report.md`](.ai/templates/implementation-report.md). Independent
-review follows the read-only [Reviewer](.ai/agents/reviewer.md) in a separate session/context and
-returns [`.ai/templates/review-report.md`](.ai/templates/review-report.md).
-
-Standard validation from the repository root:
+Start every planning, implementation, or review task with
+[`.ai/CORE_INVARIANTS.md`](.ai/CORE_INVARIANTS.md). Select the remaining context from the canonical
+[manifest](.ai/context-manifest.yaml):
 
 ```text
-python -m pytest -q
-nox -s lint format_check types
-$env:APP_IMAGE='senior-pomidor-server:agent'; docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile observability --profile daily-story config --quiet; Remove-Item Env:APP_IMAGE
+python -m tools.agent_context --role <planner|coder|reviewer> --changed-files <file...>
 ```
 
-Run security, dependency, Docker E2E, replay, migration, rehearsal, and manual checks when selected by `TEST_MATRIX.md`. Never assume CI can verify a physical-world change.
+Read every selected file and full selected `SP-FAIL-*` record. Use `--full` when changed paths are not
+known or while an older integration is in its one-release-cycle transition. Unknown paths and every
+risk flag fail safe to the full architecture/safety pack.
 
-Prohibited: production deployment or writes; reading or exposing production secrets/private infrastructure; real GPIO/actuator use; bypassing Guardrails or Executor; direct LLM-to-actuator paths; destructive database/volume operations; enabling external export in rehearsal; unapproved contract breaks. Coding agents have no production secrets, real GPIO, or production deployment access by default.
+Work only from an approved Implementation Brief: an accepted issue with explicit scope and acceptance
+criteria, or a human-approved copy of [`.ai/templates/implementation-brief.md`](.ai/templates/implementation-brief.md).
+Use the read-only [Feature Planner](.ai/agents/feature-planner.md) and matching workflow when planning is
+needed. Record selected task classes, risk flags, known failures, checks, consumers, and rollback before
+implementation.
 
-Active-season reliability fixes take priority. Keep their scope narrow and avoid unrelated refactoring.
+Approved implementation follows the [Coding Agent](.ai/agents/coding-agent.md), uses the
+[isolated task workflow](docs/AGENT_TASK_WORKFLOW.md) for agent-created branches/worktrees or Compose
+mutation, and returns [`.ai/templates/implementation-report.md`](.ai/templates/implementation-report.md).
+Independent review uses [Reviewer](.ai/agents/reviewer.md) in a separate context and returns
+[`.ai/templates/review-report.md`](.ai/templates/review-report.md).
+
+Run the checks selected by canonical [`.ai/test-matrix.yaml`](.ai/test-matrix.yaml). Generated Markdown
+summaries are navigation aids, not independent routing sources. Record automated and manual evidence as
+`PASS`, `FAIL`, or `NOT_RUN`; CI never proves a physical-world outcome.
+
+Prohibited: production deployment or writes; reading or exposing production secrets/private
+infrastructure; real GPIO/actuator use; bypassing Guardrails or Executor; direct LLM-to-actuator paths;
+destructive database/volume operations; external export in rehearsal; or unapproved contract breaks.
+Active-season reliability and data preservation take priority; keep scope narrow and reversible.

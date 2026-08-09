@@ -1,34 +1,27 @@
 # Agent roles
 
+All roles start with root [`AGENTS.md`](../../AGENTS.md), [`CORE_INVARIANTS.md`](../CORE_INVARIANTS.md),
+and the deterministic packet selected by `python -m tools.agent_context`. Use `--full` when proposed
+paths are unknown or for a legacy full-pack integration during the one-release-cycle transition.
+
 ## Feature Planner
 
-[`feature-planner.md`](feature-planner.md) is the read-only planning role. Invoke it manually with a request such as:
-
-```text
-Act as the Senior Pomidor Feature Planner. Read AGENTS.md and the complete context pack,
-then apply .ai/workflows/<workflow>.md to this request: <request>.
-Inspect only relevant evidence, do not edit files or implement code, and return only a draft
-Implementation Brief plus its compact evidence/reference list. Mark unknown facts explicitly.
-```
-
-Select `feature`, `bugfix`, `incident-fix`, `schema-change`, `infrastructure-change`, or `hardware-integration`. Apply multiple workflows when classifications overlap. The output remains draft until human approval and does not authorize production/hardware actions.
-
-Ten example outputs across feature, incident, infrastructure, schema, hardware, control and LLM categories are in [`../evaluations/feature-planner/briefs/`](../evaluations/feature-planner/briefs/). They are evaluation fixtures, not approved work orders.
+[`feature-planner.md`](feature-planner.md) is read-only, applies the matching workflow under
+[`../workflows/`](../workflows/README.md), and returns only a draft Implementation Brief plus evidence.
+Its ten frozen evaluation cases are under [`../evaluations/feature-planner/`](../evaluations/feature-planner/README.md).
 
 ## Coding Agent
 
 [`coding-agent.md`](coding-agent.md) implements one approved brief and returns the mandatory
-[`Implementation Report`](../templates/implementation-report.md). Infrastructure-sensitive tasks
-use the isolated [agent task workflow](../../docs/AGENT_TASK_WORKFLOW.md). The role never authorizes
-production deployment, merge, production secrets, or real hardware.
+[Implementation Report](../templates/implementation-report.md). Agent-created branches/worktrees and
+Compose mutation use the [isolated task workflow](../../docs/AGENT_TASK_WORKFLOW.md).
 
 ## Reviewer
 
-[`reviewer.md`](reviewer.md) independently reviews an approved brief, diff, Implementation Report and
-evidence without editing code. It returns the strict
-[`Review Report`](../templates/review-report.md), keeps missing manual/rehearsal evidence distinct from
-CI, and uses the hash-bound [Reviewer corpus and scorer](../evaluations/reviewer/README.md) for
-calibration. Publishing baseline metrics remains pending a new oracle-blind run.
+[`reviewer.md`](reviewer.md) independently reviews the brief, diff, report, and evidence without editing
+code. It returns the strict [Review Report](../templates/review-report.md). Reviewer v1 remains
+byte-stable because the published oracle-blind run is bound to its exact hash; compact routing reduces
+the surrounding packet without rewriting that evaluated instruction. A future Reviewer instruction
+change requires a new independent oracle-blind run before its metrics can replace the baseline.
 
-Run the role in a separate session/context from the Coding Agent. All roles still follow root
-[`AGENTS.md`](../../AGENTS.md) and the context pack.
+No role authorizes production deployment, production data/secrets access, or real hardware activation.
