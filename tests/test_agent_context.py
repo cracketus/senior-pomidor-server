@@ -153,6 +153,15 @@ def test_shared_agent_contract_changes_select_both_role_evaluations() -> None:
     }
 
 
+def test_model_routing_contract_selects_both_role_evaluations() -> None:
+    selection = select_context("coder", [".ai/model-routing.yaml"])
+
+    assert {item["id"] for item in selection.checks} >= {
+        "feature_planner_evaluation",
+        "reviewer_evaluation",
+    }
+
+
 def test_manifest_and_selected_sources_have_content_hashes() -> None:
     selection = select_context("coder", ["tools/agent_context.py"])
 

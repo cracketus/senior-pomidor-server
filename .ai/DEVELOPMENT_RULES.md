@@ -24,6 +24,8 @@ Owner: repository maintainer. Review with CI/tooling changes and quarterly. The 
 ## Validation and handoff
 
 - Run every required check selected by canonical [`test-matrix.yaml`](test-matrix.yaml), plus focused tests during iteration.
+- For an active isolated task, prefer `python -m tools.validate_change --base <ref> --task-key <key>
+  [--explain] [--force full]`; legacy explicit task checks remain supported for one release cycle.
 - Report exact commands and outcomes. Label checks `PASS`, `FAIL`, or `NOT RUN` with a reason; never imply manual/physical success from CI.
 - Review the final diff for debug artifacts, accidental secrets, unrelated files, contract drift, rollback gaps, and known-failure regressions.
 - Reviewer follows [`agents/reviewer.md`](agents/reviewer.md) in a separate read-only session/context,

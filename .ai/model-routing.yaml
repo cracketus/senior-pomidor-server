@@ -1,0 +1,33 @@
+version: 1
+source_of_truth: .ai/model-routing.yaml
+tiers: [script, light, medium, strong]
+operations:
+  classification: script
+  context_selection: script
+  validation: script
+  metrics: script
+  links_schemas_whitespace_secret_scan: script
+  issue_extraction: light
+  repository_map: light
+  documentation_review: light
+  test_output_summary: light
+  mapping_proposal: light
+  pure_software_implementation: medium
+  pure_software_review: medium
+  architecture_ownership: strong
+  physical_action_decision: strong
+  migration_data_loss_decision: strong
+  security_decision: strong
+  public_edge_contract_decision: strong
+  severity_dispute: strong
+  final_critical_adjudication: strong
+strong_escalation:
+  risk_flags: [physical_action, data_loss_migration, security_secrets, edge_server_compatibility, production_availability, public_contract]
+  finding_severities: [BLOCKER, HIGH]
+  conditions: [unknown_owner_consumer, contradictory_brief, missing_rollback_manual_evidence, unknown_operation]
+subagents:
+  fork_turns: none
+  packet: compact_json
+  output: structured_json
+  batching: one_medium_noncritical_one_strong_critical_or_disputed
+  forbidden: [full_tool_catalog_dump, one_agent_per_case, inherited_chat_context]

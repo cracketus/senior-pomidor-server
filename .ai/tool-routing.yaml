@@ -1,0 +1,15 @@
+version: 1
+source_of_truth: .ai/tool-routing.yaml
+operations:
+  github_issue_lookup:
+    connector: github
+    connector_operation: issue_lookup
+    discover_catalog: false
+    fallback: gh
+    fallback_only_after: connector_failure
+  github_pull_request_lookup:
+    connector: github
+    connector_operation: pull_request_lookup
+    discover_catalog: false
+    fallback: gh
+    fallback_only_after: connector_failure

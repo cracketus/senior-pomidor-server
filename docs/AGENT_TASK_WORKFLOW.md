@@ -65,9 +65,21 @@ commands for an agent task, because shell variables and `.env` precedence can de
 
 Task metadata and secret-free command/return-code records are stored in `metadata.json` and
 `commands.jsonl` for copying into the Implementation Report. Do not paste generated local passwords
-or env-file contents into the report. Creation first records an owned port allocation and a
-`creating` metadata record. A partial failure becomes `creation_failed` with the failed stage and
-created-resource inventory; its allocation remains reserved for diagnosis and recovery.
+or env-file contents into the report. Creation first proves that a temporary Git ref lock can be
+created and removed. Only then does it record an owned port allocation and a `creating` metadata
+record. A partial failure becomes `creation_failed` with the failed stage and created-resource
+inventory; its allocation remains reserved for diagnosis and recovery.
+
+Resume a recorded partial creation without allocating another port block:
+
+```powershell
+python -m tools.agent_task resume tomato-ai-128-agent-sandbox
+```
+
+`resume` verifies allocation ownership, reconciles only the recorded branch/worktree, recreates the
+synthetic environment, and is idempotent after activation. If the exact task branch was deliberately
+checked out in the control checkout after an older Git-write failure, use `--no-worktree` to adopt
+that checkout. It never adopts a differently named or unproven branch.
 
 Run standard checks through the same sanitized environment. Check names expand to fixed repository
 commands and do not accept additional shell arguments:
@@ -83,6 +95,9 @@ python -m tools.agent_task check tomato-ai-128-agent-sandbox reviewer-corpus
 This removes inherited database/cloud/Docker-target variables and does not load `.env`; production
 secret files and hardware devices are not mounted. It is not an operating-system security boundary:
 normal host ACLs must still deny the developer account access to production secrets and devices.
+
+The fixed `check` commands remain supported for one release cycle. New tasks should use the unified
+validation orchestrator documented in [`AI_VALIDATION_WORKFLOW.md`](AI_VALIDATION_WORKFLOW.md).
 
 ## Cleanup and recovery
 

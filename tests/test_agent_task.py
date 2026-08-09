@@ -19,6 +19,7 @@ from tools.agent_task import (
     check_task,
     cleanup_task,
     create_task,
+    resume_task,
     retire_task,
     sanitized_process_environment,
     validate_environment,
@@ -150,6 +151,55 @@ def test_create_refuses_dirty_source_worktree(git_repo: tuple[Path, RepositoryCo
 
     with pytest.raises(AgentTaskError, match="dirty"):
         create_task(context, "TOMATO-AI-128", "refuse-dirty", "feature")
+
+
+def test_create_preflights_git_write_before_allocation(
+    git_repo: tuple[Path, RepositoryContext], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo, context = git_repo
+
+    def fail_preflight(_context: RepositoryContext) -> None:
+        raise AgentTaskError("Git refs are not writable")
+
+    monkeypatch.setattr(agent_task_module, "_preflight_git_write", fail_preflight)
+    with pytest.raises(AgentTaskError, match="not writable"):
+        create_task(context, "TOMATO-AI-128", "preflight", "feature")
+
+    assert not (repo / ".agent-tasks").exists()
+
+
+def test_resume_completes_partial_creation_without_reallocating(
+    git_repo: tuple[Path, RepositoryContext], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _, context = git_repo
+
+    def fail_after_branch(stage: str) -> None:
+        if stage == "branch":
+            raise RuntimeError("injected failure after branch")
+
+    monkeypatch.setattr(agent_task_module, "_creation_checkpoint", fail_after_branch)
+    with pytest.raises(RuntimeError, match="after branch"):
+        create_task(
+            context,
+            "TOMATO-AI-128",
+            "resume",
+            "feature",
+            task_classes=("pure_software",),
+            risk_flags=("security_secrets",),
+        )
+    _, failed = agent_task_module.load_task(context, "tomato-ai-128-resume")
+
+    monkeypatch.setattr(agent_task_module, "_creation_checkpoint", lambda stage: None)
+    resumed = resume_task(context, "tomato-ai-128-resume")
+    repeated = resume_task(context, "tomato-ai-128-resume", task_classes=("infrastructure_deployment",))
+
+    assert resumed["status"] == "active"
+    assert resumed["port_base"] == failed["port_base"]
+    assert resumed["task_classes"] == ["pure_software"]
+    assert resumed["risk_flags"] == ["security_secrets"]
+    assert Path(resumed["worktree"]).is_dir()
+    assert Path(resumed["env_file"]).is_file()
+    assert repeated["task_classes"] == ["infrastructure_deployment", "pure_software"]
 
 
 @pytest.mark.parametrize("failed_stage", ["allocation", "metadata", "branch", "worktree"])

@@ -153,9 +153,13 @@ def _matrix_checks(
         ".ai/CORE_INVARIANTS.md",
         ".ai/context-manifest.yaml",
         ".ai/known-failures.yaml",
+        ".ai/model-routing.yaml",
         ".ai/test-matrix.yaml",
+        ".ai/tool-routing.yaml",
     }
-    if shared_agent_contracts.intersection(changed_files):
+    if shared_agent_contracts.intersection(changed_files) or any(
+        changed_path.startswith(".ai/templates/") for changed_path in changed_files
+    ):
         selected.update(("feature_planner_evaluation", "reviewer_evaluation"))
 
     checks: list[dict[str, Any]] = []
