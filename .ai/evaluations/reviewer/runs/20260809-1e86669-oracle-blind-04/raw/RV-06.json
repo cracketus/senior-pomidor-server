@@ -1,0 +1,126 @@
+{
+  "schema": "senior-pomidor.review-report.v1",
+  "title": "Review of telemetry shape and ingestion test update",
+  "case_id": "RV-06",
+  "reviewer_version": "1.0",
+  "reviewer_hash": "d98d2797c73aaa71b6f2401541d4f7b3248dd033d141b639f48e95eaa5e9471b",
+  "verdict": "REQUEST CHANGES",
+  "rationale": "The patch compares a normalized moisture ratio against a percent threshold, replaces the existing nested percent fixture with an unversioned flat ratio shape, and supplies a test that calls a mock instead of the real ingestion boundary. This breaks the stated compatibility criterion and leaves the HTTP/MQTT/storage path and edge rollout unverified.",
+  "classification": {
+    "task_classes": [
+      "pure_software",
+      "schema_data_contract",
+      "edge_hardware_integration"
+    ],
+    "risk_flags": [
+      "public_contract",
+      "edge_server_compatibility"
+    ],
+    "sp_fail_ids": [
+      "SP-FAIL-009",
+      "SP-FAIL-010",
+      "SP-FAIL-011"
+    ]
+  },
+  "scope_architecture": "All changed files relate to the stated moisture-contract and ingestion-test scope, but the fixture is changed to accommodate a new shape without a versioned adapter or migration and the test hides the missing integration by replacing the ingestion function. The brief under-classifies the edge-facing telemetry change: edge_hardware_integration and edge_server_compatibility are required in addition to its declared classes and public-contract flag.",
+  "findings": [
+    {
+      "id": "RV06-F-001",
+      "severity": "HIGH",
+      "category": "correctness",
+      "location": "app/state_estimator/decisions.py",
+      "finding": "A normalized 0..1 soil-moisture ratio is compared directly with a percent threshold whose default is 35.",
+      "evidence": "The input key is explicitly ratio-valued while the parameter is explicitly percent-valued; no named conversion occurs before comparison.",
+      "evidence_excerpt": "def is_dry(state, dry_below_percent=35):\n    return state[\"soil_moisture_ratio\"] < dry_below_percent",
+      "impact": "Nearly every valid normalized reading is classified as dry, corrupting downstream decisions and potentially any consumer that relies on the dryness result.",
+      "required_change": "Use one explicit unit at the owner boundary, for example compare a percent field to 35 or a ratio field to 0.35, and reject out-of-range input.",
+      "suggested_test": "Test 0, 0.01, 0.35, 0.5, 1, 35, 50, and 100 boundary/out-of-range cases with explicit percent-to-ratio conversion expectations."
+    },
+    {
+      "id": "RV06-F-002",
+      "severity": "BLOCKER",
+      "category": "correctness",
+      "location": "tests/fixtures/contracts/telemetry.json",
+      "finding": "The existing telemetry fixture is replaced by an incompatible field shape and unit without a new contract version or compatibility path.",
+      "evidence": "The nested state.soil_moisture_percent value is removed and replaced by a flat soil_moisture value expressed as a ratio; the patch contains no version discriminator, adapter, dual-reader, or retained old fixture.",
+      "evidence_excerpt": "\"state\": {\"soil_moisture_percent\": 42}\n\"soil_moisture\": 0.42",
+      "impact": "Existing edge, API, storage, dashboard, export, or replay consumers can reject or silently reinterpret telemetry, violating the compatibility acceptance criterion.",
+      "required_change": "Preserve the current fixture and contract, or introduce a new explicit version with named unit/range semantics, a server-tolerant compatibility adapter, every consumer update, and a coordinated rollout plan.",
+      "suggested_test": "Replay old and new versioned fixtures through HTTP and MQTT ingestion, persistence, readback, estimator, dashboard/export serialization, and every named consumer."
+    },
+    {
+      "id": "RV06-F-003",
+      "severity": "HIGH",
+      "category": "tests",
+      "location": "tests/test_api.py",
+      "finding": "The ingestion test mocks the function under test and invokes the mock directly, so it exercises no API ingestion behavior.",
+      "evidence": "mocker.patch replaces app.api.ingest_payload with a canned return value, and the assertion calls that mock rather than an HTTP route or real parser/storage path.",
+      "evidence_excerpt": "ingest = mocker.patch(\"app.api.ingest_payload\", return_value={\"ok\": True})\nassert ingest({\"soil_moisture\": 0.42}) == {\"ok\": True}",
+      "impact": "The test passes even if transport validation, normalization, authentication, schema handling, persistence, or readback is broken.",
+      "required_change": "Exercise the public HTTP ingestion boundary and the real ingestion implementation, mocking only external dependencies rather than the unit under test.",
+      "suggested_test": "Test the versioned payload with the API client through validation and persistence/readback, and add equivalent MQTT-path coverage with malformed and incompatible payload rejection."
+    },
+    {
+      "id": "RV06-F-004",
+      "severity": "HIGH",
+      "category": "tests",
+      "location": "implementation_report.automated_evidence",
+      "finding": "Required edge compatibility, both-version transport replay, consumer, and manual canary evidence is absent.",
+      "evidence": "The supplied evidence is only a generic schema fixture and API unit-test statement; the brief omits edge_server_compatibility, and no HTTP/MQTT/storage replay, old fixture, named edge consumer, rollout order, or manual canary is reported.",
+      "evidence_excerpt": "PASS: schema fixture and API unit tests",
+      "impact": "A green fixture/unit result can mask an edge-server rollout break and does not establish compatibility on the actual ingestion path.",
+      "required_change": "Add the edge compatibility flag and named consumer/rollout plan to the brief, then provide PASS evidence for old/current fixtures through all real paths and the required edge canary.",
+      "suggested_test": "manual: Run a bounded edge canary with the named edge consumer after both-version HTTP/MQTT replay passes, and record rollback criteria and observed compatibility."
+    }
+  ],
+  "contract_consumer_review": "The patch changes field nesting, name, and unit from state.soil_moisture_percent=42 to soil_moisture=0.42 but supplies no schema/version, optionality, range, producer, consumer inventory, or rollout order. At minimum the edge producer, HTTP and MQTT ingestion, validation, storage, State Estimator, API readback, fixtures, dashboards, and export/public serializers must be reviewed independently. Replacing the old fixture is not compatibility evidence.",
+  "evidence_matrix": [
+    {
+      "check": "SHA-256 verification for both supplied patch artifacts",
+      "status": "PASS",
+      "manual": false
+    },
+    {
+      "check": "Reported schema fixture and API unit tests",
+      "status": "PASS",
+      "manual": false
+    },
+    {
+      "check": "Percent/ratio boundary, range, and conversion tests",
+      "status": "NOT_RUN",
+      "manual": false
+    },
+    {
+      "check": "Old/current schema validation and serialization round-trip",
+      "status": "FAIL",
+      "manual": false
+    },
+    {
+      "check": "HTTP, MQTT, persistence, readback, estimator, and named consumer replay",
+      "status": "NOT_RUN",
+      "manual": false
+    },
+    {
+      "check": "Actual ingestion-path behavior in the added API test",
+      "status": "FAIL",
+      "manual": false
+    },
+    {
+      "check": "Named edge-consumer canary and rollback evidence",
+      "status": "NOT_RUN",
+      "manual": true
+    },
+    {
+      "check": "Full baseline pytest, lint, format, and type checks",
+      "status": "NOT_RUN",
+      "manual": false
+    }
+  ],
+  "operations_safety_security_privacy": "No direct physical action is added, so supervised hardware evidence is not required on that basis. The edge-facing compatibility risk is nevertheless operationally material: there is no canary, rollout sequence, bounded rollback, or proof that old edge payloads remain accepted. No production access, credentials, external export, or real hardware was used during review.",
+  "documentation_assessment": "No schema, contract documentation, compatibility note, release note, or edge rollout documentation accompanies the renamed/restructured field. The brief says the documented moisture contract remains compatible, but the supplied patch removes the old representation and provides no compatibility mechanism.",
+  "follow_ups": [],
+  "limitations": [
+    "Review was limited to the approved case brief, implementation report, governing context pack, and the two hash-verified supplied patches.",
+    "No runtime source outside the supplied patches, CI logs, edge device, production consumer, or production infrastructure was inspected."
+  ]
+}

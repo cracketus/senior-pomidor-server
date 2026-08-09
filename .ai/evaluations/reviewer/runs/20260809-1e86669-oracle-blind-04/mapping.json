@@ -1,0 +1,26 @@
+{
+  "schema": "senior-pomidor.reviewer-mapping.v1",
+  "mappings": [
+    {"observed_finding_id":"rv01-missing-health-allows","oracle_finding_id":"RF-022"},
+    {"observed_finding_id":"rv03-migration-runbook-skips-isolated-rehearsal","oracle_finding_id":"RF-015"},
+    {"observed_finding_id":"rv04-missing-local-model-acceptance","oracle_finding_id":"RF-016"},
+    {"observed_finding_id":"RV05-F-001","oracle_finding_id":"RF-001"},
+    {"observed_finding_id":"RV05-F-002","oracle_finding_id":"RF-002"},
+    {"observed_finding_id":"RV05-F-003","oracle_finding_id":"RF-004"},
+    {"observed_finding_id":"RV05-F-004","oracle_finding_id":"RF-018"},
+    {"observed_finding_id":"RV06-F-001","oracle_finding_id":"RF-003"},
+    {"observed_finding_id":"RV06-F-002","oracle_finding_id":"RF-005"},
+    {"observed_finding_id":"RV06-F-003","oracle_finding_id":"RF-006"},
+    {"observed_finding_id":"RV06-F-004","oracle_finding_id":"RF-019"},
+    {"observed_finding_id":"RV07-F-001","oracle_finding_id":"RF-007"},
+    {"observed_finding_id":"RV07-F-002","oracle_finding_id":"RF-008"},
+    {"observed_finding_id":"RV07-F-003","oracle_finding_id":"RF-020"},
+    {"observed_finding_id":"RV07-F-004","oracle_finding_id":"RF-026"},
+    {"observed_finding_id":"RV08-F-001","oracle_finding_id":"RF-027"},
+    {"observed_finding_id":"RV09-F-001","oracle_finding_id":"RF-010"},
+    {"observed_finding_id":"RV09-F-002","oracle_finding_id":"RF-021"},
+    {"observed_finding_id":"RV10-F-001","oracle_finding_id":"RF-011"},
+    {"observed_finding_id":"RV10-F-003","oracle_finding_id":"RF-012"},
+    {"observed_finding_id":"RV10-F-004","oracle_finding_id":"RF-013"}
+  ]
+}

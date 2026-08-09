@@ -12,7 +12,9 @@ Work only from an approved Implementation Brief: an accepted issue with explicit
 
 Approved implementation work follows the [Coding Agent](.ai/agents/coding-agent.md), uses the
 [isolated task workflow](docs/AGENT_TASK_WORKFLOW.md) for branches/worktrees or Compose mutation, and
-returns [`.ai/templates/implementation-report.md`](.ai/templates/implementation-report.md).
+returns [`.ai/templates/implementation-report.md`](.ai/templates/implementation-report.md). Independent
+review follows the read-only [Reviewer](.ai/agents/reviewer.md) in a separate session/context and
+returns [`.ai/templates/review-report.md`](.ai/templates/review-report.md).
 
 Standard validation from the repository root:
 

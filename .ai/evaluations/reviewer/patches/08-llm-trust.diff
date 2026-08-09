@@ -1,0 +1,5 @@
+diff --git a/app/daily_story.py b/app/daily_story.py
+@@
+-    parsed = validate_story_response(response)
+-    public_summary = parsed.final
++    public_summary = response.text

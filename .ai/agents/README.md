@@ -22,5 +22,13 @@ Ten example outputs across feature, incident, infrastructure, schema, hardware, 
 use the isolated [agent task workflow](../../docs/AGENT_TASK_WORKFLOW.md). The role never authorizes
 production deployment, merge, production secrets, or real hardware.
 
-The Reviewer role remains reserved for separately approved work. All roles still follow root
+## Reviewer
+
+[`reviewer.md`](reviewer.md) independently reviews an approved brief, diff, Implementation Report and
+evidence without editing code. It returns the strict
+[`Review Report`](../templates/review-report.md), keeps missing manual/rehearsal evidence distinct from
+CI, and uses the hash-bound [Reviewer corpus and scorer](../evaluations/reviewer/README.md) for
+calibration. Publishing baseline metrics remains pending a new oracle-blind run.
+
+Run the role in a separate session/context from the Coding Agent. All roles still follow root
 [`AGENTS.md`](../../AGENTS.md) and the context pack.

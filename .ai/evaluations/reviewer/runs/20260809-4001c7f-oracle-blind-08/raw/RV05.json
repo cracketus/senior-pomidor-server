@@ -1,0 +1,91 @@
+{
+  "schema": "senior-pomidor.review-report.v1",
+  "title": "Review of physical watering, restart safety, and state freshness",
+  "case_id": "RV05",
+  "reviewer_version": "1.0",
+  "reviewer_hash": "51ab66ce62e2b5363d7a71587edb937f1e34feb842d726e24141da4b03c38f0f",
+  "verdict": "REQUEST CHANGES",
+  "rationale": "The change contains three reachable physical-safety defects: watering can bypass Guardrails and the Executor, duplicate suppression is process-local and non-atomic, and missing observation timestamps are treated as fresh. Required supervised hardware/restart/rollback evidence is also NOT RUN.",
+  "classification": {
+    "task_classes": [
+      "control_guardrails_executor",
+      "edge_hardware_integration"
+    ],
+    "risk_flags": [
+      "physical_action",
+      "production_availability"
+    ],
+    "sp_fail_ids": []
+  },
+  "scope_architecture": "The patches add a direct watering path, Executor duplicate handling, and freshness authorization logic. The direct adapter call violates the mandatory Control candidate -> deterministic Guardrails -> idempotent Executor -> approved adapter boundary, while the Executor and freshness implementations violate restart-safe and fail-safe runtime invariants.",
+  "findings": [
+    {
+      "id": "OBS-DIRECT-WATERING-BYPASS",
+      "severity": "BLOCKER",
+      "category": "safety",
+      "location": "app/control.py",
+      "finding": "A watering suggestion invokes the adapter directly without deterministic Guardrails or the Executor.",
+      "evidence": "The added function calls adapter.water from the suggestion branch and contains no Guardrails or Executor boundary.",
+      "evidence_excerpt": "def apply_suggestion(adapter, suggestion):\n    if suggestion[\"action\"] == \"water\":\n        adapter.water(seconds=suggestion[\"seconds\"])",
+      "impact": "An untrusted or malformed suggestion can cause a real physical action without safety validation, idempotency, transition logging, or bounded execution handling.",
+      "required_change": "Route every watering candidate through deterministic Guardrails and the idempotent Executor before an approved adapter can run it.",
+      "suggested_test": "Simulate allowed and blocked watering candidates and assert that the fake adapter is reachable only after Guardrails approval and an Executor transition."
+    },
+    {
+      "id": "OBS-VOLATILE-IDEMPOTENCY",
+      "severity": "BLOCKER",
+      "category": "safety",
+      "location": "app/executor.py",
+      "finding": "Duplicate suppression is stored only in process memory and is recorded after the physical send.",
+      "evidence": "ACKNOWLEDGED is a module-local set; a restart loses it, and a crash after adapter.send but before set.add leaves the command eligible for replay.",
+      "evidence_excerpt": "ACKNOWLEDGED = set()\ndef execute(adapter, command):\n    if command.id not in ACKNOWLEDGED:\n        adapter.send(command)\n        ACKNOWLEDGED.add(command.id)",
+      "impact": "Redelivery after restart or a crash window can repeat a watering action, causing duplicate actuation and an uncertain physical state.",
+      "required_change": "Persist idempotency and execution transitions durably, define an atomic or recoverable send boundary, and fail safe when restart recovery finds an uncertain action.",
+      "suggested_test": "Simulate duplicate delivery, process restart, and a crash immediately after send, then assert that no acknowledged or uncertain command is actuated twice."
+    },
+    {
+      "id": "OBS-MISSING-TIMESTAMP-FRESH",
+      "severity": "BLOCKER",
+      "category": "correctness",
+      "location": "app/guardrails.py",
+      "finding": "A state with no observed_at timestamp is assigned age zero and accepted as fresh.",
+      "evidence": "The conditional expression returns 0 when observed_at is absent, and zero satisfies the 300-second freshness gate.",
+      "evidence_excerpt": "age_seconds = (now - state[\"observed_at\"]).total_seconds() if state.get(\"observed_at\") else 0\nreturn age_seconds <= 300",
+      "impact": "Missing or unverifiable telemetry freshness can authorize watering, so stale state can directly influence a physical action.",
+      "required_change": "Reject missing, malformed, future, or stale observation timestamps at the Guardrails boundary and preserve the rejection in the action audit trail.",
+      "suggested_test": "Test missing, malformed, future, boundary-age, and over-age timestamps and assert that every unverifiable state blocks the candidate action."
+    },
+    {
+      "id": "OBS-PHYSICAL-EVIDENCE-NOT-RUN",
+      "severity": "HIGH",
+      "category": "tests",
+      "location": "implementation_report.manual_evidence",
+      "finding": "Required supervised hardware, restart, abort, and rollback evidence is not available.",
+      "evidence": "The supplied evidence packet marks the physical hardware/restart check NOT RUN despite physical_action and production_availability risk.",
+      "evidence_excerpt": "manual NOT RUN hardware/restart",
+      "impact": "Green unit/fake CI cannot establish safe restart recovery, physical abort behavior, or supervised rollback on the target device.",
+      "required_change": "Complete and record the approved supervised hardware, restart, abort, and rollback procedure after the software blockers are fixed.",
+      "suggested_test": "manual: With the named human owner supervising a safe fake-or-bounded device setup, exercise restart and abort boundaries, verify no duplicate watering, and execute rollback."
+    }
+  ],
+  "contract_consumer_review": "The new physical path consumes suggestion action/seconds and state observed_at without a versioned candidate contract or explicit validation. The fake adapter evidence does not close the real Guardrails, Executor, persistence, acknowledgement, or hardware-consumer path.",
+  "evidence_matrix": [
+    {
+      "check": "Unit and fake-backend CI",
+      "status": "PASS",
+      "manual": false
+    },
+    {
+      "check": "Supervised hardware, restart, abort, and rollback procedure",
+      "status": "NOT_RUN",
+      "manual": true
+    }
+  ],
+  "operations_safety_security_privacy": "No production or real-hardware access was used. The reviewed code is not safe for physical execution because it bypasses mandatory safety ownership, loses idempotency on restart, and treats missing freshness as current.",
+  "documentation_assessment": "No operator procedure or approved manual evidence was supplied for the new physical-action and restart behavior. Documentation cannot substitute for the required implementation and supervised evidence.",
+  "follow_ups": [],
+  "limitations": [
+    "Review was limited to the supplied hash-verified patches and direct evidence packet.",
+    "Real hardware, production infrastructure, restart rehearsal, and rollback were not accessed or inferred."
+  ]
+}

@@ -1,0 +1,52 @@
+{
+  "schema": "senior-pomidor.review-report.v1",
+  "title": "Bounded local daily-story consumer review",
+  "case_id": "RV-04",
+  "reviewer_version": "1.0",
+  "reviewer_hash": "51ab66ce62e2b5363d7a71587edb937f1e34feb842d726e24141da4b03c38f0f",
+  "verdict": "REQUEST CHANGES",
+  "rationale": "The consumer remains separate from ingestion and actuation, but its accepted story parser only enforces a terminal marker. It accepts prompt discussion or reasoning before that marker, and the required representative local-model acceptance evidence is explicitly absent despite model-runtime and public-output changes.",
+  "classification": {
+    "task_classes": ["schema_data_contract", "llm_vision"],
+    "risk_flags": ["data_loss_migration", "public_contract", "security_secrets"],
+    "sp_fail_ids": ["SP-FAIL-012", "SP-FAIL-013"]
+  },
+  "scope_architecture": "The daily-story worker is a bounded analyst/communication consumer and has no ingestion or actuation authority in the pinned diff. The change alters its persisted schema, prompts, parser, retry behavior, model request, and user-visible story length, so it also changes a public and durable output contract.",
+  "findings": [
+    {
+      "id": "obs-v5-rv04-001",
+      "severity": "HIGH",
+      "category": "security",
+      "location": "app/daily_story.py:417",
+      "finding": "The story parser accepts any content before the terminal marker, including prompt discussion or hidden reasoning, and the new regression test covers only analysis after the marker.",
+      "evidence": "_parse_story validates JSON, length, and the final marker but contains no semantic rejection for prompt echoes or reasoning within the accepted story field. The user prompt itself asks the model not to emit those forms, but model output is untrusted. This leaves SP-FAIL-013's required pre-publication boundary unenforced.",
+      "evidence_excerpt": "if not story.endswith(STORY_END_MARKER):",
+      "impact": "A reasoning-capable or instruction-confused model can publish internal prompt discussion in the public daily-story field while still satisfying every parser check.",
+      "required_change": "Reject prompt-discussion, reasoning, and delimiter-leak patterns throughout the accepted story field before persistence or public serialization.",
+      "suggested_test": "Test a valid-length JSON story containing prompt analysis before #SeniorPomidor and assert generation returns a safe unavailable failure."
+    },
+    {
+      "id": "obs-v5-rv04-002",
+      "severity": "HIGH",
+      "category": "tests",
+      "location": "implementation_report.manual_evidence",
+      "finding": "The implementation report marks manual evidence not applicable even though the diff changes model runtime behavior, prompt size, output bounds, structured output handling, and public content.",
+      "evidence": "TEST_MATRIX requires representative local-model acceptance when llm_vision model/runtime behavior changes. The supplied report instead states that no physical or production action is in scope, which does not satisfy the LLM acceptance requirement.",
+      "evidence_excerpt": "NOT APPLICABLE: no physical or production action is in scope",
+      "impact": "The new default generation path can fail, truncate required context, or produce an invalid public story on the configured local model without any acceptance evidence.",
+      "required_change": "Run and attach a representative local-model acceptance covering the configured prompt, output budget, timeout, unavailable-model behavior, and public serialization boundary.",
+      "suggested_test": "Run the documented local daily-story acceptance with the configured model and retain the bounded, redacted result and public API check."
+    }
+  ],
+  "contract_consumer_review": "The pinned diff persists the expanded story and environment context, renders it into the model prompt, and keeps private fields out of the demonstrated API serializer. The public story remains a consumer-facing output and must therefore reject model internals before persistence and serialization.",
+  "evidence_matrix": [
+    {"check": "Pinned diff SHA-256", "status": "PASS", "manual": false},
+    {"check": "Pinned parser, retry, privacy-serializer, and Ollama unit tests", "status": "PASS", "manual": false},
+    {"check": "Reasoning and prompt-echo rejection before public serialization", "status": "FAIL", "manual": false},
+    {"check": "Representative local-model acceptance", "status": "NOT_RUN", "manual": true}
+  ],
+  "operations_safety_security_privacy": "The consumer is optional and does not control hardware. Its model output is nevertheless user-visible and is derived from private context, so strict semantic output validation and local-model evidence are required before approval.",
+  "documentation_assessment": "The added operations guidance describes private context and output constraints, but the parser does not yet enforce the documented no-reasoning boundary throughout accepted content.",
+  "follow_ups": [],
+  "limitations": ["The historical fixture provides no representative local-model run, timeout evidence, or retained manual acceptance artifact."]
+}

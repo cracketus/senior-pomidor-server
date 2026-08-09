@@ -1,0 +1,14 @@
+{
+  "schema": "senior-pomidor.reviewer-metrics.v1",
+  "status": "FAIL",
+  "case_count": 10,
+  "expected_finding_count": 37,
+  "observed_finding_count": 38,
+  "blocker_recall": 1.0,
+  "high_recall": 0.7666666666666667,
+  "false_positive_rate": 0.23684210526315788,
+  "severity_agreement": 0.9655172413793104,
+  "actionable_rate": 0.6052631578947368,
+  "critical_ordering_passed": true,
+  "manual_evidence_detection_passed": true
+}

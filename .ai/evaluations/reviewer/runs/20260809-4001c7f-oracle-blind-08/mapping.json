@@ -1,0 +1,24 @@
+{
+  "schema":"senior-pomidor.reviewer-mapping.v1",
+  "mappings":[
+    {"observed_finding_id":"OBS-DIRECT-WATERING-BYPASS","oracle_finding_id":"RF-001"},
+    {"observed_finding_id":"OBS-VOLATILE-IDEMPOTENCY","oracle_finding_id":"RF-002"},
+    {"observed_finding_id":"OBS-MISSING-TIMESTAMP-FRESH","oracle_finding_id":"RF-004"},
+    {"observed_finding_id":"OBS-PHYSICAL-EVIDENCE-NOT-RUN","oracle_finding_id":"RF-018"},
+    {"observed_finding_id":"OBS-UNVERSIONED-MOISTURE-CONTRACT","oracle_finding_id":"RF-005"},
+    {"observed_finding_id":"OBS-RATIO-PERCENT-COMPARISON","oracle_finding_id":"RF-003"},
+    {"observed_finding_id":"OBS-INGESTION-MOCKED-AWAY","oracle_finding_id":"RF-006"},
+    {"observed_finding_id":"OBS-PUBLIC-CONSUMER-EVIDENCE-MISSING","oracle_finding_id":"RF-019"},
+    {"observed_finding_id":"OBS-REHEARSAL-EXPORT-ENABLED","oracle_finding_id":"RF-008"},
+    {"observed_finding_id":"OBS-IMPLICIT-LATEST-IMAGE","oracle_finding_id":"RF-007"},
+    {"observed_finding_id":"OBS-REHEARSAL-EVIDENCE-NOT-RUN","oracle_finding_id":"RF-020"},
+    {"observed_finding_id":"OBS-SECRET-SHAPED-FIXTURE","oracle_finding_id":"RF-009"},
+    {"observed_finding_id":"OBS-SECRET-SCAN-NOT-RUN","oracle_finding_id":"RF-027"},
+    {"observed_finding_id":"OBS-RAW-MODEL-TEXT-PUBLISHED","oracle_finding_id":"RF-010"},
+    {"observed_finding_id":"OBS-LLM-BOUNDARY-EVIDENCE-MISSING","oracle_finding_id":"RF-021"},
+    {"observed_finding_id":"OBS-WINDOWS-TEMPFILE-REOPEN","oracle_finding_id":"RF-011"},
+    {"observed_finding_id":"OBS-WINDOWS-EVIDENCE-MISSING","oracle_finding_id":"RF-033"},
+    {"observed_finding_id":"OBS-ROLLBACK-REHEARSAL-NOT-RUN","oracle_finding_id":"RF-013"},
+    {"observed_finding_id":"OBS-FRESHNESS-DOC-DRIFT","oracle_finding_id":"RF-012"}
+  ]
+}

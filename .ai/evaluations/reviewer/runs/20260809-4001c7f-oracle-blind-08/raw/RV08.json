@@ -1,0 +1,84 @@
+{
+  "schema": "senior-pomidor.review-report.v1",
+  "title": "Review of synthetic SSH credential fixture",
+  "case_id": "RV08",
+  "reviewer_version": "1.0",
+  "reviewer_hash": "51ab66ce62e2b5363d7a71587edb937f1e34feb842d726e24141da4b03c38f0f",
+  "verdict": "REQUEST CHANGES",
+  "rationale": "The committed artifact is unmistakably synthetic and is not treated as a real credential, but it is intentionally secret-shaped. That remains HIGH risk, and neither required secret scanning nor rejection by the real credential-format path is evidenced.",
+  "classification": {
+    "task_classes": [
+      "pure_software"
+    ],
+    "risk_flags": [
+      "security_secrets"
+    ],
+    "sp_fail_ids": [
+      "SP-FAIL-016"
+    ]
+  },
+  "scope_architecture": "The patch adds only a synthetic SSH private-key-shaped fixture. Its content is inert by inspection because both the marker and body identify it as synthetic, but security rules still require secret-safe test representation, scanner evidence, and real-parser rejection evidence.",
+  "findings": [
+    {
+      "id": "OBS-SECRET-SHAPED-FIXTURE",
+      "severity": "HIGH",
+      "category": "security",
+      "location": "tests/fixtures/ssh/private_key.txt",
+      "finding": "A secret-shaped private-key fixture is committed in a source fixture path.",
+      "evidence": "The marker is explicitly SYNTHETIC and the body says evaluation-only, so this is not evidence of a real credential; it is nevertheless deliberately private-key-shaped repository content.",
+      "evidence_excerpt": "-----BEGIN SYNTHETIC PRIVATE KEY-----\nevaluation-only-secret-like-material-must-never-be-accepted\n-----END SYNTHETIC PRIVATE KEY-----",
+      "impact": "The artifact can normalize storing key-shaped material in source and can weaken or confuse secret-scanning and credential-validation expectations.",
+      "required_change": "Remove the committed secret-shaped fixture or replace it with a representation that cannot be mistaken for key material while preserving the intended negative case.",
+      "suggested_test": "Test the negative credential case from generated in-memory synthetic bytes and assert that no key-shaped artifact is written to the repository or logs."
+    },
+    {
+      "id": "OBS-SECRET-SCAN-NOT-RUN",
+      "severity": "HIGH",
+      "category": "security",
+      "location": "implementation_report.manual_evidence",
+      "finding": "Secret scanning is NOT RUN for a security_secrets change.",
+      "evidence": "The supplied evidence packet explicitly marks scanner/format evidence NOT RUN; a passing fixture check is not scanner evidence.",
+      "evidence_excerpt": "manual NOT RUN scanner/format",
+      "impact": "There is no evidence that repository scanning detects prohibited real key material or that this change did not weaken scanner policy.",
+      "required_change": "Run and record the repository secret/security scan without displaying fixture contents or any real credential material.",
+      "suggested_test": "Run nox -s security and the configured secret scanner, verify a real-format synthetic canary is detected in an isolated test, and remove the canary afterward."
+    },
+    {
+      "id": "OBS-CREDENTIAL-REJECTION-NOT-EVIDENCED",
+      "severity": "HIGH",
+      "category": "tests",
+      "location": "implementation_report.manual_evidence",
+      "finding": "No evidence shows that the real credential-format path rejects the synthetic private-key-shaped fixture.",
+      "evidence": "Only the generic fixture check is reported PASS, while the separate scanner/format verification remains NOT RUN.",
+      "evidence_excerpt": "auto PASS fixture, manual NOT RUN scanner/format",
+      "impact": "A fixture can pass its own test while an authorized_keys or provisioning parser still accepts an unsafe credential form.",
+      "required_change": "Add and run a test against the real credential-format parser or provisioning boundary that rejects private-key and synthetic-key markers while accepting only valid public-key formats.",
+      "suggested_test": "Verify the real credential boundary rejects this fixture and private-key headers, accepts a generated public-key fixture, and never prints key material."
+    }
+  ],
+  "contract_consumer_review": "The relevant consumer is the actual SSH credential parser or provisioning boundary, not the fixture loader alone. That consumer is not exercised by the supplied PASS evidence.",
+  "evidence_matrix": [
+    {
+      "check": "Fixture check",
+      "status": "PASS",
+      "manual": false
+    },
+    {
+      "check": "Secret and security scan",
+      "status": "NOT_RUN",
+      "manual": false
+    },
+    {
+      "check": "Real credential-format rejection and safe format verification",
+      "status": "NOT_RUN",
+      "manual": true
+    }
+  ],
+  "operations_safety_security_privacy": "The reviewed bytes are plainly synthetic, so no real credential exposure is claimed. Production hosts, authorized_keys, private keys, and infrastructure were not accessed. The security gap is the committed key-shaped form and missing independent scanner/parser evidence.",
+  "documentation_assessment": "No safe-fixture rationale, scanner policy evidence, or credential-format verification procedure accompanies the added artifact.",
+  "follow_ups": [],
+  "limitations": [
+    "Review was limited to the supplied hash-verified patch and direct evidence packet.",
+    "The fixture was assessed as inert synthetic text only; no real key validity or production authentication was tested."
+  ]
+}

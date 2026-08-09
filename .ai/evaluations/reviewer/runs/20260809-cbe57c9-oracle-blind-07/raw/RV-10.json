@@ -1,0 +1,98 @@
+{
+  "schema": "senior-pomidor.review-report.v1",
+  "title": "Oracle-blind review of export cleanup and operations evidence",
+  "case_id": "RV-10",
+  "reviewer_version": "1.0",
+  "reviewer_hash": "51ab66ce62e2b5363d7a71587edb937f1e34feb842d726e24141da4b03c38f0f",
+  "verdict": "REQUEST CHANGES",
+  "rationale": "The export cleanup reopens and deletes a NamedTemporaryFile while its handle is still open, which is not safe on Windows and can also conflict with context-manager cleanup. Linux-only automation omits the required supported-platform regression, the availability-sensitive rollback rehearsal is explicitly not run, and the operations documentation changes an unrelated freshness default without a corresponding runtime change.",
+  "classification": {
+    "task_classes": [
+      "pure_software",
+      "infrastructure_deployment"
+    ],
+    "risk_flags": [
+      "production_availability"
+    ],
+    "sp_fail_ids": [
+      "SP-FAIL-014"
+    ]
+  },
+  "scope_architecture": "Export cleanup, configuration documentation, and rollback evidence are in scope. The cleanup violates the cross-platform resource-lifetime rule captured by SP-FAIL-014; the freshness-default edit has no demonstrated relationship to export cleanup; and required rollback evidence remains pending.",
+  "findings": [
+    {
+      "id": "RV10-OBS-001",
+      "severity": "HIGH",
+      "category": "correctness",
+      "location": "tools/export.py",
+      "finding": "The export code reopens and unlinks a named temporary file while its original handle is still open.",
+      "evidence": "Both Path.write_text and Path.unlink execute inside the NamedTemporaryFile context.",
+      "evidence_excerpt": "with tempfile.NamedTemporaryFile() as handle:\n    Path(handle.name).write_text(payload, encoding=\"utf-8\")\n    Path(handle.name).unlink()",
+      "impact": "Windows can reject the reopen or unlink because of file locking, and context-manager cleanup can encounter an already removed path, breaking a supported export path.",
+      "required_change": "Write through the owned handle or close it before reopening, and let one clearly owned cleanup path delete the file after all handles are closed.",
+      "suggested_test": "Test successful export and cleanup on Windows and Linux, including write failure and explicit handle closure before deletion."
+    },
+    {
+      "id": "RV10-OBS-002",
+      "severity": "HIGH",
+      "category": "tests",
+      "location": "implementation_report.automated_evidence",
+      "finding": "The reported automation is Linux-only and therefore omits the required Windows cleanup regression for this filesystem change.",
+      "evidence": "The implementation evidence explicitly limits the passing automation to Linux CI and documentation checks.",
+      "evidence_excerpt": "automated PASS Linux CI/docs",
+      "impact": "The exact supported platform most exposed to open-handle deletion semantics can remain broken while CI is reported green.",
+      "required_change": "Add and report focused Windows and Linux export cleanup tests that assert handles close and temporary paths are removed without retries or skips.",
+      "suggested_test": "Run the focused export filesystem suite on native Windows and Linux and verify cleanup after explicit close in success and failure paths."
+    },
+    {
+      "id": "RV10-OBS-003",
+      "severity": "HIGH",
+      "category": "tests",
+      "location": "implementation-report.md",
+      "finding": "The required isolated rollback rehearsal is NOT RUN even though approval is requested for a production-availability change.",
+      "evidence": "The implementation report records the rollback rehearsal as awaiting an operator and then requests approval.",
+      "evidence_excerpt": "| NOT RUN | isolated rollback rehearsal | Awaiting operator |\nVerdict requested: APPROVE",
+      "impact": "There is no evidence that export failure can be rolled back without harming application availability or that post-rollback health and data remain intact.",
+      "required_change": "Complete the isolated rollback rehearsal and record failure injection, abort boundary, owner, rollback steps, and post-rollback health/data results before approval.",
+      "suggested_test": "manual: Have the authorized operator inject an export failure in isolation, execute the documented rollback, and verify application health and preserved data."
+    },
+    {
+      "id": "RV10-OBS-004",
+      "severity": "MEDIUM",
+      "category": "docs",
+      "location": "docs/OPERATIONS.md",
+      "finding": "The patch changes the documented state-freshness default from 300 to 30 seconds without any corresponding runtime/configuration change in the reviewed scope.",
+      "evidence": "The only freshness change is a prose replacement in OPERATIONS.md; the code patch concerns export temporary files.",
+      "evidence_excerpt": "-State freshness defaults to 300 seconds.\n+State freshness defaults to 30 seconds.",
+      "impact": "Operators can configure or diagnose freshness against a value that the implementation does not use, and an unrelated behavioral claim expands the export-cleanup scope.",
+      "required_change": "Restore the documented 300-second value or move an approved runtime-default change, tests, compatibility analysis, and documentation into a separately scoped change.",
+      "suggested_test": "Verify the documented freshness default against the actual configuration source and its boundary tests."
+    }
+  ],
+  "contract_consumer_review": "The temporary export path is an operational filesystem contract whose cleanup must work on both supported operating systems. The reviewed patch does not establish ownership of the open handle and deletion. The freshness documentation also claims a configuration contract change with no matching producer or consumer change.",
+  "evidence_matrix": [
+    {
+      "check": "Reported Linux CI and documentation checks",
+      "status": "PASS",
+      "manual": false
+    },
+    {
+      "check": "Focused Windows and Linux export cleanup tests",
+      "status": "NOT_RUN",
+      "manual": false
+    },
+    {
+      "check": "Isolated rollback and post-rollback health/data rehearsal",
+      "status": "NOT_RUN",
+      "manual": true
+    }
+  ],
+  "operations_safety_security_privacy": "The open-handle cleanup can cause a supported-platform export failure, and production-availability rollback remains unverified. No production path, persistent data, destructive operation, or external export was exercised during this review.",
+  "documentation_assessment": "The freshness-default edit is unrelated to export cleanup and unsupported by a reviewed config/code change. The implementation report also requests approval despite explicitly pending required rollback evidence, so its conclusion is not supported.",
+  "follow_ups": [],
+  "limitations": [
+    "Review was limited to the two supplied hash-verified patches, mandatory stable rules, reviewer guidance, schema, and direct evidence packet.",
+    "No Windows test run, rollback rehearsal, production host, export destination, current diff, or unlisted evaluation artifact was inspected.",
+    "The Linux CI claim did not include exact commands or logs."
+  ]
+}

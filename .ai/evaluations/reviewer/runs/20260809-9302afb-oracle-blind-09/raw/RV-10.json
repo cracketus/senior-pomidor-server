@@ -1,0 +1,92 @@
+{
+  "schema": "senior-pomidor.review-report.v1",
+  "title": "Oracle-blind review of export portability, operations documentation, and rollback",
+  "case_id": "RV-10",
+  "reviewer_version": "1.0",
+  "reviewer_hash": "51ab66ce62e2b5363d7a71587edb937f1e34feb842d726e24141da4b03c38f0f",
+  "verdict": "REQUEST CHANGES",
+  "rationale": "The export implementation reopens and unlinks a NamedTemporaryFile while its handle is open, a known Windows failure pattern. Evidence covers Linux only, the documentation changes the stated freshness default without a corresponding runtime change in the supplied patches, and the required isolated rollback rehearsal remains not run.",
+  "classification": {
+    "task_classes": [
+      "pure_software",
+      "infrastructure_deployment"
+    ],
+    "risk_flags": [
+      "production_availability"
+    ],
+    "sp_fail_ids": [
+      "SP-FAIL-014"
+    ]
+  },
+  "scope_architecture": "The export helper is an operational software path and the operations document defines operator-visible behavior. The changes remain in their nominal owners, but the implementation is not portable to a supported operating system and the documented default is not backed by a runtime/configuration patch.",
+  "findings": [
+    {
+      "id": "OBS-EXPORT-WINDOWS-001",
+      "severity": "HIGH",
+      "category": "correctness",
+      "location": "tools/export.py",
+      "finding": "The export path reopens and deletes a named temporary file while its original handle remains open.",
+      "evidence": "09-windows-path.diff performs Path.write_text and Path.unlink inside the NamedTemporaryFile context.",
+      "evidence_excerpt": "with tempfile.NamedTemporaryFile() as handle:\n    Path(handle.name).write_text(payload, encoding=\"utf-8\")\n    Path(handle.name).unlink()",
+      "impact": "Windows file-locking semantics can raise an access or cleanup error, breaking the required export path on a supported CI platform.",
+      "required_change": "Close the temporary file before reopening or deleting it, use a cross-platform temporary-path pattern, and make cleanup idempotent.",
+      "suggested_test": "Test successful export and cleanup on Windows and Linux with all file handles explicitly closed before deletion."
+    },
+    {
+      "id": "OBS-WINDOWS-EVIDENCE-001",
+      "severity": "HIGH",
+      "category": "tests",
+      "location": "implementation_report.automated_evidence",
+      "finding": "The automated evidence covers Linux but does not include the required Windows execution and cleanup check.",
+      "evidence": "The supplied CI statement names Linux and documentation checks only.",
+      "evidence_excerpt": "PASS: CI on Linux and documentation checks",
+      "impact": "A platform-specific file-locking regression can be reported as fully green without ever exercising the failing operating system.",
+      "required_change": "Run the focused export and cleanup tests on both Windows and Linux and record both outcomes.",
+      "suggested_test": "Run the export test matrix on Windows and Linux and verify the temporary path no longer exists after explicit close."
+    },
+    {
+      "id": "OBS-ROLLBACK-EVIDENCE-001",
+      "severity": "HIGH",
+      "category": "operations",
+      "location": "implementation_report.manual_evidence",
+      "finding": "The required isolated rollback rehearsal is not run even though approval is requested.",
+      "evidence": "The supplied manual evidence explicitly leaves rollback pending.",
+      "evidence_excerpt": "NOT RUN: isolated rollback rehearsal",
+      "impact": "Operators have no observed proof that rollback restores export behavior, health, and data integrity after the availability-affecting change.",
+      "required_change": "Complete the isolated rollback rehearsal and record the candidate identity, abort boundary, rollback owner, post-rollback health, and data checks.",
+      "suggested_test": "manual: Rehearse rollback in an isolated project and verify export behavior, service health, and representative data before and after rollback."
+    },
+    {
+      "id": "OBS-FRESHNESS-DOC-001",
+      "severity": "MEDIUM",
+      "category": "docs",
+      "location": "docs/OPERATIONS.md",
+      "finding": "Operations documentation changes the stated freshness default from 300 seconds to 30 seconds without a corresponding runtime or configuration change in the supplied patches.",
+      "evidence": "10-docs-manual.diff changes only the documented value for the freshness default.",
+      "evidence_excerpt": "State freshness defaults to 300 seconds.\nState freshness defaults to 30 seconds.",
+      "impact": "Operators can diagnose stale state, tune alerts, or execute rollback against a threshold that does not match deployable behavior.",
+      "required_change": "Restore the documented 300-second default or include and verify the approved runtime/configuration change to 30 seconds across all consumers.",
+      "suggested_test": "Verify the documented freshness default against the rendered runtime configuration and its focused behavior test."
+    }
+  ],
+  "contract_consumer_review": "The export helper is consumed by supported Windows and Linux workflows, but only Linux evidence is supplied. The freshness default is an operator-visible configuration contract; the documentation patch changes that claim without a matching runtime producer or consumer update.",
+  "evidence_matrix": [
+    {
+      "check": "PASS: CI on Linux and documentation checks",
+      "status": "PASS",
+      "manual": false
+    },
+    {
+      "check": "NOT RUN: isolated rollback rehearsal",
+      "status": "NOT_RUN",
+      "manual": true
+    }
+  ],
+  "operations_safety_security_privacy": "The export failure is a supported-platform availability defect. The requested approval is premature because rollback has not been rehearsed, and the operator-facing freshness value is inconsistent with the supplied implementation scope. No destructive action or production access was performed.",
+  "documentation_assessment": "The operations document changes a runtime-default claim without matching code/configuration evidence. The implementation report also requests approval while recording the mandatory rollback rehearsal as not run, so the documented readiness claim is not supportable.",
+  "follow_ups": [],
+  "limitations": [
+    "Review was limited to 09-windows-path.diff, 10-docs-manual.diff, and the two supplied evidence statements.",
+    "The isolated rollback rehearsal was not performed because it is explicitly reported as not run."
+  ]
+}

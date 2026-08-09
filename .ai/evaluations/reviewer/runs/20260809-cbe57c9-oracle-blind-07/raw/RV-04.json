@@ -1,0 +1,140 @@
+{
+  "schema": "senior-pomidor.review-report.v1",
+  "title": "Bounded local daily-story consumer",
+  "case_id": "RV-04",
+  "reviewer_version": "1.0",
+  "reviewer_hash": "51ab66ce62e2b5363d7a71587edb937f1e34feb842d726e24141da4b03c38f0f",
+  "verdict": "REQUEST CHANGES",
+  "rationale": "The optional consumer remains separated from ingestion and actuation, but existing databases are not migrated to the new story length, required real-model acceptance is incorrectly treated as not applicable, and the output boundary can accept reasoning or private-context echoes before the terminal marker. The HTTP response body is also read without a byte bound.",
+  "classification": {
+    "task_classes": [
+      "schema_data_contract",
+      "infrastructure_deployment",
+      "llm_vision"
+    ],
+    "risk_flags": [
+      "data_loss_migration",
+      "security_secrets",
+      "production_availability",
+      "public_contract"
+    ],
+    "sp_fail_ids": [
+      "SP-FAIL-002",
+      "SP-FAIL-005",
+      "SP-FAIL-012",
+      "SP-FAIL-013"
+    ]
+  },
+  "scope_architecture": "The diff changes model prompts and provider requests, semantic output limits, retry/fallback behavior, persisted story/environment fields, Alembic revisions, public story semantics, worker startup configuration, Compose, local diagnostic tooling, operator documentation, and tests. It remains an optional LLM communication consumer and has no path into telemetry ingestion, Control, Guardrails, Executor, GPIO, or other actuation. The schema migration and public response change require schema_data_contract/infrastructure review in addition to llm_vision, with data, privacy, availability, and public-contract risk flags.",
+  "findings": [
+    {
+      "id": "OBS-8B3EF35-001",
+      "severity": "HIGH",
+      "category": "correctness",
+      "location": "migrations/versions/0007_daily_story_runs.py:34",
+      "finding": "The change edits the already existing 0007 migration instead of altering the story column in the new 0008 migration.",
+      "evidence": "Existing databases that already applied 0007 retain varchar(280). Migration 0008 only adds environment_context_jsonb, while the worker now accepts stories of at least 1,680 characters and the ORM declares varchar(32768). Fresh test databases see the edited 0007 definition, masking the deployed upgrade failure.",
+      "evidence_excerpt": "sa.Column(\"story\", sa.String(length=32768), nullable=True),",
+      "impact": "The normal existing-database path rejects every newly valid long story during persistence, leaving the daily-story worker failed even though a fresh database passes tests.",
+      "required_change": "Restore migration 0007 to its released definition and add an explicit 0008-or-later alter-column upgrade and compatible downgrade for the story length.",
+      "suggested_test": "Run an upgrade from a database stamped at the original 0007 schema, verify the column expands to 32768, persist a minimum valid story, and exercise downgrade or rollback compatibility in isolation."
+    },
+    {
+      "id": "OBS-8B3EF35-002",
+      "severity": "HIGH",
+      "category": "tests",
+      "location": "implementation_report.manual_checks",
+      "finding": "Representative local-model acceptance is required for this runtime/output change but is reported as not applicable.",
+      "evidence": "The revision changes prompts, think=false, long-form output, a Gemma CPU fallback, context memory, num_predict, and validation/retry behavior. TEST_MATRIX requires representative local-model acceptance when model/runtime behavior changes, and the changed README explicitly calls it a mandatory operator gate.",
+      "evidence_excerpt": "NOT APPLICABLE: no physical or production action is in scope",
+      "impact": "Unit fakes cannot demonstrate that the configured Ollama/model pair supports the request schema, thinking mode, output length, timeout, fallback, and privacy boundary on the real execution path.",
+      "required_change": "Record the mandatory bounded real-model generation and API-retrieval acceptance with the configured runtime, including malformed, reasoning, timeout, unavailable, oversized, and privacy observations.",
+      "suggested_test": "manual: Run the documented seeded daily-story acceptance with the pinned Ollama/model runtime, inspect only redacted bounded diagnostics, and record output structure, privacy, timing, fallback, worker health, and API fields."
+    },
+    {
+      "id": "OBS-8B3EF35-003",
+      "severity": "HIGH",
+      "category": "correctness",
+      "location": "app/daily_story.py:402",
+      "finding": "The semantic parser rejects analysis only when it trails the terminal marker, not when it appears before the marker inside the accepted story.",
+      "evidence": "After strict JSON and total-length checks, acceptance is based solely on story.endswith(STORY_END_MARKER). A response beginning with prompt discussion, retry commentary, or reasoning and ending with #SeniorPomidor is persisted and returned; the added test covers only text after the marker.",
+      "evidence_excerpt": "if len(story) > STORY_MAX_CHARS:\n    raise DailyStoryError(f\"Ollama returned a story longer than {STORY_MAX_CHARS} characters\")\nif not story.endswith(STORY_END_MARKER):\n    raise DailyStoryError(f\"Ollama story must end with {STORY_END_MARKER} and contain no trailing analysis\")\nreturn story",
+      "impact": "Prompt discussion or model reasoning can be exposed as publishable diary content despite the stated untrusted-output boundary.",
+      "required_change": "Reject high-confidence planning, prompt discussion, retry commentary, and reasoning anywhere in the accepted story, while preserving a safe unavailable result on ambiguity.",
+      "suggested_test": "Test reasoning and prompt discussion before, inside, and after an otherwise valid marked story, plus provider thinking fields, and verify none is persisted or returned."
+    },
+    {
+      "id": "OBS-8B3EF35-004",
+      "severity": "HIGH",
+      "category": "security",
+      "location": "app/daily_story.py:391",
+      "finding": "Private environment context is sent to the model without a separate output privacy enforcement boundary.",
+      "evidence": "The new context includes operator-maintained memories and location/life details that documentation says are private and excluded from the API. They are inserted verbatim into the prompt, but the accepted story is checked only for JSON shape, total length, and ending marker; a model echo can therefore move private context into the returned story field.",
+      "evidence_excerpt": "\"{{ENVIRONMENT_CONTEXT_JSON}}\": json.dumps(\n    environment_context, ensure_ascii=False, sort_keys=True, separators=(\",\", \":\")\n),",
+      "impact": "A model can reproduce private operator context in user-visible or subsequently published diary text even though the raw environment field itself is hidden.",
+      "required_change": "Apply an explicit output privacy policy before persistence and API exposure, independently of input bounding and field omission.",
+      "suggested_test": "Test a synthetic private sentinel in environment context and model responses that echo it exactly or paraphrase it; verify the story is rejected or safely redacted according to a documented policy."
+    },
+    {
+      "id": "OBS-8B3EF35-005",
+      "severity": "MEDIUM",
+      "category": "operations",
+      "location": "app/ollama.py:86",
+      "finding": "The Ollama success body is read and decoded without a response-byte limit.",
+      "evidence": "STORY_MAX_CHARS is enforced only after response.read() loads the complete HTTP body and json.loads materializes it. An oversized or malformed local provider response can consume unbounded memory before the application returns a safe unavailable result.",
+      "evidence_excerpt": "with urllib.request.urlopen(  # noqa: S310  # nosec B310\n    request, timeout=self.timeout_seconds\n) as response:\n    decoded = json.loads(response.read().decode(\"utf-8\"))",
+      "impact": "A faulty local model server can exhaust the worker or host rather than producing a bounded failure, affecting availability beyond the optional generation attempt.",
+      "required_change": "Bound the number of response bytes read, reject declared or observed oversize before JSON parsing, and retain only bounded redacted diagnostics.",
+      "suggested_test": "Test an Ollama response whose envelope exceeds the configured byte limit in one chunk and multiple chunks; verify bounded reads, safe failure, and stable worker memory."
+    },
+    {
+      "id": "OBS-8B3EF35-006",
+      "severity": "MEDIUM",
+      "category": "correctness",
+      "location": "tests/test_daily_story.py:215",
+      "finding": "The semantic validator does not enforce the documented 7-10 post thread structure or per-post bounds.",
+      "evidence": "The prompt requires 7-10 clearly separated posts of roughly 240-280 characters, but the updated test labels one repeated unseparated paragraph as valid. Production validation checks only total length and the final marker.",
+      "evidence_excerpt": "def test_generation_retries_validation_and_sends_schema_options_and_keep_alive() -> None:\n    valid_story = f\"{('I am thriving today! ' * 100).strip()}\\n\\n#SeniorPomidor\"",
+      "impact": "The consumer can persist and expose a long blob that cannot be used as the promised thread even while reporting successful generation.",
+      "required_change": "Define an unambiguous post delimiter and validate post count plus bounded per-post length before accepting a story.",
+      "suggested_test": "Test 6, 7, 10, and 11 posts; missing delimiters; overlong and empty posts; and a valid 7-post story through generation, persistence, and API retrieval."
+    }
+  ],
+  "contract_consumer_review": "Inventoried contracts include the daily-story environment file and settings, prompt tokens, Ollama request fields, structured response, long-form story semantics, DailyStoryRun schema/migrations, worker health, Compose profile, API story field, operator manual acceptance, and diagnostic tool. Producers are deterministic telemetry/context builders plus Ollama; consumers are persistence, worker health, the daily-story API, operators, and any downstream publisher. No ingestion or actuation consumer exists. The public story field changes from at most 280 characters to 1,680-32,768 characters without a versioned compatibility plan, and the deployed database, reasoning boundary, privacy boundary, and real-model evidence are incomplete.",
+  "evidence_matrix": [
+    {
+      "check": "Supplied historical model-boundary and application tests",
+      "status": "PASS",
+      "manual": false
+    },
+    {
+      "check": "Pinned diff tests for malformed JSON, short/oversized story, trailing reasoning, timeout/permanent errors, CPU fallback, memory isolation, and API private-field omission",
+      "status": "PASS",
+      "manual": false
+    },
+    {
+      "check": "Existing-database 0007-to-0008 migration and long-story persistence",
+      "status": "NOT_RUN",
+      "manual": false
+    },
+    {
+      "check": "Representative local-model acceptance required by llm_vision and the changed operator documentation",
+      "status": "NOT_RUN",
+      "manual": true
+    },
+    {
+      "check": "Physical or production action procedure: NOT APPLICABLE because the optional consumer has no ingestion or actuation authority",
+      "status": "PASS",
+      "manual": true
+    }
+  ],
+  "operations_safety_security_privacy": "The daily-story worker remains optional, local, and downstream-only; no model output reaches MQTT ingestion, Control, Guardrails, Executor, GPIO, or hardware. Runtime inventory changes environment path/size/memory settings, output token budget, prompts, think handling, CPU fallback, story storage length, migration head, persisted private context, worker startup, and Compose mounts. SP-FAIL-002 applies to worker health, SP-FAIL-005 to the altered schema path, SP-FAIL-012 to malformed/timeout/oversized model output, and SP-FAIL-013 to reasoning and prompt leakage. Missing migration, real-model, byte-bound, semantic, and privacy controls prevent approval.",
+  "documentation_assessment": "README, environment example, operations guide, prompt files, and troubleshooting guide describe long-form structured output, private context, manual acceptance, timeout/fallback behavior, and no raw private API fields. They do not match the deployed migration behavior, and the claim that private environment context is excluded from the public API overlooks model echo into the public story. The prompt's thread requirements are also not enforced by code or tests.",
+  "follow_ups": [],
+  "limitations": [
+    "Reviewed only the supplied direct packet and complete pinned revision 8b3ef35; no current worktree diff or later history was inspected.",
+    "The supplied artifact SHA-256 aca673eab0f8b09094a4fc77fdf0e2f23753b35974931edd3e566d1f3d53af93 matched the exact git diff.",
+    "No live Ollama model, production system, private infrastructure, case registry, oracle, evaluator result, or prior report was accessed.",
+    "Historical automated checks were not rerun; PASS reflects only the supplied evidence and code-visible tests."
+  ]
+}

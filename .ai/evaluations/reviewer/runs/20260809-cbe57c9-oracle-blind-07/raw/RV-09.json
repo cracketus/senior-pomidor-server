@@ -1,0 +1,70 @@
+{
+  "schema": "senior-pomidor.review-report.v1",
+  "title": "Oracle-blind review of daily-story public response mapping",
+  "case_id": "RV-09",
+  "reviewer_version": "1.0",
+  "reviewer_hash": "51ab66ce62e2b5363d7a71587edb937f1e34feb842d726e24141da4b03c38f0f",
+  "verdict": "REQUEST CHANGES",
+  "rationale": "The patch replaces validated final-field mapping with raw model text on a public summary path. That makes extra prose, reasoning, malformed or oversized content, prompt echoes, and private material reachable in the public contract, while the generic unit-test claim does not establish the required strict-parser and privacy cases.",
+  "classification": {
+    "task_classes": [
+      "llm_vision",
+      "schema_data_contract"
+    ],
+    "risk_flags": [
+      "public_contract"
+    ],
+    "sp_fail_ids": [
+      "SP-FAIL-012",
+      "SP-FAIL-013"
+    ]
+  },
+  "scope_architecture": "Daily-story response mapping is in scope, but raw response text is untrusted input and cannot become a public contract field. The removed validation boundary directly regresses SP-FAIL-012 and SP-FAIL-013; only a strictly parsed, schema- and semantically validated, bounded final field may be mapped to public_summary.",
+  "findings": [
+    {
+      "id": "RV09-OBS-001",
+      "severity": "HIGH",
+      "category": "security",
+      "location": "app/daily_story.py",
+      "finding": "The public summary now receives raw model response text instead of the validated final field.",
+      "evidence": "The validate_story_response call and parsed.final mapping are removed and replaced by response.text.",
+      "evidence_excerpt": "-    parsed = validate_story_response(response)\n-    public_summary = parsed.final\n+    public_summary = response.text",
+      "impact": "Malformed output, extra prose, hidden reasoning, prompt echoes, oversized text, or private material can be published as the daily-story summary.",
+      "required_change": "Restore strict parsing, schema and semantic validation, size bounds, and final-field-only public mapping with a safe unavailable result on every invalid response.",
+      "suggested_test": "Test malformed and truncated JSON, leading and trailing prose, reasoning fields and tags, prompt echoes, timeout, unavailable model, oversized output, and private-data exclusion."
+    },
+    {
+      "id": "RV09-OBS-002",
+      "severity": "HIGH",
+      "category": "tests",
+      "location": "implementation_report.automated_evidence",
+      "finding": "The generic unit-test pass does not identify the mandatory adversarial parser, bounds, unavailable-model, and privacy checks for the changed public mapping.",
+      "evidence": "The supplied automated evidence names only unit tests and gives no exact commands or cases.",
+      "evidence_excerpt": "automated PASS unit tests",
+      "impact": "The raw-response regression can pass a happy-path unit suite while violating the public-output and privacy contract.",
+      "required_change": "Add and report the complete strict-output, malformed/reasoning/timeout/unavailable/oversized/privacy regression matrix on the public serialization path.",
+      "suggested_test": "Run the focused daily-story and model-output suites with adversarial responses and assert only validated final content reaches public serialization."
+    }
+  ],
+  "contract_consumer_review": "public_summary is a public contract consumer and must receive only the validated final field. The patch changes its trust boundary and semantics without a compatibility note or evidence that public serialization excludes reasoning, prompt text, malformed content, and private data.",
+  "evidence_matrix": [
+    {
+      "check": "Reported unit tests",
+      "status": "PASS",
+      "manual": false
+    },
+    {
+      "check": "Strict parser, malformed/extra/reasoning/timeout/unavailable/oversized/privacy cases through public serialization",
+      "status": "NOT_RUN",
+      "manual": false
+    }
+  ],
+  "operations_safety_security_privacy": "No actuation path is involved, but model text remains untrusted and public output must be bounded and privacy-safe. The reviewed change removes that boundary. No model endpoint, production data, private prompt, or public publisher was contacted during review.",
+  "documentation_assessment": "No reviewed release note or contract documentation explains the weakened public-summary semantics. Documentation cannot make raw response publication safe; implementation validation and serialization tests are required first.",
+  "follow_ups": [],
+  "limitations": [
+    "Review was limited to the supplied hash-verified patch, mandatory stable rules, reviewer guidance, schema, and direct evidence packet.",
+    "No model runtime, prompt corpus, production/public output, parser source beyond the patch, or unlisted evaluation artifact was inspected.",
+    "Representative local-model acceptance was described as optional and was not used to infer correctness."
+  ]
+}

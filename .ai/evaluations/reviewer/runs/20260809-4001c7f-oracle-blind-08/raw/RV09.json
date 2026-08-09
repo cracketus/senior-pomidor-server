@@ -1,0 +1,68 @@
+{
+  "schema": "senior-pomidor.review-report.v1",
+  "title": "Review of public daily-story model-output mapping",
+  "case_id": "RV09",
+  "reviewer_version": "1.0",
+  "reviewer_hash": "51ab66ce62e2b5363d7a71587edb937f1e34feb842d726e24141da4b03c38f0f",
+  "verdict": "REQUEST CHANGES",
+  "rationale": "The public daily-story summary now publishes raw model response text instead of the strictly validated final field. This makes untrusted prose, malformed output, prompt echoes, or hidden reasoning reachable at the public boundary, and generic unit evidence does not cover the required LLM failure and privacy cases.",
+  "classification": {
+    "task_classes": [
+      "llm_vision"
+    ],
+    "risk_flags": [
+      "public_contract"
+    ],
+    "sp_fail_ids": [
+      "SP-FAIL-012",
+      "SP-FAIL-013"
+    ]
+  },
+  "scope_architecture": "The patch changes the public mapping of model output. It bypasses the established untrusted-output validation boundary and makes the provider response, rather than the validated contract field, authoritative for public content.",
+  "findings": [
+    {
+      "id": "OBS-RAW-MODEL-TEXT-PUBLISHED",
+      "severity": "HIGH",
+      "category": "security",
+      "location": "app/daily_story.py",
+      "finding": "The public summary is populated from raw model response text instead of a validated final field.",
+      "evidence": "The validate_story_response call and parsed.final mapping are removed and replaced with response.text.",
+      "evidence_excerpt": "public_summary = response.text",
+      "impact": "Malformed output, extra prose, reasoning, prompt echoes, or private model-visible content can be persisted or published as the daily story.",
+      "required_change": "Restore strict parsing, schema and semantic validation, output bounds, and mapping of only the validated final field to the public contract.",
+      "suggested_test": "Test malformed and truncated JSON, extra prose on either side, reasoning fields and tags, prompt echoes, timeout, unavailable model, and oversized output, asserting a safe unavailable result and no public leakage."
+    },
+    {
+      "id": "OBS-LLM-BOUNDARY-EVIDENCE-MISSING",
+      "severity": "HIGH",
+      "category": "tests",
+      "location": "implementation_report.automated_evidence",
+      "finding": "Generic unit PASS evidence does not demonstrate the required LLM output and privacy failure cases.",
+      "evidence": "The supplied packet reports only unit PASS and supplies no named malformed, reasoning, timeout, unavailable, oversized, or privacy results.",
+      "evidence_excerpt": "auto PASS unit",
+      "impact": "The public-output regression can remain green because the critical parser and privacy boundaries are not evidenced.",
+      "required_change": "Add and run the complete named LLM boundary and public-serialization suite against the actual daily-story mapping.",
+      "suggested_test": "Run focused daily-story tests that inject malformed, reasoning-bearing, unavailable, timed-out, oversized, and prompt-echo responses through the real public serializer."
+    }
+  ],
+  "contract_consumer_review": "The model provider produces untrusted response text, validate_story_response owns the validation boundary, and the public daily-story serializer consumes only the validated final field. The patch bypasses that adapter and silently changes public content semantics without compatibility evidence.",
+  "evidence_matrix": [
+    {
+      "check": "Generic unit checks",
+      "status": "PASS",
+      "manual": false
+    },
+    {
+      "check": "Malformed, reasoning, timeout, unavailable, oversized, and privacy boundary checks",
+      "status": "NOT_RUN",
+      "manual": false
+    }
+  ],
+  "operations_safety_security_privacy": "No production model or public endpoint was contacted. The code path itself removes the privacy and trust boundary, so local green tests cannot justify publication until strict validation and safe-unavailable behavior are restored.",
+  "documentation_assessment": "No public-contract or release documentation explains a deliberate semantic change, and such documentation would not make raw untrusted model output safe.",
+  "follow_ups": [],
+  "limitations": [
+    "Review was limited to the supplied hash-verified patch and direct evidence packet.",
+    "Representative local-model acceptance was treated as optional for this mapping-only patch; the named automated parser and privacy checks remain required."
+  ]
+}

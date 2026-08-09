@@ -1,0 +1,52 @@
+{
+  "schema": "senior-pomidor.review-report.v1",
+  "title": "Read-only action simulation boundary review",
+  "case_id": "RV-01",
+  "reviewer_version": "1.0",
+  "reviewer_hash": "51ab66ce62e2b5363d7a71587edb937f1e34feb842d726e24141da4b03c38f0f",
+  "verdict": "REQUEST CHANGES",
+  "rationale": "The simulation contains no physical actuator call, but the change also adds a durable schema revision and public read surfaces without the migration classification or evidence they require. Its Guardrails simulation can report ALLOW when required sensor records are absent.",
+  "classification": {
+    "task_classes": ["schema_data_contract", "infrastructure_deployment", "control_guardrails_executor"],
+    "risk_flags": ["data_loss_migration", "public_contract", "production_availability"],
+    "sp_fail_ids": ["SP-FAIL-005", "SP-FAIL-009", "SP-FAIL-010"]
+  },
+  "scope_architecture": "The changed State Estimator owns only read-only simulation and persistence; no Control-to-adapter or actuator path appears in the pinned diff. The new table, migration, APIs, private log, and dashboard are nevertheless persisted and consumer-facing behavior outside the brief's sole declared class.",
+  "findings": [
+    {
+      "id": "obs-v5-rv01-001",
+      "severity": "HIGH",
+      "category": "tests",
+      "location": "brief.task_classes",
+      "finding": "The approved brief omits the schema, deployment, migration, public-contract, and availability classifications introduced by the action-simulation table and read APIs, so the required isolated migration/restore and rollout evidence is absent.",
+      "evidence": "The supplied brief declares only control_guardrails_executor, while the pinned diff adds an Alembic migration, persisted ActionSimulation records, HTTP endpoints, private JSONL output, and Grafana queries. TEST_MATRIX requires isolated upgrade/restore evidence for a durable schema change.",
+      "evidence_excerpt": "[\"control_guardrails_executor\"]",
+      "impact": "A production upgrade can encounter untested migration, recovery, or consumer-compatibility failures despite the simulation itself being read-only.",
+      "required_change": "Reclassify the brief and attach isolated upgrade/restore, readiness, rollback, and named API/dashboard consumer evidence before approval.",
+      "suggested_test": "Run an isolated upgrade and restore of a pre-change database, then verify the action-simulation APIs and dashboard queries against the restored data."
+    },
+    {
+      "id": "obs-v5-rv01-002",
+      "severity": "MEDIUM",
+      "category": "safety",
+      "location": "app/state_estimator/decisions.py:83",
+      "finding": "Guardrails only evaluate sensor records that are present and can return ALLOW when the sensor-health payload omits every required sensor.",
+      "evidence": "The loop checks status for existing sensor entries but does not record or block missing required sensor types. This conflicts with the fail-safe missing-input invariant for control-critical state.",
+      "evidence_excerpt": "for sensor in (sensor_health or {}).get(\"sensors\", []):",
+      "impact": "The persisted simulation can present an allow decision from incomplete health data, which is unsafe guidance for any downstream consumer of the proposed Guardrails contract.",
+      "required_change": "Treat each absent required sensor type as a blocking reason before calculating allowed.",
+      "suggested_test": "Test build_guardrails with an empty sensors list and with each required sensor omitted; assert allowed is false and the missing type is reported."
+    }
+  ],
+  "contract_consumer_review": "Inspected consumers in the pinned diff: SQL persistence/migration, private JSONL, the two HTTP read paths, and Grafana panels. The diff supplies implementation tests for these paths, but no versioned action-simulation contract or migration/consumer rollout evidence in the brief.",
+  "evidence_matrix": [
+    {"check": "Pinned diff SHA-256", "status": "PASS", "manual": false},
+    {"check": "Read-only actuation boundary inspection", "status": "PASS", "manual": false},
+    {"check": "Pinned deterministic guardrail and API tests", "status": "PASS", "manual": false},
+    {"check": "Isolated migration upgrade/restore and rollback evidence", "status": "NOT_RUN", "manual": true}
+  ],
+  "operations_safety_security_privacy": "The pinned code fixes physical_actuation and watering_proposed to false, and no adapter or hardware call is introduced. Operational readiness remains incomplete because the durable migration lacks the required recovery evidence.",
+  "documentation_assessment": "Cadence, API, and dashboard documentation changes were inspected; they do not substitute for a versioned contract and migration rollout record.",
+  "follow_ups": [],
+  "limitations": ["This historical fixture supplies only the stated implementation-report evidence; no isolated migration rehearsal artifact is supplied."]
+}

@@ -1,0 +1,111 @@
+{
+  "schema": "senior-pomidor.review-report.v1",
+  "title": "Oracle-blind review of physical execution safety and freshness",
+  "case_id": "RV-05",
+  "reviewer_version": "1.0",
+  "reviewer_hash": "51ab66ce62e2b5363d7a71587edb937f1e34feb842d726e24141da4b03c38f0f",
+  "verdict": "REQUEST CHANGES",
+  "rationale": "The proposed path can actuate without Guardrails or the Executor, can repeat an acknowledged command after process restart, and treats a missing observation timestamp as fresh. Required named failure-path automation and supervised hardware/restart evidence are also absent, so green unit/fake CI cannot close the physical-action and availability risks.",
+  "classification": {
+    "task_classes": [
+      "control_guardrails_executor",
+      "edge_hardware_integration"
+    ],
+    "risk_flags": [
+      "physical_action",
+      "production_availability"
+    ],
+    "sp_fail_ids": [
+      "SP-FAIL-002"
+    ]
+  },
+  "scope_architecture": "The watering behavior is in scope, but ownership is not preserved: Control invokes an adapter directly instead of producing a candidate for deterministic Guardrails and an idempotent Executor. The Executor state is process-local, and the freshness gate fails open for missing observations. SP-FAIL-002 applies because restart and freshness behavior require observable recovery evidence; none of the patches demonstrates it.",
+  "findings": [
+    {
+      "id": "RV05-OBS-001",
+      "severity": "BLOCKER",
+      "category": "architecture",
+      "location": "app/control.py",
+      "finding": "The Control helper sends an unvalidated suggestion directly to the watering adapter, bypassing both deterministic Guardrails and the Executor.",
+      "evidence": "The added function calls adapter.water directly whenever the suggestion action equals water.",
+      "evidence_excerpt": "def apply_suggestion(adapter, suggestion):\n    if suggestion[\"action\"] == \"water\":\n        adapter.water(seconds=suggestion[\"seconds\"])",
+      "impact": "An untrusted or malformed suggestion can cause a physical watering action without validation, idempotency, audit transitions, or an approved execution boundary.",
+      "required_change": "Route every watering candidate through deterministic Guardrails and the Executor before an approved or fake adapter can be invoked.",
+      "suggested_test": "Test that direct Control suggestions cannot reach the adapter and that allowed and blocked candidates traverse Guardrails and the Executor."
+    },
+    {
+      "id": "RV05-OBS-002",
+      "severity": "BLOCKER",
+      "category": "safety",
+      "location": "app/executor.py",
+      "finding": "Acknowledgement state exists only in a process-local set, so restart forgets completed command IDs and permits duplicate actuation.",
+      "evidence": "ACKNOWLEDGED is initialized to an empty set at import time and is the only duplicate check before adapter.send.",
+      "evidence_excerpt": "ACKNOWLEDGED = set()\ndef execute(adapter, command):\n    if command.id not in ACKNOWLEDGED:\n        adapter.send(command)\n        ACKNOWLEDGED.add(command.id)",
+      "impact": "A redelivered command after a crash or restart can water twice even though the intended physical action was already performed.",
+      "required_change": "Persist idempotency and execution transitions durably, and recover acknowledged or uncertain actions before any resend is allowed.",
+      "suggested_test": "Simulate acknowledgement, process restart, redelivery, timeout, late acknowledgement, and uncertain execution while asserting at-most-once physical actuation."
+    },
+    {
+      "id": "RV05-OBS-003",
+      "severity": "BLOCKER",
+      "category": "safety",
+      "location": "app/guardrails.py",
+      "finding": "The freshness gate assigns age zero to a missing observed_at value and therefore authorizes state with no observation timestamp.",
+      "evidence": "The conditional expression uses 0 when observed_at is absent, and zero satisfies the 300-second threshold.",
+      "evidence_excerpt": "age_seconds = (now - state[\"observed_at\"]).total_seconds() if state.get(\"observed_at\") else 0\nreturn age_seconds <= 300",
+      "impact": "Missing or unverifiable telemetry is treated as current at the physical safety gate and can authorize watering from stale state.",
+      "required_change": "Reject missing, invalid, future, or stale observation timestamps before any physical candidate can pass Guardrails.",
+      "suggested_test": "Test missing, null, malformed, future, boundary-age, and stale observed_at values and assert they fail safe."
+    },
+    {
+      "id": "RV05-OBS-004",
+      "severity": "HIGH",
+      "category": "tests",
+      "location": "implementation_report.automated_evidence",
+      "finding": "The reported generic unit/fake CI pass does not identify the mandatory physical failure-path tests.",
+      "evidence": "The supplied evidence is only a generic status and does not name duplicate, retry, timeout, late-ACK, restart, stale/low-confidence, or storage-failure coverage.",
+      "evidence_excerpt": "automated PASS unit/fake CI",
+      "impact": "Required safety behavior can remain untested even though the report presents automation as passing.",
+      "required_change": "Add and report named deterministic tests for allowed and blocked Guardrails, duplicates, retries, timeouts, late acknowledgements, restart recovery, stale or low-confidence state, and storage failure.",
+      "suggested_test": "Run the focused Guardrails and Executor suite with fake hardware and each required failure injection, then record exact commands and results."
+    },
+    {
+      "id": "RV05-OBS-005",
+      "severity": "HIGH",
+      "category": "tests",
+      "location": "implementation_report.manual_evidence",
+      "finding": "The required supervised hardware and restart acceptance procedure was not run.",
+      "evidence": "The supplied physical/restart evidence is explicitly NOT RUN.",
+      "evidence_excerpt": "manual NOT RUN supervised hardware/restart",
+      "impact": "CI cannot establish safe actuator behavior, manual abort/rollback, or reboot recovery on the target device.",
+      "required_change": "Complete the human-owned supervised safe-hardware and restart procedure with abort and rollback evidence before approval.",
+      "suggested_test": "manual: Have the authorized hardware owner supervise one bounded action, duplicate suppression, reboot recovery, manual abort, and rollback, and record PASS or FAIL."
+    }
+  ],
+  "contract_consumer_review": "The action candidate, Guardrails decision, Executor command/idempotency key, transition record, acknowledgement, and adapter boundary are all consequential cross-owner artifacts, but the patches define none of those contracts. The direct adapter call and volatile set do not cover duplicate delivery or restart consumers, while missing observed_at is accepted instead of failing safe.",
+  "evidence_matrix": [
+    {
+      "check": "Reported unit/fake CI",
+      "status": "PASS",
+      "manual": false
+    },
+    {
+      "check": "Named Guardrails and Executor duplicate/retry/timeout/late-ACK/restart/stale/storage-failure tests",
+      "status": "NOT_RUN",
+      "manual": false
+    },
+    {
+      "check": "Supervised hardware action, restart recovery, abort, and rollback",
+      "status": "NOT_RUN",
+      "manual": true
+    }
+  ],
+  "operations_safety_security_privacy": "The patches fail the mandatory physical path, idempotency-across-restart, and missing-input safety invariants. No production or real-hardware action was performed during this review. The required supervised procedure remains human-owned and pending.",
+  "documentation_assessment": "No action, idempotency, restart-recovery, freshness, manual-abort, or rollback documentation is present in the reviewed patches. The current-state boundary must not be updated to claim an active Executor or physical-control capability until an approved subsystem and evidence exist.",
+  "follow_ups": [],
+  "limitations": [
+    "Review was limited to the three supplied hash-verified patch artifacts, mandatory stable rules, reviewer guidance, schema, and direct evidence packet.",
+    "No hardware, production system, private infrastructure, or unlisted evaluation artifact was accessed.",
+    "The generic CI claim did not expose exact commands, logs, or named failure-path results."
+  ]
+}

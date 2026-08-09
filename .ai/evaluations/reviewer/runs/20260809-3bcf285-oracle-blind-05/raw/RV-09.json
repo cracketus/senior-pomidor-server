@@ -1,0 +1,120 @@
+{
+  "schema": "senior-pomidor.review-report.v1",
+  "title": "Review of RV-09 daily-story response simplification",
+  "case_id": "RV-09",
+  "reviewer_version": "1.0",
+  "reviewer_hash": "51ab66ce62e2b5363d7a71587edb937f1e34feb842d726e24141da4b03c38f0f",
+  "verdict": "REQUEST CHANGES",
+  "rationale": "The change maps raw model text directly into the public summary, removing both strict response validation and the final-field privacy boundary. Required malformed/reasoning/timeout/unavailable/oversized/privacy, public-consumer, security, and representative local-model evidence is missing.",
+  "classification": {
+    "task_classes": [
+      "llm_vision",
+      "schema_data_contract"
+    ],
+    "risk_flags": [
+      "public_contract",
+      "security_secrets"
+    ],
+    "sp_fail_ids": [
+      "SP-FAIL-012",
+      "SP-FAIL-013"
+    ]
+  },
+  "scope_architecture": "Changed-path inventory: app/daily_story.py changes the public_summary producer from the validated parsed.final field to raw response.text. This changes a public/persisted model-output boundary and removes an LLM trust and privacy privilege boundary. No required environment variable, migration revision, runtime default, or operating-system behavior is shown. The brief omits schema_data_contract and security_secrets even though public serialization and exposure behavior change.",
+  "findings": [
+    {
+      "id": "OBS-RV09-001",
+      "severity": "BLOCKER",
+      "category": "security",
+      "location": "app/daily_story.py",
+      "finding": "Raw model response text is assigned directly to the public summary instead of a whitelisted validated final field.",
+      "evidence": "The patch removes parsed.final and publishes response.text, so reasoning, prompt echoes, private input fragments, tags, or secret-like text can cross the output privacy boundary.",
+      "evidence_excerpt": "public_summary = response.text",
+      "impact": "Untrusted model content can be exposed or persisted on a public surface, including internal reasoning or private prompt-derived data.",
+      "required_change": "Map only a schema-validated, semantically bounded final field into public_summary and enforce output privacy before persistence or publication.",
+      "suggested_test": "Test responses containing separate reasoning/final fields, prompt echoes, private input fragments, tags, extra prose, and secret-like text and assert public serialization contains only the allowed final field."
+    },
+    {
+      "id": "OBS-RV09-002",
+      "severity": "HIGH",
+      "category": "correctness",
+      "location": "app/daily_story.py",
+      "finding": "The strict model-response parser and schema/semantic validation are removed from the accepted execution path.",
+      "evidence": "The prior validate_story_response call is deleted and arbitrary response.text becomes a successful summary without a demonstrated malformed, bounded-size, or unavailable-result check.",
+      "evidence_excerpt": "parsed = validate_story_response(response)\npublic_summary = parsed.final\npublic_summary = response.text",
+      "impact": "Malformed, truncated, overlong, reasoning-prefixed, or otherwise invalid responses can be treated as successful public stories instead of a safe unavailable result.",
+      "required_change": "Restore strict parsing, schema validation, semantic bounds, maximum size, and safe unavailable handling before accepting any model response.",
+      "suggested_test": "Test malformed and truncated JSON, unsupported shape, extra prose on both sides, reasoning tags, timeout, unavailable model, and oversized output and verify each yields a safe unavailable result."
+    },
+    {
+      "id": "OBS-RV09-003",
+      "severity": "HIGH",
+      "category": "tests",
+      "location": "implementation_report.automated_evidence",
+      "finding": "The generic daily-story unit-test claim does not provide the named LLM, privacy, public-contract, or security evidence required for this change.",
+      "evidence": "No inspectable results are supplied for malformed/truncated JSON, extra prose/reasoning, timeout, unavailable model, oversized output, privacy serialization, old/current consumer compatibility, full baseline, security scan, or dependency audit.",
+      "evidence_excerpt": "PASS: daily-story unit tests",
+      "impact": "A nominal happy-path test can remain green while the trust boundary, public contract, and privacy behavior regress.",
+      "required_change": "Run and report all named LLM negative/privacy tests, public serialization and consumer compatibility checks, the full baseline, security scan, and dependency audit.",
+      "suggested_test": "Run the daily-story and model-output suites with malformed, reasoning, timeout, unavailable, oversized, and privacy cases, then run public serialization, full baseline, nox security, and dependency audit checks."
+    },
+    {
+      "id": "OBS-RV09-004",
+      "severity": "HIGH",
+      "category": "tests",
+      "location": "implementation_report.manual_evidence",
+      "finding": "Representative local-model acceptance is declared not applicable even though model output mapping and public behavior changed.",
+      "evidence": "The llm_vision matrix requires representative local-model acceptance when model runtime or output behavior changes; this patch changes which provider field becomes public.",
+      "evidence_excerpt": "NOT APPLICABLE: local model acceptance is optional for this fixture",
+      "impact": "Provider-specific response field behavior, delimiter handling, and public projection remain unverified against the supported local model.",
+      "required_change": "Complete a representative local-model acceptance check using synthetic private-safe prompts and verify only the validated final field is published.",
+      "suggested_test": "manual: Have the local-model owner exercise representative final/reasoning response variants and inspect the sanitized public summary without retaining raw prompts or responses."
+    }
+  ],
+  "contract_consumer_review": "The model provider is an untrusted producer; validate_story_response is the parser boundary; daily-story persistence and public serialization are consumers. SP-FAIL-012 is uncovered because malformed, extra, timeout, unavailable, and oversized responses are not evidenced. SP-FAIL-013 is violated because raw response text replaces the validated final field. No version, compatibility behavior, consumer release note, or old/current serialization evidence is supplied for the public-contract change.",
+  "evidence_matrix": [
+    {
+      "check": "Patch artifact SHA-256 matches the case metadata",
+      "status": "PASS",
+      "manual": false
+    },
+    {
+      "check": "Reported daily-story unit tests",
+      "status": "PASS",
+      "manual": false
+    },
+    {
+      "check": "Strict parsing and malformed, reasoning, timeout, unavailable, oversized, and safe-unavailable cases",
+      "status": "NOT_RUN",
+      "manual": false
+    },
+    {
+      "check": "Public serialization privacy and old/current consumer compatibility",
+      "status": "NOT_RUN",
+      "manual": false
+    },
+    {
+      "check": "Full pytest and lint, format, and type baseline",
+      "status": "NOT_RUN",
+      "manual": false
+    },
+    {
+      "check": "Security scan and dependency audit",
+      "status": "NOT_RUN",
+      "manual": false
+    },
+    {
+      "check": "Representative supported local-model acceptance",
+      "status": "NOT_RUN",
+      "manual": true
+    }
+  ],
+  "operations_safety_security_privacy": "No physical action, migration, external export, production access, or credential value is shown. The material security/privacy issue is the reachable publication of raw untrusted model text. Prompts, reasoning, raw private inputs, and secret-like content must remain outside public and persisted output, with bounded private diagnostics only.",
+  "documentation_assessment": "No public-contract version, compatibility note, privacy assessment, rollback note, or model-output behavior documentation accompanies the mapping change. Documentation cannot describe the path as bounded while raw response.text is public.",
+  "follow_ups": [],
+  "limitations": [
+    "Review was limited to the approved evaluation case, mandatory stable rule pack, reviewer contract, report schema, and the hash-verified named patch artifact.",
+    "The complete parser, provider adapter, public serializer, tests, CI logs, local model, production data, and private prompts were not inspected.",
+    "Reported PASS status reflects the supplied claim only; no tests, model calls, network operations, security scans, or manual acceptance were executed by the reviewer."
+  ]
+}

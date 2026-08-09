@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "senior-pomidor.review-report.v1",
+  "type": "object",
+  "required": [
+    "schema",
+    "title",
+    "case_id",
+    "reviewer_version",
+    "reviewer_hash",
+    "verdict",
+    "rationale",
+    "classification",
+    "scope_architecture",
+    "findings",
+    "contract_consumer_review",
+    "evidence_matrix",
+    "operations_safety_security_privacy",
+    "documentation_assessment",
+    "follow_ups",
+    "limitations"
+  ],
+  "properties": {
+    "schema": {"const": "senior-pomidor.review-report.v1"},
+    "title": {"type": "string", "minLength": 1},
+    "case_id": {"type": "string", "minLength": 1},
+    "reviewer_version": {"type": "string", "minLength": 1},
+    "reviewer_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "verdict": {"enum": ["APPROVE", "APPROVE WITH FOLLOW-UPS", "REQUEST CHANGES", "BLOCKED"]},
+    "rationale": {"type": "string", "minLength": 1},
+    "classification": {
+      "type": "object",
+      "required": ["task_classes", "risk_flags", "sp_fail_ids"],
+      "properties": {
+        "task_classes": {"type": "array", "items": {"type": "string"}},
+        "risk_flags": {"type": "array", "items": {"type": "string"}},
+        "sp_fail_ids": {"type": "array", "items": {"type": "string"}}
+      },
+      "additionalProperties": false
+    },
+    "scope_architecture": {"type": "string", "minLength": 1},
+    "findings": {"type": "array", "items": {"$ref": "#/$defs/finding"}},
+    "contract_consumer_review": {"type": "string", "minLength": 1},
+    "evidence_matrix": {"type": "array", "items": {"$ref": "#/$defs/evidence"}, "minItems": 1},
+    "operations_safety_security_privacy": {"type": "string", "minLength": 1},
+    "documentation_assessment": {"type": "string", "minLength": 1},
+    "follow_ups": {"type": "array", "items": {"type": "string"}},
+    "limitations": {"type": "array", "items": {"type": "string"}}
+  },
+  "$defs": {
+    "finding": {
+      "type": "object",
+      "required": ["id", "severity", "category", "location", "finding", "evidence", "evidence_excerpt", "impact", "required_change", "suggested_test"]
+    },
+    "evidence": {
+      "type": "object",
+      "required": ["check", "status", "manual"],
+      "properties": {
+        "check": {"type": "string", "minLength": 1},
+        "status": {"enum": ["PASS", "FAIL", "NOT_RUN"]},
+        "manual": {"type": "boolean"}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

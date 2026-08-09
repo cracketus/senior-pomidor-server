@@ -13,6 +13,10 @@ not already provide equivalent scope, evidence, risks, validation, and acceptanc
 Approved implementations follow the [Coding Agent instructions](.ai/agents/coding-agent.md), return
 the [Implementation Report](.ai/templates/implementation-report.md), and use the
 [isolated agent task workflow](docs/AGENT_TASK_WORKFLOW.md) for branch/worktree or Compose work.
+Independent review follows [Reviewer 1.0](.ai/agents/reviewer.md), returns the strict
+[Review Report](.ai/templates/review-report.md), and uses the hash-bound
+[Reviewer corpus and scorer](.ai/evaluations/reviewer/README.md). Baseline metrics remain pending a
+new oracle-blind run.
 
 ## What It Runs
 

@@ -1,0 +1,99 @@
+{
+  "schema": "senior-pomidor.review-report.v1",
+  "title": "Review of moisture contract and ingestion coverage",
+  "case_id": "RV06",
+  "reviewer_version": "1.0",
+  "reviewer_hash": "51ab66ce62e2b5363d7a71587edb937f1e34feb842d726e24141da4b03c38f0f",
+  "verdict": "REQUEST CHANGES",
+  "rationale": "The patch replaces a nested percent contract with a flat ratio without versioning or compatibility, compares that ratio to a percent threshold, and tests only a mocked helper rather than real ingestion. Public-consumer verification was declared N/A even though public_contract risk requires it.",
+  "classification": {
+    "task_classes": [
+      "schema_data_contract",
+      "pure_software"
+    ],
+    "risk_flags": [
+      "public_contract"
+    ],
+    "sp_fail_ids": [
+      "SP-FAIL-009",
+      "SP-FAIL-010",
+      "SP-FAIL-011"
+    ]
+  },
+  "scope_architecture": "The patches change the public moisture field shape and unit, add a State Estimator decision consumer, and add an ingestion test. SP-FAIL-009, SP-FAIL-010, and SP-FAIL-011 are directly applicable because shape, percent/ratio semantics, and real transport coverage all change.",
+  "findings": [
+    {
+      "id": "OBS-UNVERSIONED-MOISTURE-CONTRACT",
+      "severity": "BLOCKER",
+      "category": "correctness",
+      "location": "tests/fixtures/contracts/telemetry.json",
+      "finding": "The old nested percent field is replaced by a flat ratio field without a new version or compatibility path.",
+      "evidence": "The contract fixture removes state.soil_moisture_percent=42 and substitutes soil_moisture=0.42; no old/current coexistence, adapter, rollout order, or consumer migration appears in the supplied patch.",
+      "evidence_excerpt": "  \"state\": {\"soil_moisture_percent\": 42}\n  \"soil_moisture\": 0.42",
+      "impact": "Existing API, storage, edge, dashboard, or public consumers can reject the payload or silently interpret the changed unit and shape incorrectly.",
+      "required_change": "Version the ratio contract or add one owned compatibility adapter, preserve old-fixture replay, and update every named producer and consumer with an explicit rollout plan.",
+      "suggested_test": "Replay old and current fixtures through HTTP or MQTT ingestion, persistence, API serialization, and each public consumer, asserting explicit percent-to-ratio conversion boundaries."
+    },
+    {
+      "id": "OBS-RATIO-PERCENT-COMPARISON",
+      "severity": "HIGH",
+      "category": "correctness",
+      "location": "app/state_estimator/decisions.py",
+      "finding": "A normalized moisture ratio is compared directly with a percent threshold.",
+      "evidence": "soil_moisture_ratio is expected on a 0..1 scale while dry_below_percent defaults to 35, with no named conversion.",
+      "evidence_excerpt": "def is_dry(state, dry_below_percent=35):\n    return state[\"soil_moisture_ratio\"] < dry_below_percent",
+      "impact": "Nearly every valid normalized reading is classified as dry, creating incorrect state decisions and factor-of-100 contract behavior.",
+      "required_change": "Convert units explicitly at the owning boundary or compare like-for-like unit-bearing fields and reject out-of-range values.",
+      "suggested_test": "Test 0, 1, 50, and 100 percent boundaries plus their normalized equivalents and out-of-range rejection."
+    },
+    {
+      "id": "OBS-INGESTION-MOCKED-AWAY",
+      "severity": "HIGH",
+      "category": "tests",
+      "location": "tests/test_api.py",
+      "finding": "The ingestion test mocks the ingestion function and calls the mock directly instead of exercising the API boundary.",
+      "evidence": "app.api.ingest_payload is replaced with a constant-return mock, so transport parsing, validation, normalization, persistence, and response serialization are not executed.",
+      "evidence_excerpt": "def test_ingestion(mocker):\n    ingest = mocker.patch(\"app.api.ingest_payload\", return_value={\"ok\": True})\n    assert ingest({\"soil_moisture\": 0.42}) == {\"ok\": True}",
+      "impact": "The reported API PASS can coexist with a broken real HTTP/MQTT ingestion path and does not detect contract drift.",
+      "required_change": "Replace the self-mocking test with a public-boundary test that sends versioned payloads through validation, persistence, and the read response.",
+      "suggested_test": "Run old and current moisture payloads through the real API test client and assert stored and serialized units and shapes."
+    },
+    {
+      "id": "OBS-PUBLIC-CONSUMER-EVIDENCE-MISSING",
+      "severity": "HIGH",
+      "category": "tests",
+      "location": "implementation_report.manual_evidence",
+      "finding": "Public-consumer verification is treated as not applicable for a public contract change.",
+      "evidence": "The supplied evidence packet states that manual evidence is N/A, but schema_data_contract with public_contract requires public consumer verification.",
+      "evidence_excerpt": "manual N/A",
+      "impact": "Compatibility and rollout safety for consumers outside the mocked unit path remain unverified.",
+      "required_change": "Complete and record verification for every named public consumer and document the compatibility or release transition.",
+      "suggested_test": "manual: Verify the versioned old and current payloads with each named public consumer and record the rollout owner and result."
+    }
+  ],
+  "contract_consumer_review": "The producer/consumer migration is incomplete: the fixture changes shape and unit, the State Estimator consumer expects a differently named ratio field, and the API test bypasses transport and persistence. No edge, storage, dashboard/export, or public-consumer compatibility evidence is supplied.",
+  "evidence_matrix": [
+    {
+      "check": "Schema and API automated checks",
+      "status": "PASS",
+      "manual": false
+    },
+    {
+      "check": "Real HTTP/MQTT ingestion and persistence replay",
+      "status": "NOT_RUN",
+      "manual": false
+    },
+    {
+      "check": "Public consumer verification declared N/A",
+      "status": "NOT_RUN",
+      "manual": true
+    }
+  ],
+  "operations_safety_security_privacy": "No physical action, production access, or secret handling is present in the reviewed patch. The operational risk is an incompatible public contract and incorrect unit semantics reaching consumers.",
+  "documentation_assessment": "No versioned schema, compatibility note, consumer inventory, or rollout documentation accompanies the changed public field.",
+  "follow_ups": [],
+  "limitations": [
+    "Review was limited to the supplied hash-verified patches and direct evidence packet.",
+    "The schema only permits PASS, FAIL, or NOT_RUN, so the packet's manual N/A claim is recorded as NOT_RUN for the required public-consumer check."
+  ]
+}

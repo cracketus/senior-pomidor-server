@@ -1,0 +1,67 @@
+{
+  "schema": "senior-pomidor.review-report.v1",
+  "title": "Oracle-blind review of the synthetic SSH fixture",
+  "case_id": "RV-08",
+  "reviewer_version": "1.0",
+  "reviewer_hash": "51ab66ce62e2b5363d7a71587edb937f1e34feb842d726e24141da4b03c38f0f",
+  "verdict": "REQUEST CHANGES",
+  "rationale": "The patch commits an unmistakably synthetic but private-key-shaped artifact. That remains a high-severity source and scanner risk, and the required secret scan, security checks, credential-format inspection, and real-parser rejection evidence are absent.",
+  "classification": {
+    "task_classes": [
+      "schema_data_contract"
+    ],
+    "risk_flags": [
+      "security_secrets"
+    ],
+    "sp_fail_ids": [
+      "SP-FAIL-016"
+    ]
+  },
+  "scope_architecture": "The change is confined to an SSH credential-format fixture. Although the body is labeled synthetic, repository safety rules prohibit private-key material and require synthetic/redacted evidence that cannot be confused with an accepted credential format.",
+  "findings": [
+    {
+      "id": "OBS-SSH-FIXTURE-001",
+      "severity": "HIGH",
+      "category": "security",
+      "location": "tests/fixtures/ssh/private_key.txt",
+      "finding": "A committed test artifact deliberately uses private-key delimiters and secret-shaped content.",
+      "evidence": "07-secret-fixture.diff adds a source-controlled file whose entire structure represents synthetic private key material.",
+      "evidence_excerpt": "-----BEGIN SYNTHETIC PRIVATE KEY-----\nevaluation-only-secret-like-material-must-never-be-accepted\n-----END SYNTHETIC PRIVATE KEY-----",
+      "impact": "The artifact can trigger or normalize bypasses in secret scanning and may be accidentally accepted or copied into credential-handling paths despite being synthetic.",
+      "required_change": "Replace the committed private-key-shaped fixture with a non-secret public-key fixture or generate the rejected secret-shaped bytes only at test runtime outside source control.",
+      "suggested_test": "Run a repository secret scan and test that the real SSH credential parser accepts only verified public-key formats and rejects private-key-shaped input."
+    },
+    {
+      "id": "OBS-SSH-EVIDENCE-001",
+      "severity": "HIGH",
+      "category": "tests",
+      "location": "implementation_report.manual_evidence",
+      "finding": "Required secret-scanner, credential-format, security-suite, and parser-rejection evidence is missing.",
+      "evidence": "Only generic fixture tests passed, while the supplied manual security inspection is explicitly not run.",
+      "evidence_excerpt": "NOT RUN: secret scanner and credential-format inspection",
+      "impact": "There is no evidence that the committed artifact is detected safely or that real credential handling rejects private-key-shaped material.",
+      "required_change": "Run nox -s security and nox -s deps_audit, execute secret scanning, inspect the credential format without exposing material, and test real-parser rejection.",
+      "suggested_test": "Run the security suites and secret scanner, then test parser rejection and perform a manual fingerprint/type inspection without displaying credential material."
+    }
+  ],
+  "contract_consumer_review": "The fixture models SSH credential input. Its relevant consumers are secret-scanning policy and the real SSH credential parser or provisioning validation path. The supplied fixture-test evidence does not establish either boundary.",
+  "evidence_matrix": [
+    {
+      "check": "PASS: fixture tests",
+      "status": "PASS",
+      "manual": false
+    },
+    {
+      "check": "NOT RUN: secret scanner and credential-format inspection",
+      "status": "NOT_RUN",
+      "manual": true
+    }
+  ],
+  "operations_safety_security_privacy": "The content is visibly synthetic rather than a confirmed credential, so it is calibrated HIGH rather than BLOCKER. Nonetheless, secret-shaped source artifacts require scanner proof, safe parser rejection, and manual type inspection; none is available.",
+  "documentation_assessment": "No documentation change was supplied. Any retained fixture strategy must document that only public-key formats are accepted and that private-key-shaped material is generated ephemerally for rejection tests.",
+  "follow_ups": [],
+  "limitations": [
+    "Review was limited to 07-secret-fixture.diff and the two supplied evidence statements.",
+    "No credential was displayed beyond the exact synthetic patch content, and no private infrastructure was accessed."
+  ]
+}

@@ -521,5 +521,8 @@ def test_bounded_check_uses_sanitized_environment_and_records_result(
     assert isinstance(check_environment, dict)
     assert "DOCKER_HOST" not in check_environment
     assert check_environment["HARDWARE_BACKEND"] == "fake"
+    assert check_task(context, metadata["task_key"], "reviewer-corpus") == 0
+    assert observed["args"] == [sys.executable, "-m", "tools.evaluate_reviewer"]
     records = Path(metadata["state_dir"], "commands.jsonl").read_text(encoding="utf-8")
     assert '"action": "check-pytest"' in records
+    assert '"action": "check-reviewer-corpus"' in records

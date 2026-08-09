@@ -1,0 +1,80 @@
+{
+  "schema": "senior-pomidor.review-report.v1",
+  "title": "Oracle-blind review of Compose and rehearsal isolation",
+  "case_id": "RV-07",
+  "reviewer_version": "1.0",
+  "reviewer_hash": "51ab66ce62e2b5363d7a71587edb937f1e34feb842d726e24141da4b03c38f0f",
+  "verdict": "REQUEST CHANGES",
+  "rationale": "The rehearsal profile explicitly enables an external Grafana Cloud exporter, which is prohibited, and the base Compose file silently falls back to latest when APP_IMAGE is missing. The required isolated rehearsal and external-write inspection has not run.",
+  "classification": {
+    "task_classes": [
+      "infrastructure_deployment"
+    ],
+    "risk_flags": [
+      "production_availability"
+    ],
+    "sp_fail_ids": [
+      "SP-FAIL-001",
+      "SP-FAIL-003"
+    ]
+  },
+  "scope_architecture": "Both changes are within Compose-owned topology, but they violate operational invariants requiring explicit image selection and a rehearsal environment with external export disabled. No application ownership boundary justifies a rehearsal profile writing to a remote observability service.",
+  "findings": [
+    {
+      "id": "OBS-REHEARSAL-EXPORT-001",
+      "severity": "BLOCKER",
+      "category": "operations",
+      "location": "docker-compose.rehearsal.yml",
+      "finding": "The rehearsal profile starts a Grafana Cloud exporter with external export enabled.",
+      "evidence": "06-compose-export.diff adds the exporter to the rehearsal profile and sets its enable flag to true.",
+      "evidence_excerpt": "  grafana-cloud-exporter:\n    profiles: [rehearsal]\n    environment:\n      GRAFANA_CLOUD_EXPORT_ENABLED: \"true\"",
+      "impact": "An isolated rehearsal can write duplicate, synthetic, or private metrics to an external production-facing service.",
+      "required_change": "Remove the external exporter from the rehearsal profile and enforce zero remote-write targets in rendered rehearsal configuration.",
+      "suggested_test": "Render the exact rehearsal configuration and verify the exporter is absent and all remote-write endpoints are disabled."
+    },
+    {
+      "id": "OBS-COMPOSE-IMAGE-001",
+      "severity": "HIGH",
+      "category": "operations",
+      "location": "docker-compose.yml",
+      "finding": "A missing APP_IMAGE silently selects the ambiguous latest tag.",
+      "evidence": "06-compose-export.diff replaces the required-variable error with a default.",
+      "evidence_excerpt": "    image: ${APP_IMAGE:-latest}",
+      "impact": "Local, CI, rehearsal, or release commands can run an unintended image and produce evidence for a different candidate than the one being approved.",
+      "required_change": "Restore a required non-secret APP_IMAGE contract that fails clearly when the variable is absent.",
+      "suggested_test": "Test that Compose rendering fails without APP_IMAGE and resolves the exact supplied candidate image when it is set."
+    },
+    {
+      "id": "OBS-REHEARSAL-EVIDENCE-001",
+      "severity": "HIGH",
+      "category": "tests",
+      "location": "implementation_report.manual_evidence",
+      "finding": "The isolated rehearsal and external-write inspection required for the availability change are not run.",
+      "evidence": "The supplied manual evidence explicitly leaves both procedures pending.",
+      "evidence_excerpt": "NOT RUN: isolated rehearsal and external-write inspection",
+      "impact": "Rendered Compose and CI evidence cannot establish project, mount, port, credential, network, data-path isolation or prove zero external writes at runtime.",
+      "required_change": "Complete the isolated candidate rehearsal and record project isolation, local targets, health, rollback, and zero external writes.",
+      "suggested_test": "manual: Start the immutable candidate in a distinct rehearsal project, inspect mounts, ports, networks, credentials, health, and remote-write traffic, then execute rollback."
+    }
+  ],
+  "contract_consumer_review": "APP_IMAGE is a required environment contract consumed by Compose in local, CI, rehearsal, and release flows. The new fallback weakens every consumer. The rehearsal profile is an operational contract whose external exporter violates the required zero-remote-write boundary.",
+  "evidence_matrix": [
+    {
+      "check": "PASS: Compose config and CI",
+      "status": "PASS",
+      "manual": false
+    },
+    {
+      "check": "NOT RUN: isolated rehearsal and external-write inspection",
+      "status": "NOT_RUN",
+      "manual": true
+    }
+  ],
+  "operations_safety_security_privacy": "Rehearsal isolation is not preserved: external export is enabled and candidate image identity becomes implicit. This creates privacy, duplicate-metric, and release-evidence risks. No production access was needed to establish the violations from the patch.",
+  "documentation_assessment": "No operator documentation or rollback evidence was supplied to reconcile the changed image contract or the newly enabled external exporter.",
+  "follow_ups": [],
+  "limitations": [
+    "Review was limited to 06-compose-export.diff and the two supplied evidence statements.",
+    "The rehearsal was not started because the required isolated manual procedure is explicitly not run."
+  ]
+}

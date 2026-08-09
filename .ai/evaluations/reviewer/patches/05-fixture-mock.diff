@@ -1,0 +1,9 @@
+diff --git a/tests/fixtures/contracts/telemetry.json b/tests/fixtures/contracts/telemetry.json
+@@
+-  "state": {"soil_moisture_percent": 42}
++  "soil_moisture": 0.42
+diff --git a/tests/test_api.py b/tests/test_api.py
+@@
++def test_ingestion(mocker):
++    ingest = mocker.patch("app.api.ingest_payload", return_value={"ok": True})
++    assert ingest({"soil_moisture": 0.42}) == {"ok": True}

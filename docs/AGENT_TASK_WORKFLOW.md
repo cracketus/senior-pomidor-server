@@ -77,6 +77,7 @@ python -m tools.agent_task check tomato-ai-128-agent-sandbox pytest
 python -m tools.agent_task check tomato-ai-128-agent-sandbox quality
 python -m tools.agent_task check tomato-ai-128-agent-sandbox security
 python -m tools.agent_task check tomato-ai-128-agent-sandbox planner
+python -m tools.agent_task check tomato-ai-128-agent-sandbox reviewer-corpus
 ```
 
 This removes inherited database/cloud/Docker-target variables and does not load `.env`; production

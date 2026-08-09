@@ -1,0 +1,119 @@
+{
+  "schema": "senior-pomidor.reviewer-cases.v1",
+  "cases": [
+    {
+      "id": "RV-01",
+      "kind": "historical",
+      "title": "Read-only action simulation boundary",
+      "source": "commit 6398d9e / PR 74",
+      "brief": {"approval":"approved evaluation fixture","scope":"Review the complete pinned diff for the read-only action simulation feature.","acceptance_criteria":["Simulation cannot actuate hardware.","Guardrail decisions and tests remain deterministic."],"task_classes":["control_guardrails_executor"],"risk_flags":[]},
+      "implementation_report": {"automated_evidence":["PASS: repository tests recorded by the historical change"],"manual_evidence":["NOT APPLICABLE: the feature is explicitly read-only and uses no hardware"]},
+      "artifacts": [
+        {"kind": "git_diff", "revision": "6398d9e", "sha256": "a0c4bf336229f3a048ec08984f8835c25545bc5bbfe74d52b1a04ace7d963f4b"}
+      ]
+    },
+    {
+      "id": "RV-02",
+      "kind": "historical",
+      "title": "setup-python dependency update",
+      "source": "commit 6ed02f5 / PR 117",
+      "brief": {"approval":"approved evaluation fixture","scope":"Review the complete pinned setup-python action version update.","acceptance_criteria":["CI continues to install the supported Python version.","No unrelated workflow behavior changes."],"task_classes":["infrastructure_deployment"],"risk_flags":[]},
+      "implementation_report": {"automated_evidence":["PASS: historical CI workflow validation"],"manual_evidence":["NOT APPLICABLE: no production, physical, secret or migration behavior is in scope"]},
+      "artifacts": [
+        {"kind": "git_diff", "revision": "6ed02f5", "sha256": "79111656f75a2e8402abb661284e9865cc2cfdeabc14f3107c6f267c5fa6b0a0"}
+      ]
+    },
+    {
+      "id": "RV-03",
+      "kind": "historical",
+      "title": "Secure multi-application production layout",
+      "source": "commit bc16f24 / PR 114",
+      "brief": {"approval":"approved evaluation fixture","scope":"Review the complete pinned production-layout diff.","acceptance_criteria":["Application and shared platform lifecycles remain separate.","Secrets and network exposure fail closed."],"task_classes":["infrastructure_deployment"],"risk_flags":["security_secrets","production_availability"]},
+      "implementation_report": {"automated_evidence":["PASS: historical Compose, release and security checks"],"manual_evidence":["PASS: historical bounded production-layout review is supplied by this fixture"]},
+      "artifacts": [
+        {"kind": "git_diff", "revision": "bc16f24", "sha256": "70938dbc09fd668fcd7988276ec45bc6babe08dd4362d88690bd684049d95b7f"}
+      ]
+    },
+    {
+      "id": "RV-04",
+      "kind": "historical",
+      "title": "Bounded local daily-story consumer",
+      "source": "commit 8b3ef35 / PR 111",
+      "brief": {"approval":"approved evaluation fixture","scope":"Review the complete pinned local daily-story diff.","acceptance_criteria":["Model output remains bounded and untrusted.","The optional local consumer cannot affect ingestion or actuation."],"task_classes":["llm_vision"],"risk_flags":[]},
+      "implementation_report": {"automated_evidence":["PASS: historical model-boundary and application tests"],"manual_evidence":["NOT APPLICABLE: no physical or production action is in scope"]},
+      "artifacts": [
+        {"kind": "git_diff", "revision": "8b3ef35", "sha256": "aca673eab0f8b09094a4fc77fdf0e2f23753b35974931edd3e566d1f3d53af93"}
+      ]
+    },
+    {
+      "id": "RV-05",
+      "kind": "seeded",
+      "title": "Physical action execution refactor",
+      "source": "synthetic evaluation mutation set A",
+      "brief": {"approval":"approved evaluation fixture","scope":"Add a small control-to-execution path for watering suggestions and freshness checks.","acceptance_criteria":["Watering suggestions execute through the owned control path.","Repeated commands and state freshness are handled safely."],"task_classes":["control_guardrails_executor","edge_hardware_integration"],"risk_flags":["physical_action","production_availability"]},
+      "implementation_report": {"automated_evidence":["PASS: unit tests and fake-adapter CI"],"manual_evidence":["NOT RUN: supervised safe-hardware and restart rehearsal"]},
+      "artifacts": [
+        {"kind": "patch", "path": ".ai/evaluations/reviewer/patches/01-guardrails-bypass.diff", "sha256": "7852179e59990b882d3d74e6969e19061d69fa13275952a75b195936a7af9f1a"},
+        {"kind": "patch", "path": ".ai/evaluations/reviewer/patches/02-duplicate-restart.diff", "sha256": "ded6fc575a5eeb6b30db4cb9070d1ce3fc6bc577c4e1db88d1696764c9478efd"},
+        {"kind": "patch", "path": ".ai/evaluations/reviewer/patches/04-stale-state.diff", "sha256": "1ebf9a5c51cc184d555e9b18046372e641623a709289a43b6d24953a4782037d"}
+      ]
+    },
+    {
+      "id": "RV-06",
+      "kind": "seeded",
+      "title": "Telemetry shape and ingestion test update",
+      "source": "synthetic evaluation mutation set B",
+      "brief": {"approval":"approved evaluation fixture","scope":"Update soil-moisture decision input and the matching telemetry ingestion coverage.","acceptance_criteria":["The documented moisture contract remains compatible.","Tests exercise ingestion behavior."],"task_classes":["schema_data_contract","pure_software"],"risk_flags":["public_contract"]},
+      "implementation_report": {"automated_evidence":["PASS: schema fixture and API unit tests"],"manual_evidence":["NOT APPLICABLE: no physical action is in scope"]},
+      "artifacts": [
+        {"kind": "patch", "path": ".ai/evaluations/reviewer/patches/03-schema-unit.diff", "sha256": "696a1486e060737aeb6e00043c4889a7eac18eb46e4744f205f447836f7d6938"},
+        {"kind": "patch", "path": ".ai/evaluations/reviewer/patches/05-fixture-mock.diff", "sha256": "ee51fc6b90bc92e45cca74e0366d22b2e9a9e456d0a4176d78a266f7a5d3c96e"}
+      ]
+    },
+    {
+      "id": "RV-07",
+      "kind": "seeded",
+      "title": "Compose image and rehearsal profile update",
+      "source": "synthetic evaluation mutation set C",
+      "brief": {"approval":"approved evaluation fixture","scope":"Simplify the application image default and add observability to the rehearsal profile.","acceptance_criteria":["Local configuration remains convenient.","Rehearsal observability is available."],"task_classes":["infrastructure_deployment"],"risk_flags":["production_availability","security_secrets"]},
+      "implementation_report": {"automated_evidence":["PASS: Compose config and CI"],"manual_evidence":["NOT RUN: isolated rehearsal and external-write inspection"]},
+      "artifacts": [
+        {"kind": "patch", "path": ".ai/evaluations/reviewer/patches/06-compose-export.diff", "sha256": "7c36d85bba82d64d410c471b88b28005919220cbc8a147df51261e4782b58d37"}
+      ]
+    },
+    {
+      "id": "RV-08",
+      "kind": "seeded",
+      "title": "SSH fixture coverage",
+      "source": "synthetic evaluation mutation set D",
+      "brief": {"approval":"approved evaluation fixture","scope":"Add a synthetic SSH-related fixture for security-path testing.","acceptance_criteria":["The fixture contains no usable credential.","Security handling remains testable without production secrets."],"task_classes":["pure_software"],"risk_flags":["security_secrets"]},
+      "implementation_report": {"automated_evidence":["PASS: fixture tests"],"manual_evidence":["NOT RUN: secret scanner and credential-format inspection"]},
+      "artifacts": [
+        {"kind": "patch", "path": ".ai/evaluations/reviewer/patches/07-secret-fixture.diff", "sha256": "59cab4f695288f36dca45eb321206169433daeff7b43016ca2cc6218bbb91d69"}
+      ]
+    },
+    {
+      "id": "RV-09",
+      "kind": "seeded",
+      "title": "Daily-story response simplification",
+      "source": "synthetic evaluation mutation set E",
+      "brief": {"approval":"approved evaluation fixture","scope":"Simplify how the daily-story response is mapped to its public summary.","acceptance_criteria":["A model response produces the expected public summary.","The local story path remains bounded."],"task_classes":["llm_vision"],"risk_flags":["public_contract"]},
+      "implementation_report": {"automated_evidence":["PASS: daily-story unit tests"],"manual_evidence":["NOT APPLICABLE: local model acceptance is optional for this fixture"]},
+      "artifacts": [
+        {"kind": "patch", "path": ".ai/evaluations/reviewer/patches/08-llm-trust.diff", "sha256": "9831c2effad5ee8a55f50e4d68c2d445d3f1516e7a5e6d3b019970815cb40e19"}
+      ]
+    },
+    {
+      "id": "RV-10",
+      "kind": "seeded",
+      "title": "Export cleanup and operations update",
+      "source": "synthetic evaluation mutation set F",
+      "brief": {"approval":"approved evaluation fixture","scope":"Add temporary export cleanup and update the documented freshness setting.","acceptance_criteria":["Temporary export files are removed.","Operations documentation matches the supported configuration.","Availability rollback is evidenced."],"task_classes":["pure_software","infrastructure_deployment"],"risk_flags":["production_availability"]},
+      "implementation_report": {"automated_evidence":["PASS: CI on Linux and documentation checks"],"manual_evidence":["NOT RUN: isolated rollback rehearsal"]},
+      "artifacts": [
+        {"kind": "patch", "path": ".ai/evaluations/reviewer/patches/09-windows-path.diff", "sha256": "dd1cfe2327ff083107333ad1d1322392107ca673940f0a834d348141ccaf32ea"},
+        {"kind": "patch", "path": ".ai/evaluations/reviewer/patches/10-docs-manual.diff", "sha256": "fa26c5d0a770a436bb86158f301672c863ab330f0a907705402b81ac7681fa46"}
+      ]
+    }
+  ]
+}

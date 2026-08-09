@@ -1,0 +1,112 @@
+{
+  "schema": "senior-pomidor.review-report.v1",
+  "title": "Review of daily-story response simplification",
+  "case_id": "RV-09",
+  "reviewer_version": "1.0",
+  "reviewer_hash": "d98d2797c73aaa71b6f2401541d4f7b3248dd033d141b639f48e95eaa5e9471b",
+  "verdict": "REQUEST CHANGES",
+  "rationale": "The public summary is changed from a strictly validated final field to raw model response text. That bypasses the model trust boundary and can publish malformed output, extra prose, hidden reasoning, prompt echoes, or private content. Generic daily-story unit-test evidence does not cover the mandatory malformed/reasoning/timeout/unavailable/oversized/privacy cases, and representative local-model acceptance is incorrectly treated as not applicable.",
+  "classification": {
+    "task_classes": [
+      "llm_vision",
+      "schema_data_contract"
+    ],
+    "risk_flags": [
+      "public_contract",
+      "security_secrets"
+    ],
+    "sp_fail_ids": [
+      "SP-FAIL-012",
+      "SP-FAIL-013"
+    ]
+  },
+  "scope_architecture": "app/daily_story.py is within the response-mapping scope, but the simplification removes the required strict validation boundary rather than preserving bounded public output. LLM/VLM content is untrusted analyst input and cannot become a public contract field directly. Because the mapping changes exposed output and possible private-content leakage, schema_data_contract and security_secrets apply in addition to the brief's llm_vision/public_contract classification.",
+  "findings": [
+    {
+      "id": "RV09-F-001",
+      "severity": "HIGH",
+      "category": "security",
+      "location": "app/daily_story.py",
+      "finding": "Raw model response text is assigned directly to the public summary, bypassing strict parsing and final-field validation.",
+      "evidence": "The call to validate_story_response and selection of parsed.final are removed and replaced with response.text.",
+      "evidence_excerpt": "parsed = validate_story_response(response)\npublic_summary = parsed.final\npublic_summary = response.text",
+      "impact": "Malformed output, reasoning, extra prose, prompt echoes, raw private inputs, or secret-like content can cross into a public or persisted story field, and response bounds/semantics are no longer enforced.",
+      "required_change": "Restore strict parse, schema and semantic validation; map only the validated bounded final field; return a safe unavailable result on malformed, extra, reasoning-bearing, timed-out, unavailable, or oversized output.",
+      "suggested_test": "Test valid final-only output plus malformed/truncated JSON, extra prose, separate reasoning, prompt echo, timeout, unavailable model, oversized text, and private-content leakage, asserting only validated final content is serialized publicly."
+    },
+    {
+      "id": "RV09-F-002",
+      "severity": "HIGH",
+      "category": "tests",
+      "location": "implementation_report.automated_evidence",
+      "finding": "The required named LLM boundary, public serialization, privacy, contract, and security checks are not evidenced.",
+      "evidence": "The report supplies only a generic daily-story unit-test statement and does not identify strict schema/semantic validation or malformed, reasoning, timeout, unavailable, oversized, privacy, old/current serialization, consumer, security, or dependency-audit checks.",
+      "evidence_excerpt": "PASS: daily-story unit tests",
+      "impact": "A happy-path unit test can pass while the changed public mapping leaks untrusted content or breaks the public contract on common failure responses.",
+      "required_change": "Provide explicit PASS results for the full named LLM negative/privacy suite, public serialization and consumer compatibility checks, baseline quality checks, and required security/dependency audits.",
+      "suggested_test": "Run the focused LLM/daily-story suite with the named negative/privacy cases, then run full baseline, contract serialization/consumer checks, and nox security and dependency audit."
+    },
+    {
+      "id": "RV09-F-003",
+      "severity": "HIGH",
+      "category": "tests",
+      "location": "implementation_report.manual_evidence",
+      "finding": "Representative local-model acceptance for changed output mapping is declared not applicable even though Reviewer requirements make it necessary for a model-output change.",
+      "evidence": "The implementation report labels local-model acceptance optional/not applicable, but the change maps provider response content directly to the public field and therefore requires representative runtime acceptance in addition to mocked negative tests.",
+      "evidence_excerpt": "NOT APPLICABLE: local model acceptance is optional for this fixture",
+      "impact": "Provider-specific response-field behavior and reasoning/final separation can remain wrong despite mocked unit tests.",
+      "required_change": "Run bounded representative local-model acceptance against the validated mapping and record public-output/privacy assertions, or keep the required manual evidence open and the change unapproved.",
+      "suggested_test": "manual: Exercise representative local-model valid, reasoning-separated, malformed, and oversized responses in an isolated local environment and verify only bounded validated final content reaches public serialization."
+    }
+  ],
+  "contract_consumer_review": "The public-summary field is a public contract consumed by story readers and any persistence or export surface. The patch changes its semantics from validated final content to arbitrary provider text without a version, compatibility note, bounds, optional/unavailable behavior, or consumer tests. Provider response fields, raw model diagnostics, reasoning, and public serialization must remain separate.",
+  "evidence_matrix": [
+    {
+      "check": "SHA-256 verification for the supplied patch artifact",
+      "status": "PASS",
+      "manual": false
+    },
+    {
+      "check": "Reported generic daily-story unit tests",
+      "status": "PASS",
+      "manual": false
+    },
+    {
+      "check": "Strict model schema/semantic validation and safe unavailable behavior",
+      "status": "FAIL",
+      "manual": false
+    },
+    {
+      "check": "Malformed, truncated, extra-prose, reasoning, timeout, unavailable, oversized, and privacy tests",
+      "status": "NOT_RUN",
+      "manual": false
+    },
+    {
+      "check": "Old/current public serialization and every named consumer compatibility check",
+      "status": "NOT_RUN",
+      "manual": false
+    },
+    {
+      "check": "Full baseline pytest, lint, format, and type checks",
+      "status": "NOT_RUN",
+      "manual": false
+    },
+    {
+      "check": "nox security and dependency audit with secret-safe evidence review",
+      "status": "NOT_RUN",
+      "manual": false
+    },
+    {
+      "check": "Representative isolated local-model acceptance for response-field mapping",
+      "status": "NOT_RUN",
+      "manual": true
+    }
+  ],
+  "operations_safety_security_privacy": "The changed code removes the trust boundary that prevents model reasoning, prompts, raw private inputs, and secret-like text from reaching public output. Safe unavailable behavior for timeout, malformed or oversized content is no longer shown. The path remains local and no actuation is present, but locality does not make untrusted output safe for publication. No model endpoint, private input, credential, or production service was accessed during review.",
+  "documentation_assessment": "No public-contract documentation, release note, provider-field mapping description, unavailable behavior, or privacy statement accompanies the semantic change. The acceptance criterion that the story path remains bounded is contradicted by direct response.text publication.",
+  "follow_ups": [],
+  "limitations": [
+    "Review was limited to the approved case brief, implementation report, governing context pack, and the hash-verified supplied patch.",
+    "No runtime source outside the supplied patch, CI logs, local model, production data, or public service was accessed."
+  ]
+}

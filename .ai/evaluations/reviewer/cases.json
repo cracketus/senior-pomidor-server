@@ -1,0 +1,76 @@
+{
+  "suite_version": 1,
+  "reviewer_version": "1.0",
+  "cases": [
+    {
+      "id": "RV-01",
+      "title": "Guardrails bypass",
+      "source": "historical architecture boundary: commit:6398d9e and issue:74",
+      "patch_path": ".ai/evaluations/reviewer/patches/01-guardrails-bypass.diff",
+      "expected_finding_ids": ["RF-001"]
+    },
+    {
+      "id": "RV-02",
+      "title": "Duplicate command after restart",
+      "source": "seeded from ARCHITECTURE_RULES runtime invariants",
+      "patch_path": ".ai/evaluations/reviewer/patches/02-duplicate-restart.diff",
+      "expected_finding_ids": ["RF-002"]
+    },
+    {
+      "id": "RV-03",
+      "title": "Schema unit mismatch",
+      "source": "SP-FAIL-009 and SP-FAIL-010",
+      "patch_path": ".ai/evaluations/reviewer/patches/03-schema-unit.diff",
+      "expected_finding_ids": ["RF-003"]
+    },
+    {
+      "id": "RV-04",
+      "title": "Stale state accepted",
+      "source": "seeded from control fail-safe invariant",
+      "patch_path": ".ai/evaluations/reviewer/patches/04-stale-state.diff",
+      "expected_finding_ids": ["RF-004"]
+    },
+    {
+      "id": "RV-05",
+      "title": "Fixture hides production-path regression",
+      "source": "SP-FAIL-011",
+      "patch_path": ".ai/evaluations/reviewer/patches/05-fixture-mock.diff",
+      "expected_finding_ids": ["RF-005", "RF-006"]
+    },
+    {
+      "id": "RV-06",
+      "title": "Unsafe Compose defaults and rehearsal export",
+      "source": "SP-FAIL-001 and SP-FAIL-003",
+      "patch_path": ".ai/evaluations/reviewer/patches/06-compose-export.diff",
+      "expected_finding_ids": ["RF-007", "RF-008"]
+    },
+    {
+      "id": "RV-07",
+      "title": "Secret-like fixture data",
+      "source": "SAFETY_RULES secret boundary",
+      "patch_path": ".ai/evaluations/reviewer/patches/07-secret-fixture.diff",
+      "expected_finding_ids": ["RF-009"]
+    },
+    {
+      "id": "RV-08",
+      "title": "Unvalidated LLM response",
+      "source": "SP-FAIL-012 and SP-FAIL-013",
+      "patch_path": ".ai/evaluations/reviewer/patches/08-llm-trust.diff",
+      "expected_finding_ids": ["RF-010"]
+    },
+    {
+      "id": "RV-09",
+      "title": "Windows-only filesystem failure",
+      "source": "SP-FAIL-014",
+      "patch_path": ".ai/evaluations/reviewer/patches/09-windows-path.diff",
+      "expected_finding_ids": ["RF-011"]
+    },
+    {
+      "id": "RV-10",
+      "title": "Documentation drift and missing rehearsal evidence",
+      "source": "seeded operational contract drift",
+      "patch_path": ".ai/evaluations/reviewer/patches/10-docs-manual.diff",
+      "expected_finding_ids": ["RF-012", "RF-013"]
+    }
+  ]
+}
