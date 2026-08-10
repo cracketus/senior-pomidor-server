@@ -1,0 +1,33 @@
+version: 1
+updated: "2026-08-10"
+review_policy:
+  timezone: Europe/Vienna
+  review_before_use: true
+  rule: "Eligibility and stage are assumptions until confirmed from the current authoritative source."
+sources:
+  - id: eu-funding-portal
+    name: EU Funding and Tenders Portal
+    url: https://ec.europa.eu/info/funding-tenders/opportunities/portal/screen/home
+    scope: EU research and innovation calls
+    status: source-to-review
+    eligibility_assumption: "Unknown; verify the call, applicant type, country, deadline, and stage requirements."
+    reviewed_at: null
+  - id: ffg
+    name: Austrian Research Promotion Agency
+    url: https://www.ffg.at/en
+    scope: Austrian research and innovation funding
+    status: source-to-review
+    eligibility_assumption: "Unknown; verify the current programme and applicant eligibility before use."
+    reviewed_at: null
+  - id: aws
+    name: Austria Wirtschaftsservice
+    url: https://www.aws.at/en/
+    scope: Austrian startup and innovation support
+    status: source-to-review
+    eligibility_assumption: "Unknown; verify current programme scope, stage, and application window."
+    reviewed_at: null
+selection_rules:
+  - Fit the project's open, research-oriented stage and available evidence.
+  - Prefer sources with explicit current eligibility, deadlines, and application guidance.
+  - Record the source URL and review date in task-specific research notes.
+  - Never present an unverified eligibility assumption as a recommendation or commitment.

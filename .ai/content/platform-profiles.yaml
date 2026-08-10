@@ -1,0 +1,24 @@
+version: 1
+updated: "2026-08-10"
+default_language: en
+profiles:
+  telegram:
+    purpose: field-notes
+    style: concise, conversational, evidence-labelled
+    include: [observation, evidence_label, limitation, link]
+    avoid: [private_location, credentials, raw_private_data, unsupported_guarantee]
+  linkedin:
+    purpose: project-update
+    style: structured, professional, transparent
+    include: [change, measured_or_observed_result, limitation, next_step]
+    avoid: [private_infrastructure, unpublished_sensitive_material, inflated_claim]
+  substack:
+    purpose: long-form-methods
+    status: future
+    style: explanatory, reproducible, reflective
+    include: [question, method, evidence, limitation, follow_up]
+    avoid: [private_data, unreviewed_claim, model_summary_as_evidence]
+publication_requirements:
+  evidence_labels: [measured, observed, inferred, speculative]
+  privacy_policy: docs/PUBLIC_DATA_POLICY.md
+  claims_policy: .ai/content/CLAIMS_POLICY.md

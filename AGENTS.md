@@ -32,3 +32,22 @@ Prohibited: production deployment or writes; reading or exposing production secr
 infrastructure; real GPIO/actuator use; bypassing Guardrails or Executor; direct LLM-to-actuator paths;
 destructive database/volume operations; external export in rehearsal; or unapproved contract breaks.
 Active-season reliability and data preservation take priority; keep scope narrow and reversible.
+
+## Shared project context
+
+Research, public communication, and planning workflows use the version-controlled context pack
+under `.ai/research/`, `.ai/content/`, and `.ai/planning/`. These files are stable inputs, not a
+replacement for current runtime status in `.ai/CURRENT_STATE.md` or for evidence collected during a
+task.
+
+- Research scope and sources: `.ai/research/RESEARCH_SCOPE.md`, `scientific-topics.yaml`, and
+  `grant-sources.yaml`.
+- Public voice and claims: `.ai/content/PUBLIC_VOICE.md`, `CLAIMS_POLICY.md`, and
+  `platform-profiles.yaml`.
+- Priorities and season: `.ai/planning/PRIORITY_RULES.md`, `project-goals.yaml`, and
+  `seasonal-calendar.yaml`.
+
+Read the relevant Markdown policy before using the adjacent YAML inputs. Treat source-backed
+eligibility, scientific, and publication statements as reviewable assumptions; do not expose
+private data or turn generated summaries into evidence. Ownership and update cadence are defined in
+[`.ai/workflows/README.md`](.ai/workflows/README.md).
