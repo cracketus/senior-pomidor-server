@@ -1,0 +1,24 @@
+version: 1
+updated: "2026-08-10"
+timezone: Europe/Vienna
+calendar:
+  - id: winter-preparation
+    period: December-February
+    focus: [backup-restore, design-review, calibration-planning, documentation]
+    constraint: "Do not treat planning simulations as evidence of physical or biological outcomes."
+  - id: spring-start
+    period: March-April
+    focus: [hardware-readiness, sensor-baseline, safe-ingestion, planting-observations]
+    constraint: "Prefer small reversible changes and establish baselines before new experiments."
+  - id: active-season
+    period: May-September
+    focus: [reliability, data-continuity, plant-observations, bounded-research]
+    constraint: "Reliability, data preservation, and plant safety outrank speculative software work."
+  - id: autumn-review
+    period: October-November
+    focus: [season-retrospective, evidence-review, publication-drafts, next-season-plan]
+    constraint: "Separate observed seasonal results from hypotheses and future proposals."
+planning_rules:
+  - Use timezone-aware Europe/Vienna dates and account for DST at local schedule boundaries.
+  - Resolve the current seasonal period from the calendar date; do not hard-code a year.
+  - Record exceptions and weather/plant conditions in task-specific notes, not this stable calendar.

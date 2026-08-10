@@ -1,0 +1,33 @@
+version: 1
+updated: "2026-08-10"
+timezone: Europe/Vienna
+evidence_vocabulary:
+  measured: "Directly recorded by a named instrument or server boundary with units and timestamp."
+  observed: "Human or image observation with observer/time/context recorded."
+  inferred: "Derived from measured or observed inputs using a documented method."
+  speculative: "A hypothesis or proposal that has not been validated as a result."
+topics:
+  - id: telemetry-quality
+    title: Sensor and telemetry quality
+    priority: high
+    questions:
+      - Which sensors remain stable across the active season?
+      - How should missing, stale, contradictory, or low-confidence readings be reported?
+    preferred_evidence: [measured, inferred]
+    public_status: explain-with-limitations
+  - id: tomato-environment
+    title: Tomato growing environment
+    priority: high
+    questions:
+      - Which temperature, humidity, light, and moisture patterns correlate with observed plant state?
+      - Which units, calibration assumptions, and sampling windows affect interpretation?
+    preferred_evidence: [measured, observed, inferred]
+    public_status: explain-with-limitations
+  - id: reproducible-open-research
+    title: Reproducible open research
+    priority: medium
+    questions:
+      - Can another researcher reproduce the calculation, fixture replay, and stated limitation?
+      - Which artifacts can be shared after privacy and public-data review?
+    preferred_evidence: [measured, observed, inferred]
+    public_status: publish-reviewed-artifacts
