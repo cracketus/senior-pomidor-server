@@ -43,6 +43,17 @@ Manual evidence selected by a flag remains manual; CI cannot turn it into `PASS`
 | `edge_server_compatibility` | `fixture_replay`, `named_consumers` | `edge_canary` |
 | `production_availability` | `compose_config` | `isolated_rehearsal_rollback_post_deploy_health` |
 | `public_contract` | `schema_validation`, `serialization_round_trip`, `fixture_replay`, `named_consumers` | none |
+
+| Historical reference | Description | Task classes | Risk flags |
+| --- | --- | --- | --- |
+| `1a9aeeb (#68)` | State Estimator layer normalizes telemetry and publishes derived canonical state without actuation. | `pure_software`, `schema_data_contract`, `edge_hardware_integration` | `edge_server_compatibility`, `public_contract` |
+| `6398d9e (#74)` | Read-only action simulation adds deterministic Guardrails reporting and explicitly keeps physical actuation disabled. | `pure_software`, `control_guardrails_executor` | `physical_action` |
+| `a480b9f (#64)` | Active server contracts make versioned schemas, fixtures, and operational boundaries explicit. | `schema_data_contract` | `edge_server_compatibility`, `public_contract` |
+| `5e6f654` | VPD telemetry metrics add unit-bearing derived fields and preserve the telemetry contract for consumers. | `schema_data_contract` | `public_contract`, `edge_server_compatibility` |
+| `aa91ba1` | Provisioned Grafana dashboards consume persisted telemetry through the read-only observability boundary. | `schema_data_contract`, `infrastructure_deployment` | `public_contract`, `production_availability` |
+| `8b3ef35 (#111)` | Ollama daily story remains an optional bounded analyst and communication consumer without ingestion or actuation authority. | `llm_vision` | none |
+| `bc16f24 (#114)` | Secure multi-app production layout separates the application lifecycle from shared platform services. | `infrastructure_deployment` | `security_secrets`, `production_availability` |
+| `532c53b (#120)` | Migration and restore hardening enforces checksums, readiness, isolated targets, and shared-service boundaries. | `schema_data_contract`, `infrastructure_deployment` | `data_loss_migration`, `production_availability` |
 <!-- END GENERATED SUMMARY -->
 
 ## Evidence rules

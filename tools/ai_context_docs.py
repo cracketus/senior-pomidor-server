@@ -13,6 +13,7 @@ FAILURES_PATH = ROOT / ".ai" / "known-failures.yaml"
 FAILURES_DOC_PATH = ROOT / ".ai" / "KNOWN_FAILURES.md"
 START = "<!-- BEGIN GENERATED SUMMARY -->"
 END = "<!-- END GENERATED SUMMARY -->"
+MIN_HISTORICAL_EXAMPLES = 8
 
 
 def _load(path: Path) -> dict[str, Any]:
@@ -28,11 +29,47 @@ def _items(value: Any, *, label: str) -> list[str]:
     return value
 
 
+def _validate_historical_examples(document: dict[str, Any]) -> list[dict[str, Any]]:
+    examples = document.get("historical_examples")
+    if not isinstance(examples, list) or len(examples) < MIN_HISTORICAL_EXAMPLES:
+        raise ValueError(f"historical_examples must contain at least {MIN_HISTORICAL_EXAMPLES} entries")
+    class_names = set(document["classes"])
+    flag_names = set(document["risk_flags"])
+    validated: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for index, example in enumerate(examples):
+        label = f"historical_examples[{index}]"
+        if not isinstance(example, dict):
+            raise ValueError(f"{label} must be a mapping")
+        reference = example.get("reference")
+        description = example.get("description")
+        if not isinstance(reference, str) or not reference.strip() or "|" in reference or "\n" in reference:
+            raise ValueError(f"{label}.reference must be a non-empty Markdown-safe string")
+        if reference in seen:
+            raise ValueError(f"duplicate historical example reference: {reference}")
+        if not isinstance(description, str) or not description.strip() or "|" in description or "\n" in description:
+            raise ValueError(f"{label}.description must be a non-empty Markdown-safe string")
+        task_classes = _items(example.get("task_classes"), label=f"{label}.task_classes")
+        risk_flags = _items(example.get("risk_flags"), label=f"{label}.risk_flags")
+        unknown_classes = set(task_classes) - class_names
+        unknown_flags = set(risk_flags) - flag_names
+        if not task_classes or unknown_classes:
+            raise ValueError(f"{label}.task_classes contains undeclared or no classes: {unknown_classes}")
+        if unknown_flags:
+            raise ValueError(f"{label}.risk_flags contains undeclared flags: {unknown_flags}")
+        seen.add(reference)
+        validated.append(
+            {"reference": reference, "description": description, "task_classes": task_classes, "risk_flags": risk_flags}
+        )
+    return validated
+
+
 def render_matrix_summary(document: dict[str, Any]) -> str:
     classes = document.get("classes")
     flags = document.get("risk_flags")
     if not isinstance(classes, dict) or not isinstance(flags, dict):
         raise ValueError("Test matrix must define classes and risk_flags")
+    examples = _validate_historical_examples(document)
     lines = [
         "| Task class | Required check IDs |",
         "| --- | --- |",
@@ -49,6 +86,13 @@ def render_matrix_summary(document: dict[str, Any]) -> str:
         added = ", ".join(f"`{item}`" for item in _items(raw_rule.get("add", []), label=str(name))) or "none"
         manual = ", ".join(f"`{item}`" for item in _items(raw_rule.get("manual", []), label=str(name))) or "none"
         lines.append(f"| `{name}` | {added} | {manual} |")
+    lines.extend(
+        ["", "| Historical reference | Description | Task classes | Risk flags |", "| --- | --- | --- | --- |"]
+    )
+    for example in examples:
+        classes_text = ", ".join(f"`{item}`" for item in example["task_classes"])
+        flags_text = ", ".join(f"`{item}`" for item in example["risk_flags"]) or "none"
+        lines.append(f"| `{example['reference']}` | {example['description']} | {classes_text} | {flags_text} |")
     return "\n".join(lines)
 
 

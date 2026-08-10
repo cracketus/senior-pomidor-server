@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from tools.ai_context_docs import ROOT, expected_documents, sync_documents
+import yaml
+
+from tools.ai_context_docs import ROOT, expected_documents, render_matrix_summary, sync_documents
 
 
 def test_generated_ai_context_summaries_are_current() -> None:
@@ -30,6 +32,30 @@ def test_test_matrix_declares_yaml_as_its_own_source_of_truth() -> None:
 
     assert "source_of_truth: .ai/test-matrix.yaml" in yaml_text
     assert "canonical machine-readable source" in markdown
+
+
+def test_historical_examples_are_complete_and_use_declared_values() -> None:
+    matrix = yaml.safe_load((ROOT / ".ai/test-matrix.yaml").read_text(encoding="utf-8"))
+    examples = matrix["historical_examples"]
+
+    assert len(examples) >= 8
+    declared_classes = set(matrix["classes"])
+    declared_flags = set(matrix["risk_flags"])
+    for example in examples:
+        assert example["reference"]
+        assert example["description"]
+        assert example["task_classes"]
+        assert set(example["task_classes"]) <= declared_classes
+        assert set(example["risk_flags"]) <= declared_flags
+
+
+def test_historical_examples_are_present_in_generated_matrix_summary() -> None:
+    matrix = yaml.safe_load((ROOT / ".ai/test-matrix.yaml").read_text(encoding="utf-8"))
+    summary = render_matrix_summary(matrix)
+
+    for example in matrix["historical_examples"]:
+        assert example["reference"] in summary
+        assert example["description"] in summary
 
 
 def test_context_tool_is_not_packaged_as_application_runtime() -> None:
