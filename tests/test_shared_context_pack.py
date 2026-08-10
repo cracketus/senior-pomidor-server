@@ -21,6 +21,8 @@ def test_shared_context_yaml_documents_have_required_machine_readable_shapes() -
     platforms = _load(".ai/content/platform-profiles.yaml")
     goals = _load(".ai/planning/project-goals.yaml")
     calendar = _load(".ai/planning/seasonal-calendar.yaml")
+    evidence = _load(".ai/research/evidence-schema.yaml")
+    examples = _load(".ai/research/evidence-examples.yaml")
 
     assert topics["evidence_vocabulary"].keys() >= {"measured", "observed", "inferred", "speculative"}
     assert topics["topics"]
@@ -29,6 +31,10 @@ def test_shared_context_yaml_documents_have_required_machine_readable_shapes() -
     assert set(platforms["profiles"]) == {"telegram", "linkedin", "substack"}
     assert goals["planning_fields"]["required"]
     assert calendar["timezone"] == "Europe/Vienna"
+    assert evidence["schema"] == "evidence_record_v1"
+    assert set(evidence["claim_vocabulary"]) == {"measured", "observed", "inferred", "speculative"}
+    assert examples["schema"] == "evidence_record_v1_examples"
+    assert len(examples["records"]) == 4
 
 
 def test_shared_context_links_and_privacy_boundaries_are_explicit() -> None:
@@ -43,3 +49,15 @@ def test_shared_context_links_and_privacy_boundaries_are_explicit() -> None:
         assert relative_path in agents or relative_path.replace(".ai/", "../") in workflows
     assert "private" in agents.lower()
     assert "CURRENT_STATE.md" in workflows
+
+
+def test_source_policy_examples_preserve_access_and_privacy_boundaries() -> None:
+    schema = _load(".ai/research/evidence-schema.yaml")
+    examples = _load(".ai/research/evidence-examples.yaml")["records"]
+    by_id = {record["record_id"]: record for record in examples}
+
+    assert "methodology" in schema["access_constraints"]["abstract"]["may_not_support"]
+    assert by_id["paper-abstract-example"]["access_level"] == "abstract"
+    assert by_id["grant-official-call-example"]["last_verified_at"]
+    assert by_id["incident-telemetry-example"]["visibility"] == "redacted_public"
+    assert all("password" not in str(record).lower() for record in examples)
