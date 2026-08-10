@@ -50,6 +50,41 @@ and operational impact, record exact checks as `PASS`, `FAIL`, or `NOT RUN`, and
 Implementation and Review Reports. Missing manual, rehearsal, edge-consumer, or physical evidence
 stays `NOT RUN`; CI cannot convert it to success.
 
+## Authentication preflight
+
+GitHub CLI authentication must be verified before any issue, branch, push, or pull-request
+automation. Git credentials used by `git push` and the token used by `gh` may come from different
+stores, so a successful push does not prove that PR metadata and CI status can be read.
+
+Run these checks without printing credentials:
+
+```powershell
+gh auth status -h github.com
+gh api user
+```
+
+If either check fails, stop before GitHub mutations and re-authenticate interactively:
+
+```powershell
+gh auth logout -h github.com -u <account>
+gh auth login -h github.com --git-protocol https --web
+gh auth status -h github.com
+gh api user
+```
+
+For non-interactive automation, provide a short-lived `GH_TOKEN` from the environment or a secret
+manager. Use least-privilege repository access for contents, pull requests, issues, and Actions read
+status as required; never commit or echo the token. Organization SSO authorization may be required.
+
+After creating a PR, verify the remote result and CI explicitly:
+
+```powershell
+gh pr view <number> --json url,mergeStateStatus,statusCheckRollup
+```
+
+An authentication failure is `NOT_RUN` for remote PR/CI evidence and must be reported as a workflow
+blocker, not as a clean or merged status.
+
 ## Automated PR handoff
 
 Before branch or commit automation, run `python -m tools.agent_task preflight`. The command must
@@ -58,11 +93,14 @@ implementation to a normal writable clone; do not edit `main`, delete lock files
 preflight. In a writable clone, the handoff is:
 
 ```powershell
+gh auth status -h github.com
+gh api user
 git checkout -b feature/TOMATO-AI-12-health-summary
 git add <approved implementation files only>
 git commit -m "feat: add health summary endpoint"
 git push -u origin feature/TOMATO-AI-12-health-summary
 gh pr create --draft --base main --head feature/TOMATO-AI-12-health-summary
+gh pr view <number> --json url,mergeStateStatus,statusCheckRollup
 ```
 
 The PR body must link issue #132, the approved brief, Implementation Report, and later the

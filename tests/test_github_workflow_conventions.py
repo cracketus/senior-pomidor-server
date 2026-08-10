@@ -47,3 +47,16 @@ def test_workflow_docs_preserve_human_approval_and_safe_evidence_boundaries() ->
         "real GPIO/actuator",
     ):
         assert required in content
+
+
+def test_workflow_docs_require_github_authentication_preflight_and_ci_readback() -> None:
+    content = (ROOT / "docs" / "GITHUB_AGENT_WORKFLOW.md").read_text(encoding="utf-8")
+    for required in (
+        "gh auth status -h github.com",
+        "gh api user",
+        "GH_TOKEN",
+        "gh pr view <number> --json url,mergeStateStatus,statusCheckRollup",
+        "successful push does not prove",
+        "NOT_RUN",
+    ):
+        assert required in content
