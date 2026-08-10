@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "scheduled_agent_run_v1",
+  "title": "Scheduled agent run",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "run_id",
+    "agent_type",
+    "prompt_version",
+    "started_at_utc",
+    "completed_at_utc",
+    "trigger",
+    "idempotency_key",
+    "input_refs",
+    "external_sources",
+    "previous_run_ref",
+    "outputs",
+    "status",
+    "quality",
+    "human_decision",
+    "errors"
+  ],
+  "properties": {
+    "schema": {"const": "scheduled_agent_run_v1"},
+    "run_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{2,119}$"},
+    "agent_type": {
+      "enum": ["scientific_scout", "grant_scout", "story_miner", "documentation_sync", "weekly_planner"]
+    },
+    "prompt_version": {"type": "string", "minLength": 1, "maxLength": 100},
+    "started_at_utc": {"type": "string", "format": "date-time", "pattern": "Z$"},
+    "completed_at_utc": {"type": ["string", "null"], "format": "date-time", "pattern": "Z$"},
+    "trigger": {"enum": ["schedule", "manual", "merge", "event"]},
+    "idempotency_key": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_.:-]{7,159}$"},
+    "input_refs": {"$ref": "#/$defs/refList"},
+    "external_sources": {"$ref": "#/$defs/sourceList"},
+    "previous_run_ref": {"type": ["string", "null"], "maxLength": 180},
+    "outputs": {"$ref": "#/$defs/outputList"},
+    "status": {"enum": ["success", "partial", "failed", "skipped"]},
+    "quality": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["duplicates_removed", "assumptions", "confidence"],
+      "properties": {
+        "duplicates_removed": {"type": "integer", "minimum": 0, "maximum": 100000},
+        "assumptions": {"type": "array", "maxItems": 64, "items": {"type": "string", "maxLength": 240}},
+        "confidence": {"enum": ["high", "medium", "low", "unknown"]}
+      }
+    },
+    "human_decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "notes"],
+      "properties": {
+        "status": {"enum": ["pending", "accepted", "modified", "rejected"]},
+        "notes": {"type": "string", "maxLength": 1000}
+      }
+    },
+    "errors": {
+      "type": "array",
+      "maxItems": 32,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "retryable"],
+        "properties": {
+          "code": {"type": "string", "pattern": "^[a-z0-9_.-]{1,80}$"},
+          "retryable": {"type": "boolean"}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "ref": {"type": "string", "pattern": "^(?!.*\\.\\.)[^\\n]{1,180}$"},
+    "refList": {"type": "array", "maxItems": 64, "uniqueItems": true, "items": {"$ref": "#/$defs/ref"}},
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_ref", "access_level", "last_verified_at"],
+      "properties": {
+        "source_ref": {"$ref": "#/$defs/ref"},
+        "access_level": {"enum": ["metadata", "abstract", "full_text", "full_call_document"]},
+        "last_verified_at": {"type": ["string", "null"], "format": "date-time", "pattern": "Z$"}
+      }
+    },
+    "sourceList": {"type": "array", "maxItems": 64, "items": {"$ref": "#/$defs/source"}},
+    "output": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact_ref", "publication_state"],
+      "properties": {
+        "artifact_ref": {"$ref": "#/$defs/ref"},
+        "publication_state": {"enum": ["candidate", "accepted", "superseded", "none"]}
+      }
+    },
+    "outputList": {"type": "array", "maxItems": 64, "items": {"$ref": "#/$defs/output"}}
+  }
+}
