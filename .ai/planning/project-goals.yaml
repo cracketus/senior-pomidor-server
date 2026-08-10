@@ -1,0 +1,27 @@
+version: 1
+updated: "2026-08-10"
+timezone: Europe/Vienna
+goals:
+  - id: safe-season-operation
+    title: Preserve safe and reliable seasonal operation
+    priority: 1
+    success_evidence: [fresh_ingestion, bounded_failure_behavior, recoverable_changes]
+    owner: operations-and-maintainers
+  - id: reproducible-research
+    title: Turn observations into reproducible, limitation-aware research
+    priority: 4
+    success_evidence: [versioned_inputs, documented_methods, evidence_labels]
+    owner: research
+  - id: transparent-publication
+    title: Share reviewed progress without overstating results
+    priority: 5
+    success_evidence: [claims_review, privacy_review, source_links]
+    owner: content
+  - id: maintainable-software
+    title: Improve the software within approved safety and reliability boundaries
+    priority: 6
+    success_evidence: [approved_brief, focused_tests, rollback_plan]
+    owner: development
+planning_fields:
+  required: [goal_id, priority, evidence_needed, consumers, rollback, deferred_work]
+  status_values: [proposed, active, blocked, complete, deferred]
