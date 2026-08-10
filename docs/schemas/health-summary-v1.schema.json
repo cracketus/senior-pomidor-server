@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://senior-pomidor.example/schemas/health-summary-v1.schema.json",
+  "title": "Senior Pomidor health summary v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "status", "generated_at", "components", "reasons", "data_freshness"],
+  "properties": {
+    "schema_version": {"const": "health_summary_v1"},
+    "status": {"enum": ["OK", "WARN", "ALERT", "UNKNOWN"]},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "components": {
+      "type": "object",
+      "additionalProperties": {"$ref": "#/$defs/component"}
+    },
+    "reasons": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "message"],
+        "properties": {
+          "code": {"type": "string", "maxLength": 64},
+          "message": {"type": "string", "maxLength": 160}
+        }
+      }
+    },
+    "data_freshness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["worker_max_age_seconds", "telemetry_max_age_seconds", "node_id"],
+      "properties": {
+        "worker_max_age_seconds": {"type": "integer", "const": 90},
+        "telemetry_max_age_seconds": {"type": "integer", "const": 1200},
+        "node_id": {"type": ["string", "null"], "maxLength": 128}
+      }
+    }
+  },
+  "$defs": {
+    "component": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["status"],
+      "properties": {
+        "status": {"enum": ["OK", "WARN", "ALERT", "UNKNOWN"]},
+        "age_seconds": {"type": "number", "minimum": 0},
+        "scope": {"type": "string", "const": "server"},
+        "migration": {"type": "string", "maxLength": 32},
+        "reason_code": {"type": "string", "maxLength": 64}
+      }
+    }
+  }
+}

@@ -19,6 +19,7 @@ from tools.agent_task import (
     check_task,
     cleanup_task,
     create_task,
+    git_preflight,
     resume_task,
     retire_task,
     sanitized_process_environment,
@@ -166,6 +167,29 @@ def test_create_preflights_git_write_before_allocation(
         create_task(context, "TOMATO-AI-128", "preflight", "feature")
 
     assert not (repo / ".agent-tasks").exists()
+
+
+def test_git_preflight_reports_clean_writable_checkout(git_repo: tuple[Path, RepositoryContext]) -> None:
+    _, context = git_repo
+
+    result = git_preflight(context)
+
+    assert result["git_metadata_writable"] is True
+    assert result["worktree_clean"] is True
+    assert result["ready_for_task"] is True
+    assert result["blocking_reasons"] == []
+
+
+def test_git_preflight_reports_dirty_checkout(git_repo: tuple[Path, RepositoryContext]) -> None:
+    repo, context = git_repo
+    (repo / "dirty.txt").write_text("untracked\n", encoding="utf-8")
+
+    result = git_preflight(context)
+
+    assert result["git_metadata_writable"] is True
+    assert result["worktree_clean"] is False
+    assert result["ready_for_task"] is False
+    assert result["blocking_reasons"] == ["worktree is dirty; commit or move changes before task creation"]
 
 
 def test_resume_completes_partial_creation_without_reallocating(

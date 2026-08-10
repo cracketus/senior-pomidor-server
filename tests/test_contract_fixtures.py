@@ -34,3 +34,13 @@ def test_photo_contract_fixture_matches_active_schema() -> None:
 
     assert photo["schema_version"] == PHOTO_SCHEMA
     assert photo["captured_at_utc"].endswith("Z")
+
+
+def test_health_summary_contract_fixture_is_versioned() -> None:
+    summary = load_json(FIXTURE_DIR / "health_summary_v1.json")
+
+    assert summary["schema_version"] == "health_summary_v1"
+    assert summary["status"] in {"OK", "WARN", "ALERT", "UNKNOWN"}
+    assert summary["generated_at"].endswith("Z")
+    assert summary["data_freshness"]["worker_max_age_seconds"] == 90
+    assert summary["data_freshness"]["telemetry_max_age_seconds"] == 1200

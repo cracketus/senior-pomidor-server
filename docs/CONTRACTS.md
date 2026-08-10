@@ -184,10 +184,27 @@ Implemented read endpoints:
 - `GET /api/v1/photos/recent?from=&to=&limit=`
 - `GET /api/v1/photos/{photo_id}`
 - `GET /health`
+- `GET /health/summary?node_id=` (read-only `health_summary_v1`)
 - `GET /ready`
 - `GET /dashboard`
 
 Latest and history telemetry responses include pod readings, pod errors, preserved `system_health`, and derived `health_alerts`.
+
+The health summary is an internal, read-only composition of existing server, worker, telemetry,
+and sensor-health signals. It does not restart services, mutate storage, invoke recovery, or publish
+an export. `node_id` is optional: without it, telemetry and sensor-health components are marked as
+server-scope and do not assert node health. With it, missing or stale node data is non-healthy.
+
+Example:
+
+```powershell
+Invoke-RestMethod "http://localhost:8000/health/summary?node_id=pi-001"
+```
+
+The response uses `schema_version: "health_summary_v1"`, UTC `generated_at`, status values
+`OK|WARN|ALERT|UNKNOWN`, bounded reason codes, and `data_freshness`. Worker health is stale after
+90 seconds; telemetry and sensor health are stale after 1200 seconds. `OK` is returned only when
+all required scoped evidence is current and healthy.
 
 Example latest telemetry call:
 
