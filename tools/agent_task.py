@@ -130,23 +130,52 @@ def _branch_exists(context: RepositoryContext, branch: str) -> bool:
 
 
 def _preflight_git_write(context: RepositoryContext) -> None:
-    """Prove local ref-lock writability before allocating ports or creating task metadata."""
+    """Prove local ref and index-lock writability before allocating task state."""
     refs = context.git_common_dir / "refs" / "heads"
-    probe = refs / f".agent-task-write-probe-{os.getpid()}-{uuid.uuid4().hex}.lock"
-    descriptor: int | None = None
+    probes = (
+        (refs / f".agent-task-write-probe-{os.getpid()}-{uuid.uuid4().hex}.lock", "Git refs"),
+        (context.git_common_dir / "index.lock", "Git index"),
+    )
+    for probe, label in probes:
+        descriptor: int | None = None
+        try:
+            descriptor = os.open(probe, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        except OSError as exc:
+            raise AgentTaskError(
+                f"{label} are not writable; use a checkout with writable .git metadata; no task allocation was created"
+            ) from exc
+        finally:
+            if descriptor is not None:
+                os.close(descriptor)
+                try:
+                    probe.unlink()
+                except OSError as exc:
+                    raise AgentTaskError(
+                        f"{label} write probe could not be removed; inspect the repository before retrying"
+                    ) from exc
+
+
+def git_preflight(context: RepositoryContext) -> dict[str, Any]:
+    """Report whether this checkout can safely create and publish a task."""
+    status = _run(["git", "status", "--porcelain"], cwd=context.checkout_root).stdout.splitlines()
+    branch = _run(["git", "branch", "--show-current"], cwd=context.checkout_root).stdout.strip()
+    reasons: list[str] = []
+    git_metadata_writable = True
     try:
-        descriptor = os.open(probe, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
-    except OSError as exc:
-        raise AgentTaskError("Git refs are not writable; no task allocation was created") from exc
-    finally:
-        if descriptor is not None:
-            os.close(descriptor)
-            try:
-                probe.unlink()
-            except OSError as exc:
-                raise AgentTaskError(
-                    "Git write probe could not be removed; inspect the repository before retrying"
-                ) from exc
+        _preflight_git_write(context)
+    except AgentTaskError as exc:
+        git_metadata_writable = False
+        reasons.append(str(exc))
+    if status:
+        reasons.append("worktree is dirty; commit or move changes before task creation")
+    return {
+        "checkout": str(context.checkout_root),
+        "branch": branch,
+        "git_metadata_writable": git_metadata_writable,
+        "worktree_clean": not status,
+        "ready_for_task": git_metadata_writable and not status,
+        "blocking_reasons": reasons,
+    }
 
 
 def _validate_classification(values: tuple[str, ...], allowed: tuple[str, ...], label: str) -> tuple[str, ...]:
@@ -873,6 +902,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     cleanup.add_argument("task_key")
     retire = subparsers.add_parser("retire", help="release a cleaned task's owned port allocation")
     retire.add_argument("task_key")
+    subparsers.add_parser("preflight", help="report Git write and worktree readiness without allocating task state")
     return parser.parse_args(argv)
 
 
@@ -880,6 +910,10 @@ def main(argv: list[str] | None = None) -> int:
     try:
         args = parse_args(argv)
         context = repository_context()
+        if args.command == "preflight":
+            result = git_preflight(context)
+            print(json.dumps(result, indent=2, sort_keys=True))
+            return 0 if result["ready_for_task"] else 2
         if args.command == "create":
             result = create_task(
                 context,

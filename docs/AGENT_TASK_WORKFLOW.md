@@ -42,6 +42,18 @@ Two tasks created from the same control checkout receive different branches, pro
 blocks, and data roots. Run each task's commands from any checkout belonging to that repository; the
 shared Git common directory locates the central registry.
 
+Run the non-mutating preflight before automation or PR handoff:
+
+```powershell
+python -m tools.agent_task preflight
+```
+
+It checks both Git refs and index-lock writability, plus a clean worktree. A read-only managed
+checkout is a hard stop: copy the approved brief and implementation into a normal writable clone,
+run preflight there, and continue with branch/commit/push/PR automation. Do not bypass the check by
+editing `main` or by manually deleting lock files. The command returns exit code `2` and a bounded
+JSON reason when it is not safe to proceed.
+
 ## Bounded Compose actions
 
 Validate without starting containers:

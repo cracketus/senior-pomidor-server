@@ -25,6 +25,8 @@ Before tagging or publishing a server release:
 - Run `nox -s deps_audit`.
 - Run `$env:RUN_DOCKER_E2E='1'; python -m pytest -q tests/test_docker_e2e.py` when Docker is available.
 - Verify `GET /health` and `GET /ready` after a local development-overlay build or tagged production deployment.
+- For a read-only machine summary, inspect `GET /health/summary` or add `?node_id=pi-001`; treat
+  `WARN`, `ALERT`, and `UNKNOWN` as degraded evidence, not as a request to restart or recover a service.
 - Confirm there are no local `.env`, private key, known-hosts, `.db`, `data/`, or `backups/` files in the release checkout.
 - Confirm `.env.example` still uses local bootstrap defaults only, and document any required production overrides.
 - Verify `python -m tools.edge_readiness --api-base-url http://127.0.0.1:8000 --mqtt-host 127.0.0.1 --photo-storage-dir data/photos`.
