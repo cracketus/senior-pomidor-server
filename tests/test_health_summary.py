@@ -66,7 +66,10 @@ def test_health_summary_marks_missing_worker_unknown(tmp_path, monkeypatch, clie
 
 def test_health_summary_marks_missing_node_data_unknown(tmp_path, monkeypatch, client_factory):
     health_file = tmp_path / "worker-health.json"
-    health_file.write_text(json.dumps({"status": "healthy", "updated_at": "2026-08-10T10:00:00Z"}), encoding="utf-8")
+    fresh_worker_time = datetime.now(UTC) - timedelta(seconds=1)
+    health_file.write_text(
+        json.dumps({"status": "healthy", "updated_at": fresh_worker_time.isoformat()}), encoding="utf-8"
+    )
     monkeypatch.setattr("app.health_summary.check_readiness", lambda *_args: ready_state())
     client = client_factory(worker_health_file=str(health_file))
 
