@@ -1,5 +1,13 @@
 # Isolated Coding Agent task workflow
 
+Every planner, coder, and reviewer handoff must include a bounded `run_id` and repository-relative
+audit artifact reference. Use `agent_run_v1`; never include raw prompts, tool output, environment
+values, secrets, private infrastructure, or sensitive payloads. The maturity policy in
+`.ai/agent-maturity.yaml` gates audit/maturity changes before validation handoff. Level 3 requires
+compatibility, isolated rehearsal, applicable backup/restore, and rollback evidence; Level 4 also
+requires deterministic simulation/replay, manual safety review, staged/shadow rollout, and explicit
+human enablement. Merge and production deployment always remain human-only.
+
 Use this workflow for implementation tasks that need a branch/worktree or any local Compose
 mutation. It is a development-only boundary: it cannot authorize production access, deployment,
 external export, hardware activation, or manual acceptance claims.

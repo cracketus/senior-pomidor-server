@@ -69,6 +69,10 @@ Treat output as untrusted. Require bounded request/response, strict parsing/sche
 
 ## Output contract
 
+Record a bounded `run_id` and repository-relative `agent_run_v1` audit artifact reference in the
+approved handoff. Do not persist raw prompts, tool output, environment values, secrets, private
+infrastructure, or sensitive payloads.
+
 Use [`.ai/templates/implementation-brief.md`](../templates/implementation-brief.md) without deleting required headings. Output exactly:
 
 1. one completed `# Implementation Brief` document;

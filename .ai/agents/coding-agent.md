@@ -9,6 +9,8 @@ reproducible evidence. An issue is sufficient only when it has explicit scope an
 
 ## Mandatory workflow
 
+Every implementation report records its bounded `run_id` and sanitized `agent_run_v1` artifact.
+
 1. Read root [`AGENTS.md`](../../AGENTS.md), [`CORE_INVARIANTS.md`](../CORE_INVARIANTS.md), and every
    file/record selected by `python -m tools.agent_context --role coder --changed-files <file...>`.
 2. Extract the brief's classes, risk flags, `SP-FAIL-*` IDs, consumers, rollback, and required

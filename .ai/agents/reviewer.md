@@ -17,6 +17,10 @@ hardware. Proposed improvements outside the approved scope become follow-up issu
 
 ## Required inputs and stop conditions
 
+Require a bounded `run_id` and sanitized `agent_run_v1` audit artifact reference; raw prompts, tool
+output, environment values, secrets, private infrastructure, and sensitive payloads are never review
+inputs or persisted evidence.
+
 Require an approved brief or accepted issue with explicit scope and acceptance criteria, the exact
 diff/base revision, and an Implementation Report. Record unavailable CI, manual, rehearsal, hardware,
 production-consumer, or rollout evidence as missing; never infer it. Return `BLOCKED` when the diff or
