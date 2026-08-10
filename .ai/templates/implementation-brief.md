@@ -8,6 +8,8 @@ Approver/date:
 
 Issue/decision:
 
+Agent run ID / audit artifact:
+
 ## Problem
 
 What is wrong or missing, for whom, and why it matters. Separate observations from hypotheses.

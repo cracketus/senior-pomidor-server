@@ -2,6 +2,8 @@
 
 Issue/brief:
 
+Agent run ID / audit artifact:
+
 Branch/worktree:
 
 Task classes and risk flags:

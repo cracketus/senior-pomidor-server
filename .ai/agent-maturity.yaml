@@ -1,0 +1,39 @@
+version: 1
+schema: agent_maturity_v1
+levels:
+  1:
+    name: docs-tests-internal-tooling
+    task_classes: [documentation_only, pure_software]
+    required_evidence: [focused_tests, diff_check]
+    human_approvers: [maintainer]
+    rollback_owner: maintainer
+    abort_criteria: [blocker, high_finding, secret_leak, unintended_side_effect]
+    downgrade_conditions: [blocker, high_finding, secret_leak, unintended_side_effect, failed_rollback, escaped_defect]
+  2:
+    name: application-logic
+    task_classes: [application_logic, llm_vision]
+    required_evidence: [focused_tests, full_pytest, quality, privacy_review]
+    human_approvers: [maintainer, application_owner]
+    rollback_owner: application_owner
+    abort_criteria: [blocker, high_finding, escaped_defect]
+    downgrade_conditions: [blocker, high_finding, escaped_defect]
+  3:
+    name: schema-data-infrastructure-deployment
+    task_classes: [schema_data_contract, infrastructure_deployment]
+    required_evidence: [compatibility, isolated_rehearsal, backup_restore_where_applicable, rollback]
+    human_approvers: [maintainer, operations_owner]
+    rollback_owner: operations_owner
+    abort_criteria: [blocker, high_finding, unintended_side_effect, failed_rollback]
+    downgrade_conditions: [blocker, high_finding, failed_rollback, escaped_defect]
+  4:
+    name: control-guardrails-executor-hardware
+    task_classes: [edge_hardware_integration, control_guardrails_executor]
+    required_evidence: [deterministic_simulation_replay, manual_safety_review, staged_shadow_rollout, explicit_human_enablement]
+    human_approvers: [maintainer, safety_owner, hardware_owner]
+    rollback_owner: safety_owner
+    abort_criteria: [blocker, high_finding, secret_leak, unintended_side_effect, failed_rollback]
+    downgrade_conditions: [blocker, high_finding, secret_leak, unintended_side_effect, failed_rollback, escaped_defect]
+gates:
+  merge: human_only
+  production_deployment: human_only
+  physical_enablement: explicit_human_only

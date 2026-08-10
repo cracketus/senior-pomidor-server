@@ -2,6 +2,8 @@
 
 - Issue: #
 - Approved Implementation Brief: 
+- Agent run ID and sanitized audit artifact:
+- Maturity level / gate result: `PASS` / `FAIL` / `NOT_RUN` (include evidence refs)
 - Task class(es):
 - Risk flag(s):
 - Applicable `SP-FAIL-*` records:
@@ -50,3 +52,4 @@
 - [ ] Required evidence is recorded as `PASS`, `FAIL`, or `NOT RUN` with reasons.
 - [ ] Reviewer completed an independent review and linked the Review Report.
 - [ ] Human maintainer approved merge after required follow-ups are resolved.
+- [ ] Level 3/4 compatibility, rehearsal, rollback, simulation, and human evidence are recorded as applicable.

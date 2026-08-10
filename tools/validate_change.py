@@ -20,6 +20,7 @@ from typing import Any
 import yaml
 
 from tools.agent_context import ContextSelection, select_context
+from tools.agent_maturity import evaluate_gate
 from tools.agent_task import (
     AgentTaskError,
     RepositoryContext,
@@ -489,6 +490,28 @@ def validate_change(
                 "reason": "manual_evidence_not_provided",
             }
         )
+    maturity_paths = (".ai/agent-runs/", ".ai/agent-maturity.yaml", "tools/agent_maturity.py")
+    if any(path.startswith(maturity_paths) for path in changed_files):
+        gate = evaluate_gate(
+            root=root,
+            task_classes=selection.task_classes,
+            risk_flags=selection.risk_flags,
+            audit_record=None,
+            brief_ref=metadata.get("implementation_brief"),
+            evidence_refs=metadata.get("evidence_refs", ()),
+            approval_refs=metadata.get("approval_refs", ()),
+            manual_evidence=False,
+            changed_files=changed_files,
+        )
+        check_results.append(
+            {
+                "id": "maturity_gate",
+                "selected": True,
+                "status": gate.status,
+                "reason": "; ".join(gate.reasons),
+                "level": gate.level,
+            }
+        )
     payload = {
         "schema": "senior-pomidor.validation.v1",
         "recorded_at_utc": datetime.now(UTC).isoformat(),
@@ -520,7 +543,13 @@ def validate_change(
         for item in check_results:
             state = "selected" if item["selected"] else "skipped"
             print(f"{item['id']}: {state}, {item['status']} ({item['reason']})")
-    failed = any(item["selected"] and item["status"] == "FAIL" for item in check_results)
+    failed = any(
+        item["selected"] and item["status"] in {"FAIL", "NOT_RUN"}
+        for item in check_results
+        if item.get("id") == "maturity_gate"
+    ) or any(
+        item["selected"] and item["status"] == "FAIL" for item in check_results if item.get("id") != "maturity_gate"
+    )
     return (1 if failed else 0), payload
 
 
