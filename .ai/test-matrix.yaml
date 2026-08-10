@@ -52,3 +52,37 @@ risk_flags:
     manual: [isolated_rehearsal_rollback_post_deploy_health]
   public_contract:
     add: [schema_validation, serialization_round_trip, fixture_replay, named_consumers]
+
+historical_examples:
+  - reference: "1a9aeeb (#68)"
+    description: "State Estimator layer normalizes telemetry and publishes derived canonical state without actuation."
+    task_classes: [pure_software, schema_data_contract, edge_hardware_integration]
+    risk_flags: [edge_server_compatibility, public_contract]
+  - reference: "6398d9e (#74)"
+    description: "Read-only action simulation adds deterministic Guardrails reporting and explicitly keeps physical actuation disabled."
+    task_classes: [pure_software, control_guardrails_executor]
+    risk_flags: [physical_action]
+  - reference: "a480b9f (#64)"
+    description: "Active server contracts make versioned schemas, fixtures, and operational boundaries explicit."
+    task_classes: [schema_data_contract]
+    risk_flags: [edge_server_compatibility, public_contract]
+  - reference: "5e6f654"
+    description: "VPD telemetry metrics add unit-bearing derived fields and preserve the telemetry contract for consumers."
+    task_classes: [schema_data_contract]
+    risk_flags: [public_contract, edge_server_compatibility]
+  - reference: "aa91ba1"
+    description: "Provisioned Grafana dashboards consume persisted telemetry through the read-only observability boundary."
+    task_classes: [schema_data_contract, infrastructure_deployment]
+    risk_flags: [public_contract, production_availability]
+  - reference: "8b3ef35 (#111)"
+    description: "Ollama daily story remains an optional bounded analyst and communication consumer without ingestion or actuation authority."
+    task_classes: [llm_vision]
+    risk_flags: []
+  - reference: "bc16f24 (#114)"
+    description: "Secure multi-app production layout separates the application lifecycle from shared platform services."
+    task_classes: [infrastructure_deployment]
+    risk_flags: [security_secrets, production_availability]
+  - reference: "532c53b (#120)"
+    description: "Migration and restore hardening enforces checksums, readiness, isolated targets, and shared-service boundaries."
+    task_classes: [schema_data_contract, infrastructure_deployment]
+    risk_flags: [data_loss_migration, production_availability]
