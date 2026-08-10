@@ -40,8 +40,8 @@ under `.ai/research/`, `.ai/content/`, and `.ai/planning/`. These files are stab
 replacement for current runtime status in `.ai/CURRENT_STATE.md` or for evidence collected during a
 task.
 
-- Research scope and sources: `.ai/research/RESEARCH_SCOPE.md`, `scientific-topics.yaml`, and
-  `grant-sources.yaml`.
+- Research scope, source policy, and evidence model: `.ai/research/RESEARCH_SCOPE.md`,
+  `SOURCE_POLICY.md`, `evidence-schema.yaml`, `scientific-topics.yaml`, and `grant-sources.yaml`.
 - Public voice and claims: `.ai/content/PUBLIC_VOICE.md`, `CLAIMS_POLICY.md`, and
   `platform-profiles.yaml`.
 - Priorities and season: `.ai/planning/PRIORITY_RULES.md`, `project-goals.yaml`, and

@@ -2,7 +2,9 @@
 
 ## Evidence vocabulary
 
-Use the same labels in research notes and public drafts:
+Use the same labels in research notes and public drafts. Source identity, access level,
+verification date, citation, confidence, uncertainty, and visibility follow the shared
+[`SOURCE_POLICY.md`](../research/SOURCE_POLICY.md) and [`evidence-schema.yaml`](../research/evidence-schema.yaml).
 
 | Label | Meaning | Public treatment |
 | --- | --- | --- |

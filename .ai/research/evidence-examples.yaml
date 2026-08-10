@@ -1,0 +1,51 @@
+version: 1
+schema: evidence_record_v1_examples
+records:
+  - record_id: paper-abstract-example
+    source_class: primary_scientific_source
+    access_level: abstract
+    title_or_subject: "Synthetic paper about greenhouse humidity"
+    source_reference: doi:10.0000/example.paper
+    last_verified_at: "2026-08-10T10:00:00Z"
+    claim_type: inferred
+    claim: "The abstract reports an association, but the method and full results were not assessed."
+    confidence: medium
+    uncertainty: "Full text was not accessed; sample design and limitations remain unknown."
+    citation: "[paper-abstract-example] Synthetic greenhouse humidity paper — Example Publisher, 2026. doi:10.0000/example.paper. Accessed 2026-08-10."
+    visibility: public
+  - record_id: grant-official-call-example
+    source_class: official_programme_page
+    access_level: full_call_document
+    title_or_subject: "Synthetic innovation call"
+    source_reference: https://funding.example.invalid/call-2026
+    last_verified_at: "2026-08-10T10:05:00Z"
+    claim_type: observed
+    claim: "The official call document lists its published deadline and applicant conditions."
+    confidence: high
+    uncertainty: "Applicant-specific eligibility still requires a project-owner review."
+    citation: "[grant-official-call-example] Synthetic innovation call — Example Funding Body, 2026. https://funding.example.invalid/call-2026. Accessed 2026-08-10."
+    visibility: public
+  - record_id: incident-telemetry-example
+    source_class: telemetry
+    access_level: full_text
+    title_or_subject: "Synthetic telemetry gap during local rehearsal"
+    source_reference: synthetic:telemetry-gap-2026-08-10
+    last_verified_at: "2026-08-10T10:10:00Z"
+    claim_type: measured
+    claim: "The synthetic fixture contains a 15-minute ingestion gap during the stated rehearsal window."
+    confidence: high
+    uncertainty: "This fixture does not establish a physical sensor, network, or biological cause."
+    citation: "[incident-telemetry-example] Synthetic telemetry fixture telemetry-gap-2026-08-10, recorded 2026-08-10T10:10:00Z."
+    visibility: redacted_public
+  - record_id: documentation-drift-example
+    source_class: repository_artifact
+    access_level: full_text
+    title_or_subject: "Synthetic documentation drift"
+    source_reference: docs/example.md@abc1234
+    last_verified_at: "2026-08-10T10:15:00Z"
+    claim_type: observed
+    claim: "The documented command differs from the command recorded in the cited repository commit."
+    confidence: high
+    uncertainty: "No claim is made about deployed environments until an approved environment check is performed."
+    citation: "[documentation-drift-example] Repository artifact docs/example.md at commit abc1234."
+    visibility: public
