@@ -28,3 +28,8 @@ The context pack contains stable inputs only. Frequently changing implementation
 remain in `.ai/CURRENT_STATE.md`; task-specific evidence remains in the brief and report. All
 workflow recommendations must preserve the priority order of plant safety, data continuity, and
 seasonal windows over speculative software work.
+
+Scheduled workflows record each attempt using [`SCHEDULED_AGENT_RUN_POLICY.md`](SCHEDULED_AGENT_RUN_POLICY.md)
+and [`../schemas/scheduled_agent_run_v1.schema.json`](../schemas/scheduled_agent_run_v1.schema.json).
+The artifact is immutable, idempotency-keyed, redacted, and distinguishes successful, partial,
+failed, and skipped runs; it never silently replaces the last accepted output.

@@ -1,0 +1,83 @@
+version: 1
+schema: scheduled_agent_run_v1_examples
+records:
+  - schema: scheduled_agent_run_v1
+    run_id: 20260810T100000Z-scientific_scout-a1
+    agent_type: scientific_scout
+    prompt_version: scientific-scout-v1
+    started_at_utc: "2026-08-10T10:00:00Z"
+    completed_at_utc: "2026-08-10T10:02:00Z"
+    trigger: schedule
+    idempotency_key: scientific_scout:2026-08-10T10:00Z:abc123
+    input_refs: [.ai/research/RESEARCH_SCOPE.md]
+    external_sources: [{source_ref: paper-abstract-example, access_level: abstract, last_verified_at: "2026-08-10T10:00:00Z"}]
+    previous_run_ref: null
+    outputs: [{artifact_ref: scheduled-agent-runs/2026/08/scientific-scout-a1.json, publication_state: candidate}]
+    status: success
+    quality: {duplicates_removed: 1, assumptions: [full_text_not_accessed], confidence: medium}
+    human_decision: {status: pending, notes: "Research owner review required."}
+    errors: []
+  - schema: scheduled_agent_run_v1
+    run_id: 20260810T101000Z-grant_scout-b1
+    agent_type: grant_scout
+    prompt_version: grant-scout-v1
+    started_at_utc: "2026-08-10T10:10:00Z"
+    completed_at_utc: "2026-08-10T10:11:00Z"
+    trigger: manual
+    idempotency_key: grant_scout:2026-08-10T10:10Z:def456
+    input_refs: [.ai/research/grant-sources.yaml]
+    external_sources: [{source_ref: grant-official-call-example, access_level: full_call_document, last_verified_at: "2026-08-10T10:05:00Z"}]
+    previous_run_ref: null
+    outputs: [{artifact_ref: scheduled-agent-runs/2026/08/grant-scout-b1.json, publication_state: candidate}]
+    status: partial
+    quality: {duplicates_removed: 0, assumptions: [applicant_review_pending], confidence: low}
+    human_decision: {status: pending, notes: "Do not treat as eligibility approval."}
+    errors: [{code: source_review_pending, retryable: true}]
+  - schema: scheduled_agent_run_v1
+    run_id: 20260810T102000Z-story_miner-c1
+    agent_type: story_miner
+    prompt_version: story-miner-v1
+    started_at_utc: "2026-08-10T10:20:00Z"
+    completed_at_utc: "2026-08-10T10:22:00Z"
+    trigger: event
+    idempotency_key: story_miner:2026-08-10T10:20Z:ghi789
+    input_refs: [incident-telemetry-example]
+    external_sources: []
+    previous_run_ref: null
+    outputs: [{artifact_ref: scheduled-agent-runs/2026/08/story-miner-c1.json, publication_state: none}]
+    status: skipped
+    quality: {duplicates_removed: 0, assumptions: [human_decision_missing], confidence: unknown}
+    human_decision: {status: pending, notes: "No public draft created."}
+    errors: []
+  - schema: scheduled_agent_run_v1
+    run_id: 20260810T103000Z-documentation_sync-d1
+    agent_type: documentation_sync
+    prompt_version: documentation-sync-v1
+    started_at_utc: "2026-08-10T10:30:00Z"
+    completed_at_utc: "2026-08-10T10:31:00Z"
+    trigger: merge
+    idempotency_key: documentation_sync:2026-08-10T10:30Z:jkl012
+    input_refs: [docs/example.md@abc1234]
+    external_sources: []
+    previous_run_ref: null
+    outputs: [{artifact_ref: scheduled-agent-runs/2026/08/documentation-sync-d1.json, publication_state: accepted}]
+    status: success
+    quality: {duplicates_removed: 0, assumptions: [], confidence: high}
+    human_decision: {status: accepted, notes: "Maintainer accepted documentation drift report."}
+    errors: []
+  - schema: scheduled_agent_run_v1
+    run_id: 20260810T104000Z-weekly_planner-e1
+    agent_type: weekly_planner
+    prompt_version: weekly-planner-v1
+    started_at_utc: "2026-08-10T10:40:00Z"
+    completed_at_utc: null
+    trigger: schedule
+    idempotency_key: weekly_planner:2026-08-10T10:40Z:mno345
+    input_refs: [.ai/planning/project-goals.yaml]
+    external_sources: []
+    previous_run_ref: null
+    outputs: []
+    status: failed
+    quality: {duplicates_removed: 0, assumptions: [], confidence: unknown}
+    human_decision: {status: pending, notes: "Last accepted plan remains current."}
+    errors: [{code: bounded_input_unavailable, retryable: false}]

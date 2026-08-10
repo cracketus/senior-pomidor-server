@@ -50,4 +50,5 @@ task.
 Read the relevant Markdown policy before using the adjacent YAML inputs. Treat source-backed
 eligibility, scientific, and publication statements as reviewable assumptions; do not expose
 private data or turn generated summaries into evidence. Ownership and update cadence are defined in
-[`.ai/workflows/README.md`](.ai/workflows/README.md).
+[`.ai/workflows/README.md`](.ai/workflows/README.md). Scheduled workflow runs use
+`.ai/schemas/scheduled_agent_run_v1.schema.json` and `.ai/workflows/SCHEDULED_AGENT_RUN_POLICY.md`.
