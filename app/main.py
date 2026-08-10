@@ -1,13 +1,16 @@
 import logging
+from typing import Annotated
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import Session
 from starlette import status
 
 from app.api import router
-from app.config import settings
-from app.db import engine
+from app.config import Settings, get_settings, settings
+from app.db import engine, get_db
+from app.health_summary import build_health_summary
 from app.logging_config import configure_logging
 from app.readiness import check_readiness
 
@@ -49,6 +52,20 @@ async def unexpected_exception_handler(_request: Request, exc: Exception) -> JSO
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/health/summary")
+def health_summary(
+    node_id: Annotated[str | None, Query(max_length=128)] = None,
+    db: Session = Depends(get_db),
+    app_settings: Settings = Depends(get_settings),
+) -> dict:
+    return build_health_summary(
+        db,
+        worker_health_file=app_settings.worker_health_file,
+        node_id=node_id,
+        readiness_engine=engine,
+    )
 
 
 @app.get("/ready")

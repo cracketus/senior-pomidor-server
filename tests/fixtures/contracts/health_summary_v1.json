@@ -1,0 +1,18 @@
+{
+  "schema_version": "health_summary_v1",
+  "status": "OK",
+  "generated_at": "2026-08-10T10:00:00Z",
+  "components": {
+    "api": {"status": "OK"},
+    "database": {"status": "OK", "migration": "current"},
+    "worker": {"status": "OK", "age_seconds": 3.2},
+    "telemetry": {"status": "OK", "scope": "server"},
+    "sensor_health": {"status": "OK", "scope": "server"}
+  },
+  "reasons": [],
+  "data_freshness": {
+    "worker_max_age_seconds": 90,
+    "telemetry_max_age_seconds": 1200,
+    "node_id": null
+  }
+}

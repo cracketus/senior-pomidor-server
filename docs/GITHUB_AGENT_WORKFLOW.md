@@ -50,6 +50,25 @@ and operational impact, record exact checks as `PASS`, `FAIL`, or `NOT RUN`, and
 Implementation and Review Reports. Missing manual, rehearsal, edge-consumer, or physical evidence
 stays `NOT RUN`; CI cannot convert it to success.
 
+## Automated PR handoff
+
+Before branch or commit automation, run `python -m tools.agent_task preflight`. The command must
+report writable Git metadata and a clean worktree. If it fails, stop and move the approved brief and
+implementation to a normal writable clone; do not edit `main`, delete lock files, or bypass the
+preflight. In a writable clone, the handoff is:
+
+```powershell
+git checkout -b feature/TOMATO-AI-12-health-summary
+git add <approved implementation files only>
+git commit -m "feat: add health summary endpoint"
+git push -u origin feature/TOMATO-AI-12-health-summary
+gh pr create --draft --base main --head feature/TOMATO-AI-12-health-summary
+```
+
+The PR body must link issue #132, the approved brief, Implementation Report, and later the
+independent Review Report. Authentication and remote writes remain explicit operator-authorized
+steps; a local sandbox cannot infer or manufacture GitHub credentials.
+
 ## Examples
 
 ### Planner
