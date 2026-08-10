@@ -20,7 +20,7 @@ from these three groups before drafting recommendations:
 
 | Context | Authoritative inputs | Update owner and cadence |
 | --- | --- | --- |
-| Research | [`../research/RESEARCH_SCOPE.md`](../research/RESEARCH_SCOPE.md), [`../research/scientific-topics.yaml`](../research/scientific-topics.yaml), [`../research/grant-sources.yaml`](../research/grant-sources.yaml) | Research owner; review sources and assumptions before each grant/publication decision |
+| Research | [`../research/RESEARCH_SCOPE.md`](../research/RESEARCH_SCOPE.md), [`../research/SOURCE_POLICY.md`](../research/SOURCE_POLICY.md), [`../research/evidence-schema.yaml`](../research/evidence-schema.yaml), [`../research/scientific-topics.yaml`](../research/scientific-topics.yaml), [`../research/grant-sources.yaml`](../research/grant-sources.yaml) | Research owner; review sources and assumptions before each grant/publication decision |
 | Content | [`../content/PUBLIC_VOICE.md`](../content/PUBLIC_VOICE.md), [`../content/CLAIMS_POLICY.md`](../content/CLAIMS_POLICY.md), [`../content/platform-profiles.yaml`](../content/platform-profiles.yaml) | Content owner; review when a platform or public policy changes |
 | Planning | [`../planning/PRIORITY_RULES.md`](../planning/PRIORITY_RULES.md), [`../planning/project-goals.yaml`](../planning/project-goals.yaml), [`../planning/seasonal-calendar.yaml`](../planning/seasonal-calendar.yaml) | Project owner; review at season boundaries and during weekly planning |
 

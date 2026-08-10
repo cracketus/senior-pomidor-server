@@ -1,0 +1,61 @@
+version: 1
+schema: evidence_record_v1
+timezone: UTC
+claim_vocabulary: [measured, observed, inferred, speculative]
+source_classes:
+  - primary_scientific_source
+  - preprint
+  - review
+  - official_programme_page
+  - official_documentation
+  - repository_artifact
+  - telemetry
+  - direct_observation
+  - inference
+access_levels: [metadata, abstract, full_text, full_call_document]
+confidence_levels: [high, medium, low, unknown]
+visibility_levels: [public, redacted_public, private]
+required_fields:
+  - record_id
+  - source_class
+  - access_level
+  - title_or_subject
+  - source_reference
+  - last_verified_at
+  - claim_type
+  - claim
+  - confidence
+  - uncertainty
+  - citation
+  - visibility
+field_rules:
+  record_id: "Stable local identifier; repository-safe and never a secret."
+  source_class: "One declared source class."
+  access_level: "What was actually accessed, not what the source may contain."
+  source_reference: "DOI, official URL, repository path plus commit/ref, or synthetic record identity."
+  last_verified_at: "UTC timestamp; null means unverified and cannot support current decision use."
+  claim_type: "One of the shared claim vocabulary values."
+  claim: "Bounded statement whose wording matches the access level and source."
+  confidence: "Confidence in this record's claim, not confidence in an AI summary."
+  uncertainty: "Explicit missing data, limitations, disagreement, or validation boundary."
+  citation: "Citation using SOURCE_POLICY.md format; no private URLs or raw paths."
+  visibility: "Public, redacted_public, or private; private records are not copied into this pack."
+access_constraints:
+  abstract:
+    may_support: [metadata, abstract_level_claim]
+    may_not_support: [methodology, full_results, replication, complete_limitations]
+  official_programme_page:
+    eligibility_requires: [official_source, last_verified_at]
+    deadline_requires: [official_source, last_verified_at]
+  grant_call:
+    eligibility_requires: [official_programme_page, full_call_document, last_verified_at]
+  private:
+    repository_content: forbidden
+    public_claim: redacted_reference_only
+conflict_policy:
+  preserve_conflicting_sources: true
+  unresolved_confidence: unknown
+  resolution: [newer_authoritative_correction, documented_version_change, new_measurement_or_method]
+redaction:
+  forbidden_content: [credentials, exact_address, internal_ip, private_correspondence, raw_private_dataset, hidden_prompt]
+  public_private_boundary: "Raw private evidence remains outside the public repository."
