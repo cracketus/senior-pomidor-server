@@ -25,7 +25,9 @@ KNOWN_METRICS = {
 DEVICE_ID_MAX_LENGTH = 128
 PHOTO_ID_MAX_LENGTH = 128
 POD_KEY_MAX_LENGTH = 64
+RECORD_ID_MAX_LENGTH = 128
 SAFE_IDENTIFIER_PATTERN = re.compile(r"^[A-Za-z0-9_.-]+$")
+RECORD_ID_PATTERN = re.compile(r"^[A-Za-z0-9_.:-]+$")
 
 
 class ValidationError(ValueError):
@@ -55,6 +57,22 @@ def validate_photo_id(value: object) -> str:
 
 def validate_pod_key(value: object) -> str:
     return validate_safe_identifier(value, "pod_key", POD_KEY_MAX_LENGTH)
+
+
+def validate_record_id(value: object) -> str:
+    if not isinstance(value, str) or not value:
+        raise ValidationError("record_id is required")
+    if len(value) > RECORD_ID_MAX_LENGTH:
+        raise ValidationError(f"record_id exceeds {RECORD_ID_MAX_LENGTH} characters")
+    if not RECORD_ID_PATTERN.fullmatch(value):
+        raise ValidationError("record_id contains unsafe characters")
+    return value
+
+
+def optional_record_id(payload: Any) -> str | None:
+    if not isinstance(payload, dict) or "record_id" not in payload:
+        return None
+    return validate_record_id(payload["record_id"])
 
 
 def parse_utc_z(value: str) -> datetime:
@@ -188,6 +206,7 @@ def validate_telemetry_payload(payload: Any) -> tuple[str, datetime]:
         raise ValidationError(f"unsupported telemetry schema: {schema}")
     device_id = payload_device_id(payload)
     timestamp = payload_timestamp(payload)
+    optional_record_id(payload)
     validate_system_health(payload)
     return device_id, timestamp
 

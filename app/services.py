@@ -1,8 +1,9 @@
 import hashlib
 import os
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 from uuid import uuid4
 
 from sqlalchemy import select
@@ -22,12 +23,26 @@ from app.telemetry import (
 from app.validation import (
     PHOTO_SCHEMA,
     ValidationError,
+    optional_record_id,
     parse_utc_z,
+    payload_schema,
     validate_device_id,
     validate_photo_id,
     validate_pod_key,
     validate_telemetry_payload,
 )
+
+
+@dataclass(frozen=True)
+class TelemetryPersistenceResult:
+    event: TelemetryEvent
+    outcome: Literal["accepted", "duplicate"]
+
+
+class TelemetryConflictError(Exception):
+    def __init__(self, error_code: Literal["record_id_conflict", "observation_identity_conflict"]) -> None:
+        super().__init__(error_code)
+        self.error_code = error_code
 
 
 def resolve_photo_storage_dir(storage_dir: str) -> Path:
@@ -81,13 +96,75 @@ def upsert_device(db: Session, device_id: str, payload_at: datetime, received_at
     return device
 
 
-def persist_telemetry(db: Session, payload: dict[str, Any], source: str) -> TelemetryEvent:
+def _telemetry_by_record_id(db: Session, record_id: str) -> TelemetryEvent | None:
+    return db.scalar(select(TelemetryEvent).where(TelemetryEvent.record_id == record_id))
+
+
+def _telemetry_by_observation_identity(
+    db: Session,
+    *,
+    device_id: str,
+    timestamp: datetime,
+    schema_version: str,
+) -> TelemetryEvent | None:
+    return db.scalar(
+        select(TelemetryEvent).where(
+            TelemetryEvent.device_id == device_id,
+            TelemetryEvent.timestamp_utc == timestamp,
+            TelemetryEvent.schema_version == schema_version,
+        )
+    )
+
+
+def _resolve_existing_telemetry(
+    db: Session,
+    *,
+    payload: dict[str, Any],
+    record_id: str | None,
+    device_id: str,
+    timestamp: datetime,
+    schema_version: str,
+) -> TelemetryPersistenceResult | None:
+    if record_id is not None:
+        by_record_id = _telemetry_by_record_id(db, record_id)
+        if by_record_id is not None:
+            if by_record_id.raw_payload_jsonb == payload:
+                return TelemetryPersistenceResult(event=by_record_id, outcome="duplicate")
+            raise TelemetryConflictError("record_id_conflict")
+
+    by_identity = _telemetry_by_observation_identity(
+        db,
+        device_id=device_id,
+        timestamp=timestamp,
+        schema_version=schema_version,
+    )
+    if by_identity is None:
+        return None
+    if record_id is not None and by_identity.record_id != record_id:
+        raise TelemetryConflictError("observation_identity_conflict")
+    return TelemetryPersistenceResult(event=by_identity, outcome="duplicate")
+
+
+def persist_telemetry_result(db: Session, payload: dict[str, Any], source: str) -> TelemetryPersistenceResult:
     device_id, timestamp = validate_telemetry_payload(payload)
-    schema_version = payload.get("schema_version") or payload.get("schema")
+    schema_version = payload_schema(payload)
+    record_id = optional_record_id(payload)
+    existing = _resolve_existing_telemetry(
+        db,
+        payload=payload,
+        record_id=record_id,
+        device_id=device_id,
+        timestamp=timestamp,
+        schema_version=schema_version,
+    )
+    if existing is not None:
+        return existing
+
     received_at = now_utc()
     upsert_device(db, device_id, timestamp, received_at)
 
     event = TelemetryEvent(
+        record_id=record_id,
         device_id=device_id,
         timestamp_utc=timestamp,
         schema_version=schema_version,
@@ -101,12 +178,13 @@ def persist_telemetry(db: Session, payload: dict[str, Any], source: str) -> Tele
         db.flush()
     except IntegrityError:
         db.rollback()
-        existing = db.scalar(
-            select(TelemetryEvent).where(
-                TelemetryEvent.device_id == device_id,
-                TelemetryEvent.timestamp_utc == timestamp,
-                TelemetryEvent.schema_version == schema_version,
-            )
+        existing = _resolve_existing_telemetry(
+            db,
+            payload=payload,
+            record_id=record_id,
+            device_id=device_id,
+            timestamp=timestamp,
+            schema_version=schema_version,
         )
         if existing is None:
             raise
@@ -148,9 +226,17 @@ def persist_telemetry(db: Session, payload: dict[str, Any], source: str) -> Tele
                 message=str(error["message"]),
             )
         )
-    db.commit()
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     db.refresh(event)
-    return event
+    return TelemetryPersistenceResult(event=event, outcome="accepted")
+
+
+def persist_telemetry(db: Session, payload: dict[str, Any], source: str) -> TelemetryEvent:
+    return persist_telemetry_result(db, payload, source).event
 
 
 def persist_photo(

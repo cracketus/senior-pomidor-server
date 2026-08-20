@@ -11,8 +11,8 @@ import paho.mqtt.client as mqtt
 from app.config import settings
 from app.db import SessionLocal
 from app.logging_config import configure_logging
-from app.services import persist_telemetry
-from app.validation import ValidationError, validate_telemetry_payload, validate_topic_device
+from app.services import TelemetryConflictError, persist_telemetry_result
+from app.validation import ValidationError, optional_record_id, validate_telemetry_payload, validate_topic_device
 from app.worker_health import write_worker_health
 
 configure_logging()
@@ -42,22 +42,42 @@ def on_connect(
 
 
 def on_message(_client: mqtt.Client, _userdata: object, message: mqtt.MQTTMessage) -> None:
+    record_id: str | None = None
     try:
         payload = json.loads(message.payload.decode("utf-8"))
+        record_id = optional_record_id(payload)
         device_id, _timestamp = validate_telemetry_payload(payload)
         validate_topic_device(message.topic, settings.mqtt_topic_prefix, device_id)
-    except (json.JSONDecodeError, UnicodeDecodeError, ValidationError) as exc:
-        logger.warning("Rejected MQTT telemetry on %s: %s", message.topic, exc)
+    except (json.JSONDecodeError, UnicodeDecodeError, ValidationError):
+        logger.warning(
+            "telemetry_ingest outcome=rejected source=mqtt record_id=%s event_id=None error_code=invalid_payload",
+            record_id,
+        )
         return
 
     with SessionLocal() as db:
         try:
-            event = persist_telemetry(db, payload, source="mqtt")
+            result = persist_telemetry_result(db, payload, source="mqtt")
+        except TelemetryConflictError as exc:
+            logger.warning(
+                "telemetry_ingest outcome=rejected source=mqtt record_id=%s event_id=None error_code=%s",
+                record_id,
+                exc.error_code,
+            )
+            return
         except Exception:
-            logger.exception("Failed to persist MQTT telemetry on %s", message.topic)
+            logger.error(
+                "telemetry_ingest outcome=retry source=mqtt record_id=%s event_id=None error_code=storage_unavailable",
+                record_id,
+            )
             return
     write_worker_health("healthy", last_message_topic=message.topic)
-    logger.info("Accepted MQTT telemetry event_id=%s topic=%s", event.id, message.topic)
+    logger.info(
+        "telemetry_ingest outcome=%s source=mqtt record_id=%s event_id=%s",
+        result.outcome,
+        record_id,
+        result.event.id,
+    )
 
 
 def main() -> int:

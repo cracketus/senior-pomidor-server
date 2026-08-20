@@ -41,6 +41,7 @@
                                            }
                              },
                     "device_id":  "balcony-edge-01",
+                    "record_id":  "spool:balcony-edge-01:20260611T174059Z",
                     "system_health":  {
                                           "errors":  [
                                                          {
