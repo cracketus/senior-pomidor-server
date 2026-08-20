@@ -49,6 +49,7 @@ From the Pi:
 ```bash
 mosquitto_pub -h 192.168.1.50 -p 1883 -t senior-pomidor/pi-001/telemetry -m '{
   "schema_version":"senior-pomidor.edge.telemetry.v2",
+  "record_id":"spool:pi-001:20260702T120000Z",
   "device_id":"pi-001",
   "timestamp_utc":"2026-07-02T12:00:00Z",
   "pods":{"pod_1":{"enabled":true,"metrics":{"soil_moisture_percent":42.5}}},
@@ -67,8 +68,14 @@ curl http://192.168.1.50:8000/api/v1/devices/pi-001/latest
 ```bash
 curl -X POST http://192.168.1.50:8000/api/v1/edge/telemetry \
   -H 'Content-Type: application/json' \
-  -d '{"schema_version":"senior-pomidor.edge.telemetry.v2","device_id":"pi-001","timestamp_utc":"2026-07-02T12:01:00Z","pods":{"pod_1":{"enabled":true,"metrics":{"soil_moisture_percent":41.0}}}}'
+  -d '{"schema_version":"senior-pomidor.edge.telemetry.v2","record_id":"spool:pi-001:20260702T120100Z","device_id":"pi-001","timestamp_utc":"2026-07-02T12:01:00Z","pods":{"pod_1":{"enabled":true,"metrics":{"soil_moisture_percent":41.0}}}}'
 ```
+
+The first request must return HTTP `202` with status `accepted`. Repeat the exact request to simulate a lost
+ACK; it must return HTTP `202` with status `duplicate`, the same `record_id`, and only one stored telemetry row.
+Before replaying a real backlog, run the compatibility checker from the pinned `senior-pomidor-plant-v2#67`
+edge checkout and record its result. Stop if either ACK differs, a retry/5xx rate rises, or a second row appears.
+Legacy payloads without `record_id` remain supported for one release cycle.
 
 If `TELEMETRY_UPLOAD_TOKEN` is configured, add:
 

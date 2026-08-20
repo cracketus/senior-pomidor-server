@@ -7,6 +7,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+import app.api as api_module
 import app.main as main_module
 from app.config import Settings, get_settings
 from app.db import get_db
@@ -84,6 +85,7 @@ def network_health_payload(timestamp: str = "2026-06-07T12:00:00Z") -> dict:
 def test_http_telemetry_ingest_and_latest(client):
     response = client.post("/api/v1/edge/telemetry", json=telemetry_payload())
     assert response.status_code == 202
+    assert response.json() == {"accepted": True, "event_id": 1}
 
     latest = client.get("/api/v1/devices/pi-001/latest")
     assert latest.status_code == 200
@@ -94,6 +96,124 @@ def test_http_telemetry_ingest_and_latest(client):
     assert body["readings"][0]["metrics"]["leaf_vpd_kpa"] == 3.66
     assert body["readings"][0]["metrics"]["battery_mv"] == 5010.0
     assert body["errors"][0]["message"] == "intermittent"
+
+
+def test_record_id_accepts_and_deduplicates_with_exact_ack(client):
+    payload = telemetry_v2_payload()
+    payload["record_id"] = "spool:pi-001:0001"
+
+    accepted = client.post("/api/v1/edge/telemetry", json=payload)
+    duplicate = client.post("/api/v1/edge/telemetry", json=payload)
+
+    assert accepted.status_code == 202
+    assert accepted.json() == {"record_id": payload["record_id"], "status": "accepted"}
+    assert duplicate.status_code == 202
+    assert duplicate.json() == {"record_id": payload["record_id"], "status": "duplicate"}
+    history = client.get("/api/v1/devices/pi-001/telemetry")
+    assert len(history.json()) == 1
+    assert history.json()[0]["record_id"] == payload["record_id"]
+
+
+def test_record_id_rejects_content_and_observation_identity_conflicts(client):
+    original = telemetry_v2_payload()
+    original["record_id"] = "spool:pi-001:0002"
+    assert client.post("/api/v1/edge/telemetry", json=original).status_code == 202
+
+    changed = telemetry_v2_payload()
+    changed["record_id"] = original["record_id"]
+    changed["pods"]["pod-1"]["soil_moisture_percent"] = 99.0
+    record_conflict = client.post("/api/v1/edge/telemetry", json=changed)
+    assert record_conflict.status_code == 200
+    assert record_conflict.json() == {
+        "record_id": original["record_id"],
+        "status": "rejected",
+        "error_code": "record_id_conflict",
+    }
+
+    different_record = telemetry_v2_payload()
+    different_record["record_id"] = "spool:pi-001:0003"
+    identity_conflict = client.post("/api/v1/edge/telemetry", json=different_record)
+    assert identity_conflict.status_code == 200
+    assert identity_conflict.json() == {
+        "record_id": different_record["record_id"],
+        "status": "rejected",
+        "error_code": "observation_identity_conflict",
+    }
+    assert len(client.get("/api/v1/devices/pi-001/telemetry").json()) == 1
+    assert client.get("/api/v1/devices/pi-001/latest").json()["readings"][0]["metrics"]["soil_moisture_percent"] == 42.5
+
+
+def test_record_id_rejects_collision_with_legacy_observation(client):
+    legacy = telemetry_v2_payload()
+    assert client.post("/api/v1/edge/telemetry", json=legacy).json() == {"accepted": True, "event_id": 1}
+
+    replay = telemetry_v2_payload()
+    replay["record_id"] = "spool:pi-001:legacy-collision"
+    response = client.post("/api/v1/edge/telemetry", json=replay)
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "record_id": replay["record_id"],
+        "status": "rejected",
+        "error_code": "observation_identity_conflict",
+    }
+    assert len(client.get("/api/v1/devices/pi-001/telemetry").json()) == 1
+
+
+def test_valid_record_id_gets_rejected_ack_for_invalid_payload(client):
+    payload = telemetry_v2_payload()
+    payload["record_id"] = "spool:pi-001:invalid"
+    payload["system_health"]["rpi_core"]["cpu_temp_c"] = "hot"
+
+    response = client.post("/api/v1/edge/telemetry", json=payload)
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "record_id": payload["record_id"],
+        "status": "rejected",
+        "error_code": "invalid_payload",
+    }
+
+
+@pytest.mark.parametrize("record_id", ["", "contains space", "unsafe/path", "x" * 129, None])
+def test_invalid_record_id_is_http_400(client, record_id):
+    payload = telemetry_v2_payload()
+    payload["record_id"] = record_id
+
+    response = client.post("/api/v1/edge/telemetry", json=payload)
+
+    assert response.status_code == 400
+    assert "record_id" in response.json()["detail"]
+
+
+def test_malformed_json_is_http_400(client):
+    response = client.post(
+        "/api/v1/edge/telemetry",
+        content=b'{"record_id":"untrusted-truncated"',
+        headers={"Content-Type": "application/json"},
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {"detail": "malformed JSON"}
+
+
+def test_record_id_storage_failure_is_retryable_without_exception_details(client, monkeypatch):
+    def fail_storage(*_args, **_kwargs):
+        raise SQLAlchemyError("private database exception detail")
+
+    monkeypatch.setattr(api_module, "persist_telemetry_result", fail_storage)
+    payload = telemetry_v2_payload()
+    payload["record_id"] = "spool:pi-001:retry"
+
+    response = client.post("/api/v1/edge/telemetry", json=payload)
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "record_id": payload["record_id"],
+        "status": "retry",
+        "error_code": "storage_unavailable",
+    }
+    assert "private" not in response.text
 
 
 def test_http_telemetry_v2_persists_system_health(client):

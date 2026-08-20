@@ -25,8 +25,27 @@ def test_telemetry_contract_fixtures_match_runtime_validation() -> None:
 
     assert telemetry_v1["schema_version"] == TELEMETRY_SCHEMA
     assert telemetry_v2["schema_version"] == TELEMETRY_SCHEMA_V2
+    assert telemetry_v2["record_id"] == "spool:pi-001:20260702T120000Z"
     assert validate_telemetry_payload(telemetry_v1)[0] == "pi-001"
     assert validate_telemetry_payload(telemetry_v2)[0] == "pi-001"
+
+
+def test_telemetry_v2_schema_bounds_record_id() -> None:
+    schema = load_json(SCHEMA_DIR / "telemetry-v2.schema.json")
+    record_id = schema["properties"]["record_id"]
+
+    assert record_id == {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128,
+        "pattern": "^[A-Za-z0-9_.:-]+$",
+    }
+
+
+def test_telemetry_v2_fixture_serialization_round_trip() -> None:
+    telemetry_v2 = load_json(FIXTURE_DIR / "telemetry_v2.json")
+
+    assert json.loads(json.dumps(telemetry_v2, sort_keys=True)) == telemetry_v2
 
 
 def test_photo_contract_fixture_matches_active_schema() -> None:

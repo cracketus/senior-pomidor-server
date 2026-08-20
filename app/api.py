@@ -1,11 +1,13 @@
 import hmac
+import json
 import logging
 from datetime import UTC, date, datetime, timedelta
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, Response, UploadFile, status
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, Request, Response, UploadFile, status
+from fastapi.responses import FileResponse, JSONResponse
 from sqlalchemy import desc, select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, selectinload
 
 from app.config import Settings, get_settings
@@ -21,12 +23,24 @@ from app.models import (
     StateSnapshot,
     TelemetryEvent,
 )
-from app.services import persist_photo, persist_telemetry, resolve_stored_photo_path
+from app.services import (
+    TelemetryConflictError,
+    persist_photo,
+    persist_telemetry_result,
+    resolve_stored_photo_path,
+)
 from app.state_estimator.decisions import build_guardrails
 from app.state_estimator.persistence import latest_state_or_estimate
 from app.state_estimator.replay import replay_observations
 from app.telemetry import health_alerts
-from app.validation import ValidationError, parse_utc_z, validate_device_id, validate_photo_id, validate_pod_key
+from app.validation import (
+    ValidationError,
+    optional_record_id,
+    parse_utc_z,
+    validate_device_id,
+    validate_photo_id,
+    validate_pod_key,
+)
 
 router = APIRouter(prefix="/api/v1")
 logger = logging.getLogger(__name__)
@@ -72,6 +86,7 @@ def event_to_dict(event: TelemetryEvent) -> dict[str, Any]:
     system_health = event.system_health_jsonb
     return {
         "id": event.id,
+        "record_id": event.record_id,
         "device_id": event.device_id,
         "timestamp_utc": format_utc(event.timestamp_utc),
         "schema_version": event.schema_version,
@@ -156,19 +171,74 @@ async def read_bounded_upload(upload: UploadFile, max_bytes: int) -> bytes:
 
 
 @router.post("/edge/telemetry", status_code=status.HTTP_202_ACCEPTED)
-def ingest_telemetry(
-    payload: dict[str, Any],
+async def ingest_telemetry(
+    request: Request,
     authorization: Annotated[str | None, Header()] = None,
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
-) -> dict[str, Any]:
+) -> Any:
     if not bearer_token_matches(authorization, settings.telemetry_upload_token):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid telemetry upload token")
+
     try:
-        event = persist_telemetry(db, payload, source="http")
+        payload = await request.json()
+    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="malformed JSON") from exc
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="telemetry payload must be an object")
+
+    try:
+        record_id = optional_record_id(payload)
     except ValidationError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-    return {"accepted": True, "event_id": event.id}
+
+    try:
+        result = persist_telemetry_result(db, payload, source="http")
+    except ValidationError as exc:
+        db.rollback()
+        if record_id is None:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        logger.info(
+            "telemetry_ingest outcome=rejected source=http record_id=%s event_id=None error_code=invalid_payload",
+            record_id,
+        )
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={"record_id": record_id, "status": "rejected", "error_code": "invalid_payload"},
+        )
+    except TelemetryConflictError as exc:
+        db.rollback()
+        logger.info(
+            "telemetry_ingest outcome=rejected source=http record_id=%s event_id=None error_code=%s",
+            record_id,
+            exc.error_code,
+        )
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={"record_id": record_id, "status": "rejected", "error_code": exc.error_code},
+        )
+    except SQLAlchemyError:
+        db.rollback()
+        if record_id is None:
+            raise
+        logger.warning(
+            "telemetry_ingest outcome=retry source=http record_id=%s event_id=None error_code=storage_unavailable",
+            record_id,
+        )
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={"record_id": record_id, "status": "retry", "error_code": "storage_unavailable"},
+        )
+
+    if record_id is None:
+        return {"accepted": True, "event_id": result.event.id}
+    logger.info(
+        "telemetry_ingest outcome=%s source=http record_id=%s event_id=%s",
+        result.outcome,
+        record_id,
+        result.event.id,
+    )
+    return {"record_id": record_id, "status": result.outcome}
 
 
 @router.post("/edge/photos")

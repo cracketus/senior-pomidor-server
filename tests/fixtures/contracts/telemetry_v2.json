@@ -1,5 +1,6 @@
 {
   "schema_version": "senior-pomidor.edge.telemetry.v2",
+  "record_id": "spool:pi-001:20260702T120000Z",
   "device_id": "pi-001",
   "timestamp_utc": "2026-07-02T12:00:00Z",
   "pods": {
