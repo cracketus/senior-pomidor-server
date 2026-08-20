@@ -1,0 +1,200 @@
+schema: docs_map_v1
+map_version: 1
+producer: architecture/development-maintainer
+description: >-
+  Source-path ownership map for read-only documentation validation. Authority conflicts require
+  human review; source code is never selected as truth automatically.
+entries:
+  - id: schemas-and-models
+    area: schemas_models
+    lifecycle: current
+    source_paths:
+      - app/models.py
+      - app/validation.py
+      - app/state_estimator/models.py
+      - docs/schemas/*.json
+      - tests/fixtures/contracts/*.json
+    authoritative_documents:
+      - docs/CONTRACTS.md
+      - docs/state_estimator_spec_v_1_0_en.md
+    owner: architecture-maintainer
+    authority_direction: shared_semantic_review
+    mechanical_fields:
+      - schema_version
+      - required_fields
+      - field_names
+      - numeric_ranges
+      - units
+      - examples
+    semantic_review_required: true
+    conflict_behavior: human_review_no_truth_selection
+    cross_repository_impact: possible
+    required_checks:
+      - schema_validation
+      - serialization_round_trip
+      - fixture_replay
+      - named_consumers
+
+  - id: api-and-storage
+    area: api_storage
+    lifecycle: current
+    source_paths:
+      - app/api.py
+      - app/db.py
+      - app/telemetry.py
+      - app/mqtt_worker.py
+      - migrations/**/*.py
+      - tests/test_api.py
+      - tests/test_contract_fixtures.py
+    authoritative_documents:
+      - docs/CONTRACTS.md
+      - docs/OPERATIONS.md
+    owner: server-maintainer
+    authority_direction: shared_semantic_review
+    mechanical_fields:
+      - endpoint_paths
+      - method
+      - schema_version
+      - migration_revision
+      - timestamp_timezone
+    semantic_review_required: true
+    conflict_behavior: human_review_no_truth_selection
+    cross_repository_impact: required
+    required_checks:
+      - schema_validation
+      - serialization_round_trip
+      - fixture_replay
+      - named_consumers
+
+  - id: compose-and-deployment
+    area: compose_deploy
+    lifecycle: current
+    source_paths:
+      - docker-compose.yml
+      - docker-compose.dev.yml
+      - docker-compose.prod.yml
+      - docker-compose.agent.yml
+      - Dockerfile
+      - deploy/**
+      - .github/workflows/*.yml
+    authoritative_documents:
+      - docs/OPERATIONS.md
+      - docs/MIGRATION_WINDOWS_TO_UBUNTU.md
+      - docs/UBUNTU_HOST.md
+    owner: infrastructure-maintainer
+    authority_direction: source_to_documentation_mechanical
+    mechanical_fields:
+      - service_names
+      - environment_keys
+      - ports
+      - healthchecks
+      - paths
+      - profiles
+    semantic_review_required: true
+    conflict_behavior: human_review_no_truth_selection
+    cross_repository_impact: required
+    required_checks:
+      - compose_config
+      - named_consumers
+
+  - id: state-estimator
+    area: state_estimator
+    lifecycle: current
+    source_paths:
+      - app/state_estimator/**/*.py
+      - app/state_estimator_worker.py
+      - config/state_estimator_v1.yaml
+      - tests/state_estimator/**/*.py
+    authoritative_documents:
+      - docs/state_estimator_spec_v_1_0_en.md
+      - docs/CONTRACTS.md
+    owner: state-estimator-maintainer
+    authority_direction: shared_semantic_review
+    mechanical_fields:
+      - state_shape
+      - units
+      - freshness
+      - confidence
+      - health_levels
+      - anomaly_types
+    semantic_review_required: true
+    conflict_behavior: human_review_no_truth_selection
+    cross_repository_impact: required
+    required_checks:
+      - schema_validation
+      - serialization_round_trip
+      - fixture_replay
+      - named_consumers
+
+  - id: future-control-boundaries
+    area: future_control_boundaries
+    lifecycle: future
+    source_paths:
+      - app/control.py
+      - app/guardrails.py
+      - app/executor.py
+    authoritative_documents:
+      - .ai/CURRENT_STATE.md
+      - docs/CONTRACTS.md
+    owner: architecture-maintainer
+    authority_direction: future_boundary_only
+    mechanical_fields: []
+    semantic_review_required: true
+    conflict_behavior: human_review_no_truth_selection
+    cross_repository_impact: required
+    required_checks:
+      - named_consumers
+
+  - id: hardware-adapters
+    area: hardware_adapters
+    lifecycle: current
+    source_paths:
+      - tools/pi_camera_smoke_test.py
+      - tools/edge_readiness.py
+      - docs/PI_INTEGRATION_RUNBOOK.md
+      - tests/test_edge_readiness.py
+    authoritative_documents:
+      - docs/PI_INTEGRATION_RUNBOOK.md
+      - docs/NETWORK.md
+    owner: edge-integration-maintainer
+    authority_direction: shared_semantic_review
+    mechanical_fields:
+      - interface_names
+      - timeout_bounds
+      - fake_backend
+      - safe_default
+    semantic_review_required: true
+    conflict_behavior: human_review_no_truth_selection
+    cross_repository_impact: required
+    required_checks:
+      - fixture_replay
+      - named_consumers
+
+  - id: public-readme-and-status
+    area: public_readme_status
+    lifecycle: current
+    source_paths:
+      - README.md
+      - app/health_summary.py
+      - app/readiness.py
+      - tools/public_status.py
+      - tests/test_public_status.py
+    authoritative_documents:
+      - README.md
+      - docs/PUBLIC_DATA_POLICY.md
+      - docs/CONTRACTS.md
+    owner: public-communication-maintainer
+    authority_direction: shared_semantic_review
+    mechanical_fields:
+      - endpoint_paths
+      - status_values
+      - public_fields
+      - privacy_boundaries
+    semantic_review_required: true
+    conflict_behavior: human_review_no_truth_selection
+    cross_repository_impact: possible
+    required_checks:
+      - schema_validation
+      - serialization_round_trip
+      - fixture_replay
+      - named_consumers

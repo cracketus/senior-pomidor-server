@@ -1,0 +1,28 @@
+schema: docs_map_v1
+map_version: 1
+producer: test
+entries:
+  - id: mechanical
+    area: test
+    lifecycle: current
+    source_paths: [docker-compose.yml]
+    authoritative_documents: [docs/OPERATIONS.md]
+    owner: test-owner
+    authority_direction: source_to_documentation_mechanical
+    mechanical_fields: [ports, healthchecks]
+    semantic_review_required: false
+    conflict_behavior: human_review_no_truth_selection
+    cross_repository_impact: none
+    required_checks: [compose_config]
+  - id: semantic
+    area: test
+    lifecycle: current
+    source_paths: [README.md]
+    authoritative_documents: [docs/PUBLIC_DATA_POLICY.md]
+    owner: test-owner
+    authority_direction: shared_semantic_review
+    mechanical_fields: []
+    semantic_review_required: true
+    conflict_behavior: human_review_no_truth_selection
+    cross_repository_impact: possible
+    required_checks: [named_consumers]
