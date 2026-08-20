@@ -37,6 +37,8 @@ def test_runtime_bundle_builder_includes_operations_assets_without_source() -> N
     ):
         assert runtime_asset in builder
     assert "-name '*.py'" in builder
+    assert '"$stage/REVISION"' in builder
+    assert "SOURCE_REVISION" in builder
     assert "sha256sum" in builder
 
 
@@ -63,3 +65,16 @@ def test_windows_backup_quotes_csv_field_separator_for_powershell() -> None:
 
     assert "--field-separator ','" in windows_backup
     assert "--field-separator=," not in windows_backup
+
+
+def test_operations_preserves_packaged_backup_retention_and_configured_restore_identity() -> None:
+    operations = (ROOT / "docs/OPERATIONS.md").read_text(encoding="utf-8")
+
+    assert "The source-free Linux production bundle does not contain `tools.backup`" in operations
+    assert "senior-pomidor-backup@daily.service" in operations
+    assert "senior-pomidor-backup@weekly.service" in operations
+    assert "retain daily sets for 30 days" in operations
+    assert "weekly sets for 56 days" in operations
+    assert "--username $env:POSTGRES_USER --dbname $env:POSTGRES_DB" in operations
+    assert "pg_dump -U $env:POSTGRES_USER $env:POSTGRES_DB" in operations
+    assert "psql -U $env:POSTGRES_USER -d $env:POSTGRES_DB" in operations

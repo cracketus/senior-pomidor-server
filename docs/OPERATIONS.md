@@ -30,7 +30,7 @@ Before tagging or publishing a server release:
 - Confirm there are no local `.env`, private key, known-hosts, `.db`, `data/`, or `backups/` files in the release checkout.
 - Confirm `.env.example` still uses local bootstrap defaults only, and document any required production overrides.
 - Verify `python -m tools.edge_readiness --api-base-url http://127.0.0.1:8000 --mqtt-host 127.0.0.1 --photo-storage-dir data/photos`.
-- Verify `tools/backup_data.ps1` can write a backup outside the repository.
+- Verify `python -m tools.backup` can write and verify a complete snapshot outside the repository.
 - Confirm release notes state the trusted-LAN security boundary, optional bearer-token behavior, MQTT default auth posture, and public dataset/export limitations.
 - Confirm `git status -sb` is clean on the intended release branch before tagging.
 
@@ -188,26 +188,91 @@ For longer-term sizing, retention, power estimates, and pod-count expansion
 planning, see [CAPACITY_PLANNING.md](CAPACITY_PLANNING.md).
 For public export boundaries, see [PUBLIC_DATA_POLICY.md](PUBLIC_DATA_POLICY.md).
 
-Create timestamped backups outside the repository:
+From a Windows or Linux source checkout, create a complete timestamped snapshot outside the repository.
+For a fresh checkout, first create the local development environment file from the checked-in
+synthetic template; Compose requires its `APP_IMAGE` value even though the development overlay builds
+the image locally. Do not commit the resulting `.env` file. In PowerShell:
 
 ```powershell
-.\tools\backup_data.ps1 -BackupRoot D:\senior-pomidor-backups
+Copy-Item .env.example .env
+docker compose --env-file .env -f docker-compose.yml -f docker-compose.dev.yml config --quiet
+docker compose --env-file .env -f docker-compose.yml -f docker-compose.dev.yml up -d --build postgres mosquitto api worker state-estimator-worker
 ```
+
+On Linux, use `cp .env.example .env` in place of `Copy-Item`. The command below then keeps PostgreSQL running
+for a custom-format logical dump, briefly stops only active ingestion/file-writing services, archives
+the application data mounts, and restores every service it stopped even when a component fails or the
+process is interrupted:
+
+```powershell
+python -m tools.backup --backup-root D:\senior-pomidor-backups
+```
+
+Every backup subprocess has a 15-minute deadline. Restart commands use a 30-second command deadline,
+and each stopped service must become running (and `healthy` when it defines a healthcheck) within 60
+seconds. A timeout or failed post-restart health check keeps the snapshot incomplete and returns a
+bounded failure; inspect and recover the named service before retrying.
+
+The source-free Linux production bundle does not contain `tools.backup`. Use the bundled and installed
+`backup.sh` entry point through its systemd units; it reads the deployment's exact environment and
+Compose files. Daily runs create logical database backups, while weekly runs also stop active writers
+and archive application data:
+
+```bash
+sudo systemctl start senior-pomidor-backup@daily.service
+sudo systemctl start senior-pomidor-backup@weekly.service
+sudo journalctl -u senior-pomidor-backup@daily.service -u senior-pomidor-backup@weekly.service
+```
+
+In the source-checkout Python workflow, include an environment file only by encrypting it directly
+with `age`. Supplying an environment file without a recipient is rejected; no plaintext copy is
+written to the snapshot:
+
+```bash
+python -m tools.backup \
+  --backup-root /srv/backups/senior-pomidor/manual \
+  --env-file /path/to/deployment.env \
+  --age-recipient age1example-recipient
+```
+
+Use `--json` for the versioned machine-readable component result. The manifest records a hashed host
+identity, Git commit, Compose project and image references, Alembic revision, service-recovery results,
+sizes, archive names, and SHA-256 checksums. Verification rejects missing or contradictory provenance,
+recovery, component, or artifact metadata. Verify the snapshot after creation or transfer:
+
+```powershell
+python -m tools.backup --verify D:\senior-pomidor-backups\snapshot-YYYYmmddTHHMMSSZ-xxxxxxxx --json
+```
+
+New snapshots use `senior-pomidor.backup-manifest.v2` and include `baseline-counts.csv` plus bounded
+representative SHA-256 inventories for photo, estimator-private, and Mosquitto data. The verifier
+continues to accept existing v1 snapshots under the v1 component rules; only v2 requires the restore
+baselines.
+
+`grafana_data` is archived only when a Grafana container exists for the selected Compose project; the
+manifest records `absent` otherwise. Production Grafana remains platform-owned and must not be
+lifecycle-managed by this application command.
+
+The existing `tools/backup_data.ps1` remains available for the one-release compatibility window. On
+source-free Linux production, keep the bundled `backup.sh` timers: they retain daily sets for 30 days
+and weekly sets for 56 days. Do not migrate a scheduled job to `python -m tools.backup` until that
+entry point is packaged for the target and an equivalent reviewed retention job plus isolated restore
+rehearsal are in place.
 
 Recommended schedule:
 
-- Daily PostgreSQL backup.
-- Weekly photo archive.
+- Daily logical database snapshot and weekly complete application-data snapshot while the season is active.
+- A separately scheduled isolated restore rehearsal; checksum verification alone is not recovery proof.
 - Fresh backup before Docker image, schema, or host OS upgrades.
 - Investigate disk usage at 70%; uploaded photos are the primary growth risk.
 
-Manual PostgreSQL backup:
+Emergency manual PostgreSQL backup (database only, not a complete server snapshot):
 
 ```powershell
-docker compose exec -T postgres pg_dump -U senior_pomidor senior_pomidor > backups\senior_pomidor.sql
+docker compose exec -T postgres pg_dump -U $env:POSTGRES_USER $env:POSTGRES_DB > backups\senior_pomidor.sql
 ```
 
-Manual uploaded photo backup:
+Emergency manual uploaded photo backup (not a complete server snapshot):
 
 ```powershell
 tar.exe -czf backups/photo_data.tgz -C $env:PHOTO_DATA_DIR .
@@ -216,7 +281,8 @@ tar.exe -czf backups/photo_data.tgz -C $env:PHOTO_DATA_DIR .
 Restore PostgreSQL into an empty database:
 
 ```powershell
-Get-Content backups\senior_pomidor.sql | docker compose exec -T postgres psql -U senior_pomidor senior_pomidor
+Get-Content backups\senior_pomidor.sql | docker compose exec -T postgres `
+  psql -U $env:POSTGRES_USER -d $env:POSTGRES_DB
 ```
 
 Restore uploaded photos:
@@ -231,13 +297,98 @@ Verify photo metadata and files agree:
 python tools/check_photo_storage.py
 ```
 
-Restore drill:
+Restore drill (required before treating a snapshot as recovery evidence). `database.dump` is a
+custom-format archive and must be restored with `pg_restore`, not `psql`. For a disposable local
+development project on PowerShell, first point every data path at a new empty drill directory, start
+only its PostgreSQL container, copy in the verified dump, and restore it:
+
+```powershell
+$snapshot = "D:\senior-pomidor-backups\snapshot-YYYYmmddTHHMMSSZ-xxxxxxxx"
+$drillRoot = Join-Path $env:TEMP ("senior-pomidor-restore-drill-" + [guid]::NewGuid().ToString("N"))
+$drillEnv = Join-Path $drillRoot "restore-drill.env"
+$postgresDir = Join-Path $drillRoot "postgres"
+$photoDir = Join-Path $drillRoot "photos"
+$estimatorDir = Join-Path $drillRoot "estimator-private"
+$mosquittoDir = Join-Path $drillRoot "mosquitto"
+$grafanaDir = Join-Path $drillRoot "grafana"
+$ollamaDir = Join-Path $drillRoot "ollama"
+New-Item -ItemType Directory $drillRoot, $postgresDir, $photoDir, $estimatorDir, `
+  $mosquittoDir, $grafanaDir, $ollamaDir | Out-Null
+
+# Shell variables override --env-file, so remove every Compose-sensitive deployment override first.
+$composeIsolationVars = @(
+  "APP_IMAGE", "DATABASE_URL", "POSTGRES_DB", "POSTGRES_USER", "POSTGRES_PASSWORD",
+  "POSTGRES_DATA_DIR", "PHOTO_DATA_DIR", "ESTIMATOR_PRIVATE_DATA_DIR", "MOSQUITTO_DATA_DIR",
+  "GRAFANA_DATA_DIR", "OLLAMA_DATA_DIR", "LAN_BIND_ADDRESS", "POSTGRES_BIND_ADDRESS",
+  "API_PUBLISHED_PORT", "MQTT_PUBLISHED_PORT", "POSTGRES_PUBLISHED_PORT", "GRAFANA_PUBLISHED_PORT",
+  "OLLAMA_PUBLISHED_PORT", "COMPOSE_PROFILES", "COMPOSE_FILE", "COMPOSE_ENV_FILES",
+  "COMPOSE_PROJECT_NAME", "GRAFANA_CLOUD_EXPORT_ENABLED", "GRAFANA_CLOUD_REMOTE_WRITE_URL",
+  "GRAFANA_CLOUD_INSTANCE_ID", "GRAFANA_CLOUD_API_TOKEN", "GRAFANA_DB_USER",
+  "GRAFANA_DB_PASSWORD", "MQTT_HOST", "MQTT_PORT", "MQTT_USERNAME", "MQTT_PASSWORD",
+  "PHOTO_UPLOAD_TOKEN", "TELEMETRY_UPLOAD_TOKEN", "DOCKER_HOST", "DOCKER_CONTEXT",
+  "DOCKER_TLS_VERIFY", "DOCKER_CERT_PATH"
+)
+$composeIsolationVars | ForEach-Object { Remove-Item "Env:$_" -ErrorAction SilentlyContinue }
+$dockerEndpoint = docker context inspect --format "{{.Endpoints.docker.Host}}"
+if ($dockerEndpoint -notmatch "^(npipe://|unix://)") {
+  throw "Restore drill requires a local Docker engine; refusing endpoint $dockerEndpoint"
+}
+
+$drillSettings = @(
+  "APP_IMAGE=senior-pomidor-server:restore-drill",
+  "POSTGRES_DB=senior_pomidor_drill",
+  "POSTGRES_USER=restore_drill",
+  "POSTGRES_PASSWORD=synthetic-restore-drill-only",
+  "DATABASE_URL=postgresql+psycopg://restore_drill:synthetic-restore-drill-only@postgres:5432/senior_pomidor_drill",
+  "POSTGRES_DATA_DIR=$postgresDir", "PHOTO_DATA_DIR=$photoDir",
+  "ESTIMATOR_PRIVATE_DATA_DIR=$estimatorDir", "MOSQUITTO_DATA_DIR=$mosquittoDir",
+  "GRAFANA_DATA_DIR=$grafanaDir", "OLLAMA_DATA_DIR=$ollamaDir",
+  "LAN_BIND_ADDRESS=127.0.0.1", "POSTGRES_BIND_ADDRESS=127.0.0.1",
+  "API_PUBLISHED_PORT=0", "MQTT_PUBLISHED_PORT=0", "POSTGRES_PUBLISHED_PORT=0",
+  "GRAFANA_PUBLISHED_PORT=0", "OLLAMA_PUBLISHED_PORT=0", "COMPOSE_PROFILES=",
+  "GRAFANA_DB_USER=restore_drill_reader", "GRAFANA_DB_PASSWORD=synthetic-restore-drill-reader-only",
+  "MQTT_HOST=mosquitto", "MQTT_PORT=1883", "MQTT_USERNAME=", "MQTT_PASSWORD=",
+  "PHOTO_UPLOAD_TOKEN=", "TELEMETRY_UPLOAD_TOKEN=",
+  "GRAFANA_CLOUD_EXPORT_ENABLED=false", "GRAFANA_CLOUD_REMOTE_WRITE_URL=",
+  "GRAFANA_CLOUD_INSTANCE_ID=", "GRAFANA_CLOUD_API_TOKEN="
+)
+[IO.File]::WriteAllLines($drillEnv, $drillSettings, [Text.UTF8Encoding]::new($false))
+$env:POSTGRES_USER = "restore_drill"
+$env:POSTGRES_DB = "senior_pomidor_drill"
+
+docker compose --env-file $drillEnv -f docker-compose.yml -f docker-compose.dev.yml `
+  -p senior-pomidor-restore-drill up -d postgres
+docker compose --env-file $drillEnv -f docker-compose.yml -f docker-compose.dev.yml `
+  -p senior-pomidor-restore-drill cp "$snapshot\database.dump" postgres:/tmp/database.dump
+docker compose --env-file $drillEnv -f docker-compose.yml -f docker-compose.dev.yml `
+  -p senior-pomidor-restore-drill exec -T postgres pg_restore --exit-on-error `
+  --no-owner --no-acl --username $env:POSTGRES_USER --dbname $env:POSTGRES_DB /tmp/database.dump
+```
+
+Extract `photo_data.tar.gz`, `estimator_private_data.tar.gz`, and `mosquitto_data.tar.gz` into their
+matching empty drill directories before starting the remaining services. Re-run the seven bounded
+table-count queries recorded in `baseline-counts.csv`, regenerate the representative hashes from the
+three restored data directories, and require exact matches before accepting the drill. Start only the
+named local services; do not add a profile or the cloud exporter:
+
+```powershell
+docker compose --env-file $drillEnv -f docker-compose.yml -f docker-compose.dev.yml `
+  -p senior-pomidor-restore-drill up -d --build migrate mosquitto api worker state-estimator-worker
+$apiAddress = docker compose --env-file $drillEnv -f docker-compose.yml -f docker-compose.dev.yml `
+  -p senior-pomidor-restore-drill port api 8000
+Invoke-RestMethod "http://$apiAddress/ready"
+```
+
+Then:
 
 1. Create a disposable Compose project name and empty volumes.
-2. Restore the latest SQL dump and photo archive into that project.
+2. Restore the latest verified `database.dump` with `pg_restore` and extract the application archives.
 3. Set all bind-mount paths to disposable directories and run Compose with `docker-compose.dev.yml`.
-4. Confirm `/ready`, `/api/v1/devices`, and representative photo downloads work.
-5. Stop the disposable project and remove only its explicitly verified disposable directories.
+4. Compare restored counts and representative hashes with the snapshot baselines.
+5. Confirm `/ready`, `/api/v1/devices`, and representative photo downloads work.
+6. Stop the disposable project with the same `--env-file`, Compose files, and project name; then remove
+   only its explicitly verified disposable directories. Do not add `--volumes` because named-volume
+   ownership is outside this drill procedure.
 
 Mosquitto persistence is bind-mounted from `MOSQUITTO_DATA_DIR`. Broker persistence only protects queued QoS messages when clients use durable sessions; telemetry idempotency and long-term durability remain database responsibilities.
 
