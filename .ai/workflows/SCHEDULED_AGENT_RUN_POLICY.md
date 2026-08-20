@@ -15,8 +15,12 @@ health records.
 - `idempotency_key` is stable across retries for the same agent, schedule window, input manifest,
   and prompt/config version. A retry receives a new `run_id` but keeps the same key and points to
   the prior attempt with `previous_run_ref`.
+- `idempotency_key` uses lowercase ASCII. When the UTC window is embedded in the key, encode its
+  separators as lowercase `t` and `z`; timestamp fields remain RFC 3339 UTC strings ending in uppercase `Z`.
 - Input and output references are bounded repository-safe identifiers or approved artifact IDs.
   Never embed raw prompts, private payloads, credentials, or unredacted logs.
+  References use relative `/`-separated segments containing only ASCII letters, digits, `.`, `_`,
+  `@`, and `-`; absolute paths, backslashes, whitespace/control characters, and `..` are invalid.
 
 ## Idempotency and deduplication
 
