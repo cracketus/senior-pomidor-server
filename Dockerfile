@@ -1,5 +1,11 @@
 FROM python:3.12-slim
 
+# Keep Debian runtime packages (including util-linux) at the current security
+# level instead of inheriting stale packages from the base image cache.
+RUN apt-get update \
+    && apt-get upgrade -y --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/*
+
 LABEL org.opencontainers.image.source="https://github.com/cracketus/senior-pomidor-server"
 
 ENV PYTHONDONTWRITEBYTECODE=1
