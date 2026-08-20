@@ -24,7 +24,11 @@
   ],
   "properties": {
     "schema": {"const": "scheduled_agent_run_v1"},
-    "run_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{2,119}$"},
+    "run_id": {
+      "type": "string",
+      "maxLength": 120,
+      "pattern": "^(?![\\s\\S]*[\\x00-\\x1F\\x7F])[0-9]{8}T[0-9]{6}Z-(scientific_scout|grant_scout|story_miner|documentation_sync|weekly_planner)-[A-Za-z0-9][A-Za-z0-9_.-]*$"
+    },
     "agent_type": {
       "enum": ["scientific_scout", "grant_scout", "story_miner", "documentation_sync", "weekly_planner"]
     },
@@ -32,10 +36,15 @@
     "started_at_utc": {"type": "string", "format": "date-time", "pattern": "Z$"},
     "completed_at_utc": {"type": ["string", "null"], "format": "date-time", "pattern": "Z$"},
     "trigger": {"enum": ["schedule", "manual", "merge", "event"]},
-    "idempotency_key": {"type": "string", "pattern": "^[a-z0-9][a-z0-9_.:-]{7,159}$"},
+    "idempotency_key": {"type": "string", "pattern": "^(?![\\s\\S]*[\\x00-\\x1F\\x7F])[a-z0-9][a-z0-9_.:-]{7,159}$"},
     "input_refs": {"$ref": "#/$defs/refList"},
     "external_sources": {"$ref": "#/$defs/sourceList"},
-    "previous_run_ref": {"type": ["string", "null"], "maxLength": 180},
+    "previous_run_ref": {
+      "anyOf": [
+        {"$ref": "#/$defs/ref"},
+        {"type": "null"}
+      ]
+    },
     "outputs": {"$ref": "#/$defs/outputList"},
     "status": {"enum": ["success", "partial", "failed", "skipped"]},
     "quality": {
@@ -65,14 +74,123 @@
         "additionalProperties": false,
         "required": ["code", "retryable"],
         "properties": {
-          "code": {"type": "string", "pattern": "^[a-z0-9_.-]{1,80}$"},
+          "code": {"type": "string", "pattern": "^(?![\\s\\S]*[\\x00-\\x1F\\x7F])[a-z0-9_.-]{1,80}$"},
           "retryable": {"type": "boolean"}
         }
       }
     }
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": {"status": {"const": "success"}},
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "completed_at_utc": {"type": "string"},
+          "outputs": {"minItems": 1}
+        },
+        "required": ["completed_at_utc", "outputs"]
+      }
+    },
+    {
+      "if": {
+        "properties": {"status": {"const": "failed"}},
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {"outputs": {"maxItems": 0}},
+        "required": ["outputs"]
+      }
+    },
+    {
+      "oneOf": [
+        {
+          "properties": {
+            "agent_type": {"const": "scientific_scout"},
+            "run_id": {"pattern": "^[0-9]{8}T[0-9]{6}Z-scientific_scout-[A-Za-z0-9][A-Za-z0-9_.-]*$"}
+          },
+          "required": ["agent_type", "run_id"]
+        },
+        {
+          "properties": {
+            "agent_type": {"const": "grant_scout"},
+            "run_id": {"pattern": "^[0-9]{8}T[0-9]{6}Z-grant_scout-[A-Za-z0-9][A-Za-z0-9_.-]*$"}
+          },
+          "required": ["agent_type", "run_id"]
+        },
+        {
+          "properties": {
+            "agent_type": {"const": "story_miner"},
+            "run_id": {"pattern": "^[0-9]{8}T[0-9]{6}Z-story_miner-[A-Za-z0-9][A-Za-z0-9_.-]*$"}
+          },
+          "required": ["agent_type", "run_id"]
+        },
+        {
+          "properties": {
+            "agent_type": {"const": "documentation_sync"},
+            "run_id": {"pattern": "^[0-9]{8}T[0-9]{6}Z-documentation_sync-[A-Za-z0-9][A-Za-z0-9_.-]*$"}
+          },
+          "required": ["agent_type", "run_id"]
+        },
+        {
+          "properties": {
+            "agent_type": {"const": "weekly_planner"},
+            "run_id": {"pattern": "^[0-9]{8}T[0-9]{6}Z-weekly_planner-[A-Za-z0-9][A-Za-z0-9_.-]*$"}
+          },
+          "required": ["agent_type", "run_id"]
+        }
+      ]
+    },
+    {
+      "if": {
+        "properties": {
+          "outputs": {
+            "contains": {
+              "type": "object",
+              "properties": {"publication_state": {"const": "accepted"}},
+              "required": ["publication_state"]
+            }
+          }
+        },
+        "required": ["outputs"]
+      },
+      "then": {
+        "properties": {
+          "status": {"const": "success"},
+          "human_decision": {
+            "type": "object",
+            "properties": {"status": {"const": "accepted"}},
+            "required": ["status"]
+          }
+        },
+        "required": ["status", "human_decision"]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "human_decision": {
+            "type": "object",
+            "properties": {"status": {"const": "accepted"}},
+            "required": ["status"]
+          }
+        },
+        "required": ["human_decision"]
+      },
+      "then": {
+        "properties": {"status": {"const": "success"}},
+        "required": ["status"]
+      }
+    }
+  ],
   "$defs": {
-    "ref": {"type": "string", "pattern": "^(?!.*\\.\\.)[^\\n]{1,180}$"},
+    "ref": {
+      "type": "string",
+      "maxLength": 180,
+      "pattern": "^(?![\\s\\S]*[\\x00-\\x1F\\x7F])(?!.*\\.\\.)(?:[A-Za-z0-9_@]|\\.[A-Za-z0-9_@-])[A-Za-z0-9._@-]*(?:/(?:[A-Za-z0-9_@]|\\.[A-Za-z0-9_@-])[A-Za-z0-9._@-]*)*$"
+    },
     "refList": {"type": "array", "maxItems": 64, "uniqueItems": true, "items": {"$ref": "#/$defs/ref"}},
     "source": {
       "type": "object",
