@@ -1,0 +1,16 @@
+schema: docs_map_v1
+map_version: 1
+producer: test
+entries:
+  - id: known
+    area: test
+    lifecycle: current
+    source_paths: [app/models.py]
+    authoritative_documents: [docs/CONTRACTS.md]
+    owner: test-owner
+    authority_direction: shared_semantic_review
+    mechanical_fields: [field_names]
+    semantic_review_required: true
+    conflict_behavior: human_review_no_truth_selection
+    cross_repository_impact: none
+    required_checks: [schema_validation]
