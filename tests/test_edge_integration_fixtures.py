@@ -109,7 +109,53 @@ def test_http_fallback_edge_fixture_is_visible_through_api(integration_client: T
     response = integration_client.post("/api/v1/edge/telemetry", json=payload)
 
     assert response.status_code == 202
+    assert response.json() == {"record_id": payload["record_id"], "status": "accepted"}
     assert_fixture_visible(integration_client, payload, expected_source="http")
+
+
+def test_mqtt_then_http_is_duplicate_by_shared_record_id(integration_client: TestClient) -> None:
+    fixture = load_fixture("telemetry_mqtt.json")
+    mqtt_worker.on_message(None, None, mqtt_message(fixture["topic"], fixture["payload"]))
+
+    response = integration_client.post("/api/v1/edge/telemetry", json=fixture["payload"])
+
+    assert response.status_code == 202
+    assert response.json() == {"record_id": fixture["payload"]["record_id"], "status": "duplicate"}
+    assert_fixture_visible(integration_client, fixture["payload"], expected_source="mqtt")
+
+
+def test_http_then_mqtt_creates_no_second_row(integration_client: TestClient) -> None:
+    fixture = load_fixture("telemetry_mqtt.json")
+    response = integration_client.post("/api/v1/edge/telemetry", json=fixture["payload"])
+    assert response.json()["status"] == "accepted"
+
+    mqtt_worker.on_message(None, None, mqtt_message(fixture["topic"], fixture["payload"]))
+
+    assert_fixture_visible(integration_client, fixture["payload"], expected_source="http")
+
+
+def test_mixed_500_record_backlog_and_replays(integration_client: TestClient) -> None:
+    payloads = [
+        {
+            "schema_version": "senior-pomidor.edge.telemetry.v2",
+            "record_id": f"backlog:balcony-edge-01:{index:04d}",
+            "device_id": "balcony-edge-01",
+            "timestamp_utc": f"2026-08-{1 + index // 24:02d}T{index % 24:02d}:00:00Z",
+            "pods": {"pod_1": {"enabled": True, "metrics": {"soil_moisture_percent": float(index % 101)}}},
+        }
+        for index in range(500)
+    ]
+
+    for payload in payloads:
+        response = integration_client.post("/api/v1/edge/telemetry", json=payload)
+        assert response.json()["status"] == "accepted"
+    for payload in payloads[::50]:
+        response = integration_client.post("/api/v1/edge/telemetry", json=payload)
+        assert response.json()["status"] == "duplicate"
+
+    history = integration_client.get("/api/v1/devices/balcony-edge-01/telemetry?limit=1000")
+    assert history.status_code == 200
+    assert len(history.json()) == 500
 
 
 def test_photo_fixture_metadata_and_download_are_visible_through_api(integration_client: TestClient) -> None:

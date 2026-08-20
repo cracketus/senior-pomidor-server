@@ -171,6 +171,19 @@ MQTT should be treated as the primary path. HTTP telemetry is the compatibility 
 
 ## Backup And Restore
 
+### Telemetry `record_id` rollout
+
+Migration `0009_telemetry_record_id` adds a nullable unique column and leaves historical rows and the legacy
+observation identity constraint unchanged. Roll out in this order: verify a fresh backup; rehearse upgrade and
+restore in an isolated task; apply the additive migration; release the API and worker; send one canary record and
+its identical replay; then replay the backlog in bounded groups.
+
+Abort on a migration revision mismatch, changed historical row counts/raw-payload hashes/timestamps, a changed
+legacy constraint, duplicate rows, an ACK that does not echo the canary `record_id`, or elevated retry/5xx results.
+Rollback is application-only: restore the previous application image while retaining the nullable column/index.
+Do not downgrade the migration or delete telemetry. Edge acquisition continues into its durable spool until a
+forward application fix is available.
+
 For longer-term sizing, retention, power estimates, and pod-count expansion
 planning, see [CAPACITY_PLANNING.md](CAPACITY_PLANNING.md).
 For public export boundaries, see [PUBLIC_DATA_POLICY.md](PUBLIC_DATA_POLICY.md).

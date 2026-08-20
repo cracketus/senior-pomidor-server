@@ -1,6 +1,6 @@
 # Current state
 
-Owner: maintainer performing a release or operational change. Update after every deployed subsystem, contract, topology, season, or rehearsal change and review at least monthly during the active season. Snapshot date: 2026-08-06. Do not add addresses, credentials, hostnames, or other private infrastructure values.
+Owner: maintainer performing a release or operational change. Update after every deployed subsystem, contract, topology, season, or rehearsal change and review at least monthly during the active season. Snapshot date: 2026-08-19. Do not add addresses, credentials, hostnames, or other private infrastructure values.
 
 ## Running/deployable services
 
@@ -14,6 +14,8 @@ Owner: maintainer performing a release or operational change. Update after every
 ## Active contracts and storage
 
 - Edge telemetry: `senior-pomidor.edge.telemetry.v1` and `.v2` over MQTT and HTTP fallback.
+- Telemetry v2 supports globally unique edge `record_id` values shared by MQTT and HTTP for durable
+  idempotency. Payloads without `record_id` retain legacy observation-identity deduplication for one release cycle.
 - Edge photo: `senior-pomidor.edge.photo.v1` JPEG multipart upload.
 - Derived artifacts: `state_v1`, `sensor_health_v1`, `anomaly_v1`, estimator diagnostics, private JSONL.
 - Public status: sanitized `senior-pomidor.status.v1`; optional Grafana Cloud export contains only the documented low-cardinality projection.

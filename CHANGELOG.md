@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add durable telemetry idempotency across HTTP and MQTT using edge `record_id`, actionable accepted/duplicate/
+  rejected/retry HTTP acknowledgements, and one-release-cycle compatibility for legacy telemetry.
 - Align production deployment, migration, backup/restore, systemd, and Compose paths with the
   app-scoped `/srv/apps/senior-pomidor` filesystem layout.
 - Stop Senior Pomidor provisioning and restore tooling from changing or replacing host-shared

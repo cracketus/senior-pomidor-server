@@ -39,6 +39,7 @@ class TelemetryEvent(Base):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    record_id: Mapped[str | None] = mapped_column(String(128), unique=True, index=True)
     device_id: Mapped[str] = mapped_column(String(128), ForeignKey("devices.device_id"), index=True)
     timestamp_utc: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     schema_version: Mapped[str] = mapped_column(String(128), nullable=False)

@@ -31,6 +31,10 @@ Required fields:
 - `device_id`
 - `timestamp_utc`, or compatibility alias `timestamp`
 
+Telemetry v2 producers should also send `record_id`, a globally unique durable-spool identifier of 1-128
+characters from `A-Za-z0-9_.:-`. It remains optional for one release cycle so already-deployed legacy
+producers continue to ingest. Empty, oversized, or unsafe `record_id` values are rejected with HTTP `400`.
+
 Timestamps must be UTC ISO strings ending in `Z`. `device_id` and pod keys may contain only letters, digits, `_`, `.`, and `-`.
 
 Pod readings may be sent as a list or object through `pods`, `pod_readings`, `plant.readings`, or `plant.pods`. Known numeric metrics are stored in typed columns. Unknown numeric metrics remain forward-compatible in `metrics_jsonb`.
@@ -42,13 +46,16 @@ Telemetry v2 may include optional `system_health`:
 - `network`: booleans `wifi_connected`, `interface_up`, `default_gateway_reachable`, `dns_resolution_ok`, `internet_reachable`, `active_profile_present`, `preferred_profile_present`; strings `ssid`, `ip_address`, `last_recovery_action`, `last_recovery_result`, `last_recovery_at_utc`; integers `wifi_profile_count`, `last_recovery_exit_code`
 - `errors`: list of objects with optional `sensor` and required `message`
 
-Invalid schema names, malformed timestamps, unsafe identifiers, and wrong typed `system_health` fields return HTTP `400` for HTTP ingestion and are rejected by the MQTT worker.
+Malformed JSON and invalid `record_id` values return HTTP `400` because the server cannot trust a correlation
+identifier. Invalid schema names, malformed timestamps, unsafe identifiers, and wrong typed `system_health`
+fields without a valid `record_id` also return HTTP `400` and are rejected by the MQTT worker.
 
 Example HTTP request:
 
 ```powershell
 $body = @{
   schema_version = 'senior-pomidor.edge.telemetry.v2'
+  record_id = 'spool:pi-001:20260702T120000Z'
   device_id = 'pi-001'
   timestamp_utc = '2026-07-02T12:00:00Z'
   pods = @{
@@ -82,14 +89,25 @@ Invoke-RestMethod `
   -Body $body
 ```
 
-Successful HTTP response:
+First committed delivery with `record_id` returns HTTP `202`:
 
 ```json
-{
-  "accepted": true,
-  "event_id": 1
-}
+{"record_id":"spool:pi-001:20260702T120000Z","status":"accepted"}
 ```
+
+An identical replay, including after a lost acknowledgement or through the other transport, returns HTTP
+`202` with exactly `{"record_id":"...","status":"duplicate"}`. Both outcomes allow the released edge
+spool to mark the record delivered. MQTT and HTTP use the same stored identity and never create a second row.
+
+A valid `record_id` paired with a permanently invalid payload returns HTTP `200` and
+`{"record_id":"...","status":"rejected","error_code":"invalid_payload"}`. Reusing a `record_id` for
+different content returns `record_id_conflict`; using a different `record_id` for the existing
+`(device_id, timestamp_utc, schema_version)` observation returns `observation_identity_conflict`. The original
+row is never overwritten. A transient database failure returns HTTP `503` with
+`{"record_id":"...","status":"retry","error_code":"storage_unavailable"}` and no database details.
+
+For the one-release-cycle compatibility window, payloads without `record_id` keep the legacy identity
+deduplication and HTTP `202` response `{"accepted":true,"event_id":1}`.
 
 Invalid payload example:
 
@@ -189,6 +207,7 @@ Implemented read endpoints:
 - `GET /dashboard`
 
 Latest and history telemetry responses include pod readings, pod errors, preserved `system_health`, and derived `health_alerts`.
+They also include nullable `record_id`; historical and compatibility-window events without it return `null`.
 
 The health summary is an internal, read-only composition of existing server, worker, telemetry,
 and sensor-health signals. It does not restart services, mutate storage, invoke recovery, or publish
@@ -217,6 +236,7 @@ Example response:
 ```json
 {
   "id": 1,
+  "record_id": "spool:pi-001:20260702T120000Z",
   "device_id": "pi-001",
   "timestamp_utc": "2026-07-02T12:00:00Z",
   "schema_version": "senior-pomidor.edge.telemetry.v2",

@@ -256,6 +256,7 @@ def assert_mosquitto_bind_mount() -> None:
 def telemetry_payload() -> dict:
     return {
         "schema_version": TELEMETRY_SCHEMA,
+        "record_id": "docker:pi-001:telemetry-1",
         "device_id": "pi-001",
         "timestamp_utc": "2026-06-07T12:00:00Z",
         "pods": [
@@ -316,6 +317,16 @@ def test_docker_compose_stack_ingests_and_serves_data():
 
             telemetry = client.post("/api/v1/edge/telemetry", json=telemetry_payload())
             assert telemetry.status_code == 202
+            assert telemetry.json() == {"record_id": "docker:pi-001:telemetry-1", "status": "accepted"}
+
+            duplicate = client.post("/api/v1/edge/telemetry", json=telemetry_payload())
+            assert duplicate.status_code == 202
+            assert duplicate.json() == {"record_id": "docker:pi-001:telemetry-1", "status": "duplicate"}
+
+            count_result = grafana_reader_psql(
+                "SELECT count(*) FROM public.telemetry_events WHERE record_id = 'docker:pi-001:telemetry-1';"
+            )
+            assert [line.strip() for line in count_result.stdout.splitlines() if line.strip().isdigit()] == ["1"]
 
             state = client.get("/api/v1/state/latest?node_id=pi-001")
             assert state.status_code == 200
