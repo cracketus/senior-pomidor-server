@@ -8,7 +8,7 @@ records:
     started_at_utc: "2026-08-10T10:00:00Z"
     completed_at_utc: "2026-08-10T10:02:00Z"
     trigger: schedule
-    idempotency_key: scientific_scout:2026-08-10T10:00Z:abc123
+    idempotency_key: scientific_scout:2026-08-10t10:00z:abc123
     input_refs: [.ai/research/RESEARCH_SCOPE.md]
     external_sources: [{source_ref: paper-abstract-example, access_level: abstract, last_verified_at: "2026-08-10T10:00:00Z"}]
     previous_run_ref: null
@@ -24,7 +24,7 @@ records:
     started_at_utc: "2026-08-10T10:10:00Z"
     completed_at_utc: "2026-08-10T10:11:00Z"
     trigger: manual
-    idempotency_key: grant_scout:2026-08-10T10:10Z:def456
+    idempotency_key: grant_scout:2026-08-10t10:10z:def456
     input_refs: [.ai/research/grant-sources.yaml]
     external_sources: [{source_ref: grant-official-call-example, access_level: full_call_document, last_verified_at: "2026-08-10T10:05:00Z"}]
     previous_run_ref: null
@@ -40,7 +40,7 @@ records:
     started_at_utc: "2026-08-10T10:20:00Z"
     completed_at_utc: "2026-08-10T10:22:00Z"
     trigger: event
-    idempotency_key: story_miner:2026-08-10T10:20Z:ghi789
+    idempotency_key: story_miner:2026-08-10t10:20z:ghi789
     input_refs: [incident-telemetry-example]
     external_sources: []
     previous_run_ref: null
@@ -56,7 +56,7 @@ records:
     started_at_utc: "2026-08-10T10:30:00Z"
     completed_at_utc: "2026-08-10T10:31:00Z"
     trigger: merge
-    idempotency_key: documentation_sync:2026-08-10T10:30Z:jkl012
+    idempotency_key: documentation_sync:2026-08-10t10:30z:jkl012
     input_refs: [docs/example.md@abc1234]
     external_sources: []
     previous_run_ref: null
@@ -72,7 +72,7 @@ records:
     started_at_utc: "2026-08-10T10:40:00Z"
     completed_at_utc: null
     trigger: schedule
-    idempotency_key: weekly_planner:2026-08-10T10:40Z:mno345
+    idempotency_key: weekly_planner:2026-08-10t10:40z:mno345
     input_refs: [.ai/planning/project-goals.yaml]
     external_sources: []
     previous_run_ref: null
