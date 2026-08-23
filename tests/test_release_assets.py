@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import yaml
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -21,6 +23,16 @@ def test_release_workflow_is_annotated_tag_only_multiarch_and_immutable() -> Non
     assert "--clobber" in workflow
     assert "nox -s tests lint format_check types security deps_audit" in workflow
     assert workflow.count("aquasecurity/trivy-action") == 2
+
+
+def test_release_test_job_fetches_history_for_historical_reviewer_fixtures() -> None:
+    workflow = yaml.safe_load((ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8"))
+
+    checkout = workflow["jobs"]["test-quality-security"]["steps"][0]
+    assert checkout == {
+        "uses": "actions/checkout@v7",
+        "with": {"fetch-depth": 0},
+    }
 
 
 def test_runtime_bundle_builder_includes_operations_assets_without_source() -> None:
