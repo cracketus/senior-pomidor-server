@@ -382,6 +382,63 @@ def test_http_telemetry_v2_reports_network_health_alerts(client):
     assert alerts["wifi_profile_count"]["level"] == "critical"
 
 
+def test_http_telemetry_reports_stable_reliability_alerts_in_latest_and_history(client):
+    payload = telemetry_v2_payload()
+    payload["system_health"].update(
+        {
+            "watchdog": {
+                "state": "recovering",
+                "result": "restart_accepted",
+                "suppression": False,
+                "configured": True,
+            },
+            "spool": {
+                "status": "OK",
+                "disk_status": "OK",
+                "pending_count": 0,
+                "backlog_count": 0,
+                "in_flight_count": 0,
+                "worker_state": "running",
+            },
+            "application": {
+                "process_running": True,
+                "systemd_available": True,
+                "systemd_service_active": True,
+                "systemd_active_state": "active",
+            },
+        }
+    )
+
+    assert client.post("/api/v1/edge/telemetry", json=payload).status_code == 202
+
+    latest = client.get("/api/v1/devices/pi-001/latest").json()
+    history = client.get("/api/v1/devices/pi-001/telemetry").json()
+    expected = {
+        "metric": "edge_watchdog",
+        "level": "warning",
+        "reason_code": "edge_watchdog_restart_recovery",
+        "message": "Edge watchdog restart recovery is in progress",
+    }
+    assert latest["health_alerts"] == [expected]
+    assert history[0]["health_alerts"] == [expected]
+
+
+def test_existing_numeric_alert_shape_is_unchanged(client):
+    payload = telemetry_v2_payload()
+    payload["system_health"]["rpi_core"]["cpu_temp_c"] = 80.0
+
+    assert client.post("/api/v1/edge/telemetry", json=payload).status_code == 202
+
+    alert = client.get("/api/v1/devices/pi-001/latest").json()["health_alerts"][0]
+    assert alert == {
+        "metric": "cpu_temp_c",
+        "level": "warning",
+        "message": "CPU temperature is high",
+        "value": 80.0,
+        "threshold": 75.0,
+    }
+
+
 def test_http_telemetry_v2_accepts_partial_system_health_errors(client):
     payload = telemetry_v2_payload()
     payload["timestamp_utc"] = "2026-06-07T12:02:00Z"

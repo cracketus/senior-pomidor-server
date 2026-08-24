@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add deterministic watchdog/spool/application reliability alerts and a node-scoped
+  `health_summary_v1.components.edge_reliability` projection, with stale/missing telemetry failing to
+  `UNKNOWN` and no public or Grafana Cloud payload expansion.
 - Add durable telemetry idempotency across HTTP and MQTT using edge `record_id`, actionable accepted/duplicate/
   rejected/retry HTTP acknowledgements, and one-release-cycle compatibility for legacy telemetry.
 - Align production deployment, migration, backup/restore, systemd, and Compose paths with the

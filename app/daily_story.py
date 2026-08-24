@@ -258,7 +258,7 @@ def build_daily_story_context(
     metric_samples: dict[str, dict[str, list[tuple[datetime, float]]]] = defaultdict(lambda: defaultdict(list))
     pod_errors: list[tuple[str, str, str]] = []
     system_errors: list[tuple[str, str]] = []
-    system_alerts: list[tuple[str, str, str]] = []
+    system_alerts: list[tuple[str, str, str, str]] = []
     for event in events:
         timestamp = ensure_utc(event.timestamp_utc)
         for reading in sorted(event.readings, key=lambda item: item.pod_key):
@@ -276,7 +276,12 @@ def build_daily_story_context(
                     system_errors.append((str(error.get("sensor") or ""), str(error["message"])))
         for alert in health_alerts(event.system_health_jsonb):
             system_alerts.append(
-                (str(alert.get("metric") or ""), str(alert.get("level") or ""), str(alert.get("message") or ""))
+                (
+                    str(alert.get("metric") or ""),
+                    str(alert.get("level") or ""),
+                    str(alert.get("reason_code") or ""),
+                    str(alert.get("message") or ""),
+                )
             )
 
     summary = {
@@ -292,7 +297,7 @@ def build_daily_story_context(
         "errors": {
             "pod": _grouped_counts(pod_errors, ("pod_key", "sensor", "message"))[:100],
             "system_health": _grouped_counts(system_errors, ("sensor", "message"))[:100],
-            "system_health_alerts": _grouped_counts(system_alerts, ("metric", "level", "message"))[:100],
+            "system_health_alerts": _grouped_counts(system_alerts, ("metric", "level", "reason_code", "message"))[:100],
         },
         "anomalies": _anomaly_summary(anomalies),
         "sensor_health": _sensor_health_summary(health),

@@ -233,9 +233,13 @@ Implemented read endpoints:
 
 Latest and history telemetry responses include pod readings, pod errors, preserved `system_health`, and derived `health_alerts`.
 They also include nullable `record_id`; historical and compatibility-window events without it return `null`.
-The reliability blocks above appear only inside the existing private `system_health` response. This
-contract does not assign them health-alert or health-summary semantics and does not add them to public
-status or the Grafana Cloud projection.
+The private API derives deterministic reliability alerts from the three reliability blocks. Only
+`WARN` and `ALERT` findings are appended to `health_alerts`, with metrics `edge_watchdog`, `edge_spool`,
+or `edge_application`, fixed `reason_code` values prefixed by that metric, fixed messages, and levels
+`warning` or `critical`. Missing, incomplete, or unrecognized reliability input evaluates to `UNKNOWN`
+and does not create a legacy-visible alert. Existing numeric, network, and probe-error alert objects
+retain their prior shape. Edge-provided reason/error details, paths, service names, boot IDs, and
+counters are never copied into derived alerts.
 
 The health summary is an internal, read-only composition of existing server, worker, telemetry,
 and sensor-health signals. It does not restart services, mutate storage, invoke recovery, or publish
@@ -252,6 +256,44 @@ The response uses `schema_version: "health_summary_v1"`, UTC `generated_at`, sta
 `OK|WARN|ALERT|UNKNOWN`, bounded reason codes, and `data_freshness`. Worker health is stale after
 90 seconds; telemetry and sensor health are stale after 1200 seconds. `OK` is returned only when
 all required scoped evidence is current and healthy.
+
+Only a node-scoped response adds `components.edge_reliability`. It contains the aggregate status,
+telemetry age, ordered/deduplicated `reason_codes`, and bounded watchdog/spool/application projections.
+The evaluator uses severity precedence `ALERT > WARN > UNKNOWN > OK`. Watchdog recovery and transitions
+are warnings; suppression, exhausted budget, and failed recovery are alerts. Spool backlog and disk
+warnings are warnings; degraded/critical spool or disk state and worker errors are alerts. A stopped
+process or inactive systemd service is an alert; unavailable expected systemd or contradictory service
+state is a warning. `configured=false` is a normal disabled watchdog. Missing, partial, unavailable, or
+unrecognized state is never treated as healthy.
+
+When node telemetry is missing, stale, timestamp-invalid, or unavailable, old reliability values are
+not evaluated. The component is `UNKNOWN` with one of
+`edge_reliability_telemetry_missing|stale|unavailable`. Summary reasons remain deterministic,
+deduplicated, and globally limited to 20. A request without `node_id` omits `edge_reliability`, preserving
+server-only `health_summary_v1` behavior. The evaluator is observational only: it does not copy edge
+recovery policy or perform any action.
+
+```json
+{
+  "edge_reliability": {
+    "status": "WARN",
+    "age_seconds": 12,
+    "reason_codes": ["edge_watchdog_restart_recovery"],
+    "watchdog": {
+      "status": "WARN",
+      "state": "recovering",
+      "result": "restart_accepted",
+      "suppression": false
+    },
+    "spool": {"status": "OK", "reported_status": "OK", "disk_status": "OK"},
+    "application": {"status": "OK", "process_running": true, "systemd_service_active": true}
+  }
+}
+```
+
+Public status continues to publish only its existing sanitized projection. Its aggregate state may
+become `degraded` because it counts private alerts, but it does not publish reliability reason codes or
+payload fields. The Grafana Cloud projection is unchanged.
 
 Example latest telemetry call:
 

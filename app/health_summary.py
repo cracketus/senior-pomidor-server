@@ -9,6 +9,7 @@ from sqlalchemy import desc, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from app.edge_reliability import EdgeReliabilityEvaluation, evaluate_edge_reliability
 from app.models import SensorHealthSnapshot, TelemetryEvent
 from app.readiness import check_readiness
 from app.telemetry import health_alerts
@@ -36,6 +37,52 @@ def _component(status: str, *, age_seconds: float | None = None, **details: Any)
         result["age_seconds"] = age_seconds
     result.update(details)
     return result
+
+
+def _object(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _reliability_component(
+    evaluation: EdgeReliabilityEvaluation,
+    system_health: dict[str, Any],
+    *,
+    age_seconds: float,
+) -> dict[str, Any]:
+    watchdog = _object(system_health.get("watchdog"))
+    spool = _object(system_health.get("spool"))
+    application = _object(system_health.get("application"))
+    watchdog_details = {
+        field: watchdog[field] for field in ("state", "result", "suppression", "configured") if field in watchdog
+    }
+    spool_details = {
+        target: spool[source]
+        for source, target in (("status", "reported_status"), ("disk_status", "disk_status"))
+        if source in spool
+    }
+    application_details = {
+        field: application[field]
+        for field in ("process_running", "systemd_available", "systemd_service_active")
+        if field in application
+    }
+    return _component(
+        evaluation.status,
+        age_seconds=age_seconds,
+        reason_codes=[finding.reason_code for finding in evaluation.findings],
+        watchdog=_component(evaluation.watchdog_status, **watchdog_details),
+        spool=_component(evaluation.spool_status, **spool_details),
+        application=_component(evaluation.application_status, **application_details),
+    )
+
+
+def _unknown_reliability_component(reason_code: str) -> dict[str, Any]:
+    return _component(
+        "UNKNOWN",
+        reason_codes=[reason_code],
+        watchdog=_component("UNKNOWN"),
+        spool=_component("UNKNOWN"),
+        application=_component("UNKNOWN"),
+    )
 
 
 def _worker_component(path_value: str, now: datetime) -> tuple[dict[str, Any], list[dict[str, str]]]:
@@ -71,7 +118,7 @@ def _worker_component(path_value: str, now: datetime) -> tuple[dict[str, Any], l
 
 def _node_component(
     db: Session, node_id: str, now: datetime
-) -> tuple[dict[str, Any], dict[str, Any], list[dict[str, str]]]:
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], list[dict[str, str]]]:
     reasons: list[dict[str, str]] = []
     telemetry = db.scalar(
         select(TelemetryEvent)
@@ -87,23 +134,47 @@ def _node_component(
     if telemetry is None:
         telemetry_component = _component("UNKNOWN", reason_code="telemetry_missing")
         reasons.append({"code": "telemetry_missing", "message": "node telemetry is unavailable"})
+        reliability_component = _unknown_reliability_component("edge_reliability_telemetry_missing")
+        reasons.append(
+            {
+                "code": "edge_reliability_telemetry_missing",
+                "message": "edge reliability telemetry is unavailable",
+            }
+        )
     else:
         age = _age_seconds(telemetry.timestamp_utc, now)
-        alerts = health_alerts(telemetry.system_health_jsonb)
         if age is None:
             telemetry_component = _component("UNKNOWN", reason_code="telemetry_timestamp_invalid")
             reasons.append({"code": "telemetry_timestamp_invalid", "message": "node telemetry timestamp is invalid"})
+            reliability_component = _unknown_reliability_component("edge_reliability_telemetry_unavailable")
+            reasons.append(
+                {
+                    "code": "edge_reliability_telemetry_unavailable",
+                    "message": "edge reliability telemetry is unavailable",
+                }
+            )
         elif age > TELEMETRY_STALE_SECONDS:
             telemetry_component = _component("WARN", age_seconds=age, reason_code="telemetry_stale")
             reasons.append({"code": "telemetry_stale", "message": "node telemetry is stale"})
-        elif any(alert.get("level") == "critical" for alert in alerts):
-            telemetry_component = _component("ALERT", age_seconds=age, reason_code="telemetry_critical_alert")
-            reasons.append({"code": "telemetry_critical_alert", "message": "node telemetry has a critical alert"})
-        elif alerts:
-            telemetry_component = _component("WARN", age_seconds=age, reason_code="telemetry_alert")
-            reasons.append({"code": "telemetry_alert", "message": "node telemetry has an alert"})
+            reliability_component = _unknown_reliability_component("edge_reliability_telemetry_stale")
+            reliability_component["age_seconds"] = age
+            reasons.append(
+                {"code": "edge_reliability_telemetry_stale", "message": "edge reliability telemetry is stale"}
+            )
         else:
-            telemetry_component = _component("OK", age_seconds=age)
+            system_health = telemetry.system_health_jsonb if isinstance(telemetry.system_health_jsonb, dict) else {}
+            evaluation = evaluate_edge_reliability(system_health)
+            alerts = health_alerts(system_health, edge_reliability=evaluation)
+            reliability_component = _reliability_component(evaluation, system_health, age_seconds=age)
+            reasons.extend({"code": finding.reason_code, "message": finding.message} for finding in evaluation.findings)
+            if any(alert.get("level") == "critical" for alert in alerts):
+                telemetry_component = _component("ALERT", age_seconds=age, reason_code="telemetry_critical_alert")
+                reasons.append({"code": "telemetry_critical_alert", "message": "node telemetry has a critical alert"})
+            elif alerts:
+                telemetry_component = _component("WARN", age_seconds=age, reason_code="telemetry_alert")
+                reasons.append({"code": "telemetry_alert", "message": "node telemetry has an alert"})
+            else:
+                telemetry_component = _component("OK", age_seconds=age)
 
     if sensor_health is None:
         sensor_component = _component("UNKNOWN", reason_code="sensor_health_missing")
@@ -118,7 +189,20 @@ def _node_component(
             reasons.append({"code": "sensor_health_stale", "message": "sensor health is stale"})
         else:
             sensor_component = _component("OK", age_seconds=age)
-    return telemetry_component, sensor_component, reasons
+    return telemetry_component, sensor_component, reliability_component, reasons
+
+
+def _bounded_unique_reasons(reasons: list[dict[str, str]]) -> list[dict[str, str]]:
+    result: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for reason in reasons:
+        if reason["code"] in seen:
+            continue
+        result.append(reason)
+        seen.add(reason["code"])
+        if len(result) == 20:
+            break
+    return result
 
 
 def build_health_summary(
@@ -154,14 +238,22 @@ def build_health_summary(
 
     if node_id:
         try:
-            telemetry, sensor_health, node_reasons = _node_component(db, node_id, current_time)
+            telemetry, sensor_health, edge_reliability, node_reasons = _node_component(db, node_id, current_time)
             components["telemetry"] = telemetry
             components["sensor_health"] = sensor_health
+            components["edge_reliability"] = edge_reliability
             reasons.extend(node_reasons)
         except SQLAlchemyError:
             components["telemetry"] = _component("UNKNOWN", reason_code="telemetry_unavailable")
             components["sensor_health"] = _component("UNKNOWN", reason_code="sensor_health_unavailable")
+            components["edge_reliability"] = _unknown_reliability_component("edge_reliability_telemetry_unavailable")
             reasons.append({"code": "node_health_unavailable", "message": "node health is unavailable"})
+            reasons.append(
+                {
+                    "code": "edge_reliability_telemetry_unavailable",
+                    "message": "edge reliability telemetry is unavailable",
+                }
+            )
     else:
         components["telemetry"] = _component("OK", scope="server")
         components["sensor_health"] = _component("OK", scope="server")
@@ -176,7 +268,7 @@ def build_health_summary(
         "status": status if status in SUMMARY_STATUSES else "UNKNOWN",
         "generated_at": current_time.isoformat().replace("+00:00", "Z"),
         "components": components,
-        "reasons": reasons[:20],
+        "reasons": _bounded_unique_reasons(reasons),
         "data_freshness": {
             "worker_max_age_seconds": WORKER_STALE_SECONDS,
             "telemetry_max_age_seconds": TELEMETRY_STALE_SECONDS,

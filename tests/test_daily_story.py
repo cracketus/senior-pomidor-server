@@ -199,6 +199,44 @@ def test_context_is_bounded_and_empty_window_does_not_claim_other_node(db_sessio
     assert len(json.dumps(context.summary, separators=(",", ":"), sort_keys=True)) <= 512
 
 
+def test_context_accepts_reliability_alert_reason_code(db_session) -> None:
+    start = datetime(2026, 8, 24, 12, 0, tzinfo=UTC)
+    payload = telemetry_payload("pi-001", start, 42.0)
+    payload["system_health"].update(
+        {
+            "watchdog": {
+                "state": "recovering",
+                "result": "restart_accepted",
+                "suppression": False,
+                "configured": True,
+            },
+            "spool": {
+                "status": "OK",
+                "disk_status": "OK",
+                "pending_count": 0,
+                "backlog_count": 0,
+                "in_flight_count": 0,
+            },
+            "application": {
+                "process_running": True,
+                "systemd_available": True,
+                "systemd_service_active": True,
+            },
+        }
+    )
+    persist_telemetry(db_session, payload, source="test")
+
+    context = build_daily_story_context(
+        db_session,
+        node_id="pi-001",
+        window_start=start - timedelta(minutes=1),
+        window_end=start + timedelta(minutes=1),
+    )
+
+    alerts = context.summary["errors"]["system_health_alerts"]
+    assert any(item["reason_code"] == "edge_watchdog_restart_recovery" for item in alerts)
+
+
 class FakeClient:
     def __init__(self, results):
         self.results = iter(results)

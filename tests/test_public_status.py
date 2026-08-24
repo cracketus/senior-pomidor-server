@@ -56,7 +56,13 @@ def test_normalize_edge_device_reports_freshness_and_buffers() -> None:
     event = {
         "device_id": "pi-001",
         "received_at": "2026-06-29T12:00:00Z",
-        "health_alerts": [{"metric": "cpu_temp_c"}],
+        "health_alerts": [
+            {
+                "metric": "edge_watchdog",
+                "reason_code": "edge_watchdog_restart_recovery",
+                "message": "Edge watchdog restart recovery is in progress",
+            }
+        ],
         "system_health": {
             "rpi_core": {
                 "telemetry_buffer_file_count": 2,
@@ -75,7 +81,12 @@ def test_normalize_edge_device_reports_freshness_and_buffers() -> None:
                 "ip_address": "192.168.1.25",
                 "last_recovery_action": "wpa_cli -i wlan0 reconfigure",
             },
-            "watchdog": {"boot_id": "private-boot-id", "state": "healthy"},
+            "watchdog": {
+                "boot_id": "private-boot-id",
+                "state": "recovering",
+                "result": "private-restart-result",
+                "restart_count": 987654321,
+            },
             "spool": {
                 "status": "BACKLOG",
                 "last_error_code": "private-spool-code",
@@ -109,6 +120,9 @@ def test_normalize_edge_device_reports_freshness_and_buffers() -> None:
     assert "private-boot-id" not in public_json
     assert "private-spool-code" not in public_json
     assert "private-edge-service" not in public_json
+    assert "edge_watchdog_restart_recovery" not in public_json
+    assert "private-restart-result" not in public_json
+    assert "987654321" not in public_json
     assert "65536" not in public_json
     assert "4321" not in public_json
 

@@ -94,9 +94,13 @@ def test_photo_contract_fixture_matches_active_schema() -> None:
 
 def test_health_summary_contract_fixture_is_versioned() -> None:
     summary = load_json(FIXTURE_DIR / "health_summary_v1.json")
+    schema = load_json(SCHEMA_DIR / "health-summary-v1.schema.json")
 
+    Draft202012Validator(schema).validate(summary)
     assert summary["schema_version"] == "health_summary_v1"
     assert summary["status"] in {"OK", "WARN", "ALERT", "UNKNOWN"}
     assert summary["generated_at"].endswith("Z")
     assert summary["data_freshness"]["worker_max_age_seconds"] == 90
     assert summary["data_freshness"]["telemetry_max_age_seconds"] == 1200
+    assert summary["data_freshness"]["node_id"] == "pi-001"
+    assert summary["components"]["edge_reliability"]["reason_codes"] == ["edge_watchdog_restart_recovery"]
