@@ -133,6 +133,9 @@ def telemetry_payload(timestamp: str, *, enabled: bool = True, moisture: float |
         "pods": {"pod-1": pod},
         "system_health": {
             "rpi_core": {"cpu_temp_c": 80.0},
+            "watchdog": {"boot_id": "private-boot-id", "state": "healthy"},
+            "spool": {"last_error_code": "private-spool-code", "database_size_bytes": 65536},
+            "application": {"systemd_service_name": "private-edge-service", "process_id": 4321},
             "errors": [{"sensor": "wifi", "message": "do not export"}],
         },
     }
@@ -274,6 +277,12 @@ def test_export_once_reads_postgres_rows_sends_metrics_and_advances_state():
     assert result.max_source_reading_id is not None
     assert state.since == datetime(2026, 6, 7, 12, 1, tzinfo=UTC)
     assert state.last_reading_id == result.max_source_reading_id
+    projection = repr(transport.samples)
+    assert "private-boot-id" not in projection
+    assert "private-spool-code" not in projection
+    assert "private-edge-service" not in projection
+    assert "65536" not in projection
+    assert "4321" not in projection
 
 
 def test_export_once_does_not_skip_rows_inserted_later_at_checkpoint_timestamp():

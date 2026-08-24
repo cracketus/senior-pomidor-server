@@ -1,0 +1,102 @@
+{
+  "provenance": {
+    "source_repository": "senior-pomidor-plant-v2",
+    "source_revision": "e1244ae0f9e4f08e5b272839c970e13f4fb7dcc9",
+    "schema_path": "schemas/edge-telemetry-v2.schema.json",
+    "runtime_paths": [
+      "src/telemetry_spool.py",
+      "src/sensors/application_health.py",
+      "src/watchdog.py"
+    ],
+    "note": "Synthetic private-safe copy; tests do not access the edge checkout."
+  },
+  "topic": "senior-pomidor/edge-fixture-01/telemetry",
+  "payload": {
+    "schema_version": "senior-pomidor.edge.telemetry.v2",
+    "record_id": "spool:edge-fixture-01:20260824T120000Z",
+    "device_id": "edge-fixture-01",
+    "timestamp_utc": "2026-08-24T12:00:00Z",
+    "pods": {
+      "pod_1": {
+        "enabled": true,
+        "metrics": {
+          "soil_moisture_percent": 42.5
+        },
+        "errors": []
+      }
+    },
+    "system_health": {
+      "watchdog": {
+        "state": "recovering",
+        "reason": "heartbeat_stale:persisted",
+        "result": "restart_accepted",
+        "suppression": false,
+        "configured": true,
+        "attempt_count": 1,
+        "restart_count": 1,
+        "reboot_count": 0,
+        "last_healthy_heartbeat_at_utc": "2026-08-24T11:58:00Z",
+        "boot_id": "synthetic-boot-a",
+        "unknown_watchdog_field": "drop-me"
+      },
+      "spool": {
+        "status": "BACKLOG",
+        "disk_status": "OK",
+        "pending_count": 3,
+        "backlog_count": 4,
+        "in_flight_count": 1,
+        "delivered_count": 120,
+        "dead_letter_count": 1,
+        "reconciled_count": 2,
+        "resolution_total": 2,
+        "last_reconciliation_at_utc": "2026-08-24T11:00:00Z",
+        "last_reconciliation_reason": "already_present_on_server",
+        "oldest_pending_age_seconds": 180,
+        "outage_duration_seconds": 90,
+        "database_size_bytes": 65536,
+        "free_space_bytes": 2147483648,
+        "disk_usage_percent": 27.5,
+        "delivery_attempt_count": 130,
+        "delivery_success_count": 120,
+        "duplicate_count": 4,
+        "delivery_retry_count": 5,
+        "delivery_rejected_count": 1,
+        "last_delivery_result": "retry",
+        "last_delivery_at_utc": "2026-08-24T11:59:30Z",
+        "last_successful_delivery_at_utc": "2026-08-24T11:55:00Z",
+        "last_error_code": "transport_error",
+        "last_error_detail": "synthetic detail must not persist",
+        "last_error_at_utc": "2026-08-24T11:59:30Z",
+        "write_failure_count": 0,
+        "written_total": 125,
+        "success_total": 120,
+        "failure_total": 5,
+        "duplicate_total": 4,
+        "replayed_total": 3,
+        "replay_count": 3,
+        "estimated_drain_seconds": 1.5,
+        "estimated_retention_days": 45.2,
+        "worker_state": "running",
+        "worker_last_heartbeat_at_utc": "2026-08-24T11:59:59Z",
+        "worker_last_error": "synthetic worker detail must not persist",
+        "legacy_corrupt_count": 0,
+        "unknown_spool_field": "drop-me"
+      },
+      "application": {
+        "process_id": 4321,
+        "process_running": true,
+        "process_uptime_seconds": 7200,
+        "process_memory_rss_bytes": 134217728,
+        "process_cpu_percent": 1.2,
+        "systemd_available": true,
+        "systemd_service_name": "senior-pomidor-edge",
+        "systemd_active_state": "active",
+        "systemd_sub_state": "running",
+        "systemd_service_active": true,
+        "systemd_main_pid": 4321,
+        "errors": [{"message": "synthetic nested error must not persist"}],
+        "unknown_application_field": "drop-me"
+      }
+    }
+  }
+}

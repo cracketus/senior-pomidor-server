@@ -46,6 +46,31 @@ Telemetry v2 may include optional `system_health`:
 - `network`: booleans `wifi_connected`, `interface_up`, `default_gateway_reachable`, `dns_resolution_ok`, `internet_reachable`, `active_profile_present`, `preferred_profile_present`; strings `ssid`, `ip_address`, `last_recovery_action`, `last_recovery_result`, `last_recovery_at_utc`; integers `wifi_profile_count`, `last_recovery_exit_code`
 - `errors`: list of objects with optional `sensor` and required `message`
 
+Telemetry v2 producers may additionally send edge reliability diagnostics. The producer contract in
+`docs/schemas/telemetry-v2.schema.json` is strict for known fields: counters, byte sizes, process IDs,
+and durations are non-negative integers; `disk_usage_percent` is `0..100`; estimates and CPU percent
+are non-negative numbers; timestamps are valid UTC ISO strings ending in `Z`; and state, code, and
+identifier strings are non-empty and at most 256 characters. Known reliability blocks are:
+
+- `watchdog`: state/reason/result, suppression and configured flags, recovery counters, last healthy
+  heartbeat timestamp, and boot ID
+- `spool`: queue/delivery/reconciliation counters, database/free-space bytes, disk state and usage,
+  backlog/outage ages, delivery and worker status/timestamps, and drain/retention estimates
+- `application`: process liveness, PID, uptime, RSS and CPU, plus systemd availability, service identity,
+  state/substate, active flag, and main PID
+
+The server reader is deliberately tolerant for these three additive blocks. A missing block remains
+missing; an object is preserved even when all its fields are dropped, yielding `{}`. Known nullable
+status, timestamp, age, and estimate fields preserve explicit `null`. An individual malformed or unknown
+field is ignored without rejecting the telemetry record, and booleans are never accepted as integers.
+This tolerant behavior does not weaken the producer schema and does not change existing strict validation
+for `rpi_core`, `pod_1_hardware`, `network`, or `errors`.
+
+Only the documented allowlist is copied into `system_health_jsonb`. In particular, arbitrary
+`last_error_detail`, `worker_last_error`, nested application errors, and unknown fields are not persisted.
+The raw ingestion payload and `record_id` idempotency behavior are unchanged. `aggregate` and `indicator`
+remain outside this server normalization contract.
+
 Malformed JSON and invalid `record_id` values return HTTP `400` because the server cannot trust a correlation
 identifier. Invalid schema names, malformed timestamps, unsafe identifiers, and wrong typed `system_health`
 fields without a valid `record_id` also return HTTP `400` and are rejected by the MQTT worker.
@@ -208,6 +233,9 @@ Implemented read endpoints:
 
 Latest and history telemetry responses include pod readings, pod errors, preserved `system_health`, and derived `health_alerts`.
 They also include nullable `record_id`; historical and compatibility-window events without it return `null`.
+The reliability blocks above appear only inside the existing private `system_health` response. This
+contract does not assign them health-alert or health-summary semantics and does not add them to public
+status or the Grafana Cloud projection.
 
 The health summary is an internal, read-only composition of existing server, worker, telemetry,
 and sensor-health signals. It does not restart services, mutate storage, invoke recovery, or publish

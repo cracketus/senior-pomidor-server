@@ -75,6 +75,13 @@ def test_normalize_edge_device_reports_freshness_and_buffers() -> None:
                 "ip_address": "192.168.1.25",
                 "last_recovery_action": "wpa_cli -i wlan0 reconfigure",
             },
+            "watchdog": {"boot_id": "private-boot-id", "state": "healthy"},
+            "spool": {
+                "status": "BACKLOG",
+                "last_error_code": "private-spool-code",
+                "database_size_bytes": 65536,
+            },
+            "application": {"systemd_service_name": "private-edge-service", "process_id": 4321},
         },
     }
 
@@ -99,6 +106,11 @@ def test_normalize_edge_device_reports_freshness_and_buffers() -> None:
     assert "private-wifi" not in public_json
     assert "192.168.1.25" not in public_json
     assert "wpa_cli" not in public_json
+    assert "private-boot-id" not in public_json
+    assert "private-spool-code" not in public_json
+    assert "private-edge-service" not in public_json
+    assert "65536" not in public_json
+    assert "4321" not in public_json
 
 
 def test_edge_status_marks_stale_after_threshold() -> None:

@@ -95,6 +95,42 @@ def assert_fixture_visible(client: TestClient, payload: dict[str, Any], *, expec
     assert len(history.json()) == 1
 
 
+def assert_reliability_visible(client: TestClient, payload: dict[str, Any], *, expected_source: str) -> None:
+    response = client.get(f"/api/v1/devices/{payload['device_id']}/latest")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["source"] == expected_source
+    health = body["system_health"]
+    source_health = payload["system_health"]
+    assert health["watchdog"] == {
+        key: value for key, value in source_health["watchdog"].items() if key != "unknown_watchdog_field"
+    }
+    assert health["spool"] == {
+        key: value
+        for key, value in source_health["spool"].items()
+        if key not in {"last_error_detail", "worker_last_error", "unknown_spool_field"}
+    }
+    assert health["application"] == {
+        key: value
+        for key, value in source_health["application"].items()
+        if key not in {"errors", "unknown_application_field"}
+    }
+    serialized = json.dumps(health)
+    for forbidden in (
+        "last_error_detail",
+        "worker_last_error",
+        "synthetic nested error",
+        "unknown_watchdog_field",
+        "unknown_spool_field",
+        "unknown_application_field",
+    ):
+        assert forbidden not in serialized
+
+    history = client.get(f"/api/v1/devices/{payload['device_id']}/telemetry")
+    assert history.status_code == 200
+    assert history.json() == [body]
+
+
 def test_mqtt_edge_fixture_is_visible_through_api(integration_client: TestClient) -> None:
     fixture = load_fixture("telemetry_mqtt.json")
 
@@ -132,6 +168,29 @@ def test_http_then_mqtt_creates_no_second_row(integration_client: TestClient) ->
     mqtt_worker.on_message(None, None, mqtt_message(fixture["topic"], fixture["payload"]))
 
     assert_fixture_visible(integration_client, fixture["payload"], expected_source="http")
+
+
+def test_reliability_fixture_passes_mqtt_persistence_and_read_path(integration_client: TestClient) -> None:
+    fixture = load_fixture("telemetry_reliability.json")
+
+    mqtt_worker.on_message(None, None, mqtt_message(fixture["topic"], fixture["payload"]))
+
+    assert_reliability_visible(integration_client, fixture["payload"], expected_source="mqtt")
+
+
+def test_reliability_fixture_cross_transport_replay_is_duplicate(integration_client: TestClient) -> None:
+    fixture = load_fixture("telemetry_reliability.json")
+    payload = fixture["payload"]
+    accepted = integration_client.post("/api/v1/edge/telemetry", json=payload)
+
+    mqtt_worker.on_message(None, None, mqtt_message(fixture["topic"], payload))
+    duplicate = integration_client.post("/api/v1/edge/telemetry", json=payload)
+
+    assert accepted.status_code == 202
+    assert accepted.json() == {"record_id": payload["record_id"], "status": "accepted"}
+    assert duplicate.status_code == 202
+    assert duplicate.json() == {"record_id": payload["record_id"], "status": "duplicate"}
+    assert_reliability_visible(integration_client, payload, expected_source="http")
 
 
 def test_mixed_500_record_backlog_and_replays(integration_client: TestClient) -> None:
