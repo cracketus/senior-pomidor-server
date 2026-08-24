@@ -134,6 +134,46 @@ def test_prompt_inputs_include_photo_and_telemetry_summary(db_session, tmp_path)
     assert "telemetry_correlations" in prompt
 
 
+def test_prompt_inputs_include_reliability_reason_code(db_session, tmp_path) -> None:
+    payload = telemetry_payload(schema_version=TELEMETRY_SCHEMA_V2)
+    payload["system_health"].update(
+        {
+            "watchdog": {
+                "state": "recovering",
+                "result": "restart_accepted",
+                "suppression": False,
+                "configured": True,
+            },
+            "spool": {
+                "status": "OK",
+                "disk_status": "OK",
+                "pending_count": 0,
+                "backlog_count": 0,
+                "in_flight_count": 0,
+            },
+            "application": {
+                "process_running": True,
+                "systemd_available": True,
+                "systemd_service_active": True,
+            },
+        }
+    )
+    persist_telemetry(db_session, payload, source="test")
+    seed_photo(db_session, tmp_path)
+    context = select_photo_contexts(db_session, limit=1, telemetry_window=timedelta(minutes=30))[0]
+
+    prompt_inputs = build_prompt_inputs(context)
+
+    assert prompt_inputs["telemetry"][0]["health_alerts"] == [
+        {
+            "metric": "edge_watchdog",
+            "level": "warning",
+            "reason_code": "edge_watchdog_restart_recovery",
+            "message": "Edge watchdog restart recovery is in progress",
+        }
+    ]
+
+
 class FakeAnalyzer:
     def analyze(self, image_path, prompt: str) -> str:
         assert image_path.is_file()

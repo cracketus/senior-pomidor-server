@@ -1,18 +1,43 @@
 {
   "schema_version": "health_summary_v1",
-  "status": "OK",
+  "status": "WARN",
   "generated_at": "2026-08-10T10:00:00Z",
   "components": {
     "api": {"status": "OK"},
     "database": {"status": "OK", "migration": "current"},
     "worker": {"status": "OK", "age_seconds": 3.2},
-    "telemetry": {"status": "OK", "scope": "server"},
-    "sensor_health": {"status": "OK", "scope": "server"}
+    "telemetry": {"status": "WARN", "age_seconds": 12, "reason_code": "telemetry_alert"},
+    "sensor_health": {"status": "OK", "age_seconds": 12},
+    "edge_reliability": {
+      "status": "WARN",
+      "age_seconds": 12,
+      "reason_codes": ["edge_watchdog_restart_recovery"],
+      "watchdog": {
+        "status": "WARN",
+        "state": "recovering",
+        "result": "restart_accepted",
+        "suppression": false,
+        "configured": true
+      },
+      "spool": {"status": "OK", "reported_status": "OK", "disk_status": "OK"},
+      "application": {
+        "status": "OK",
+        "process_running": true,
+        "systemd_available": true,
+        "systemd_service_active": true
+      }
+    }
   },
-  "reasons": [],
+  "reasons": [
+    {
+      "code": "edge_watchdog_restart_recovery",
+      "message": "Edge watchdog restart recovery is in progress"
+    },
+    {"code": "telemetry_alert", "message": "node telemetry has an alert"}
+  ],
   "data_freshness": {
     "worker_max_age_seconds": 90,
     "telemetry_max_age_seconds": 1200,
-    "node_id": null
+    "node_id": "pi-001"
   }
 }

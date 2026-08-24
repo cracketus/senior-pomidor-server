@@ -11,6 +11,9 @@
     "generated_at": {"type": "string", "format": "date-time"},
     "components": {
       "type": "object",
+      "properties": {
+        "edge_reliability": {"$ref": "#/$defs/edgeReliability"}
+      },
       "additionalProperties": {"$ref": "#/$defs/component"}
     },
     "reasons": {
@@ -38,16 +41,67 @@
     }
   },
   "$defs": {
+    "status": {"enum": ["OK", "WARN", "ALERT", "UNKNOWN"]},
     "component": {
       "type": "object",
       "additionalProperties": true,
       "required": ["status"],
       "properties": {
-        "status": {"enum": ["OK", "WARN", "ALERT", "UNKNOWN"]},
+        "status": {"$ref": "#/$defs/status"},
         "age_seconds": {"type": "number", "minimum": 0},
         "scope": {"type": "string", "const": "server"},
         "migration": {"type": "string", "maxLength": 32},
         "reason_code": {"type": "string", "maxLength": 64}
+      }
+    },
+    "edgeReliability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "reason_codes", "watchdog", "spool", "application"],
+      "properties": {
+        "status": {"$ref": "#/$defs/status"},
+        "age_seconds": {"type": "number", "minimum": 0},
+        "reason_codes": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "maxLength": 64}
+        },
+        "watchdog": {"$ref": "#/$defs/watchdogReliability"},
+        "spool": {"$ref": "#/$defs/spoolReliability"},
+        "application": {"$ref": "#/$defs/applicationReliability"}
+      }
+    },
+    "watchdogReliability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": {
+        "status": {"$ref": "#/$defs/status"},
+        "state": {"type": "string", "maxLength": 256},
+        "result": {"type": ["string", "null"], "maxLength": 256},
+        "suppression": {"type": "boolean"},
+        "configured": {"type": "boolean"}
+      }
+    },
+    "spoolReliability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": {
+        "status": {"$ref": "#/$defs/status"},
+        "reported_status": {"type": ["string", "null"], "maxLength": 256},
+        "disk_status": {"type": ["string", "null"], "maxLength": 256}
+      }
+    },
+    "applicationReliability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status"],
+      "properties": {
+        "status": {"$ref": "#/$defs/status"},
+        "process_running": {"type": "boolean"},
+        "systemd_available": {"type": "boolean"},
+        "systemd_service_active": {"type": "boolean"}
       }
     }
   }

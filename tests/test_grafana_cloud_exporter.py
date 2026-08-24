@@ -133,7 +133,12 @@ def telemetry_payload(timestamp: str, *, enabled: bool = True, moisture: float |
         "pods": {"pod-1": pod},
         "system_health": {
             "rpi_core": {"cpu_temp_c": 80.0},
-            "watchdog": {"boot_id": "private-boot-id", "state": "healthy"},
+            "watchdog": {
+                "boot_id": "private-boot-id",
+                "state": "recovering",
+                "result": "private-restart-result",
+                "restart_count": 987654321,
+            },
             "spool": {"last_error_code": "private-spool-code", "database_size_bytes": 65536},
             "application": {"systemd_service_name": "private-edge-service", "process_id": 4321},
             "errors": [{"sensor": "wifi", "message": "do not export"}],
@@ -281,6 +286,8 @@ def test_export_once_reads_postgres_rows_sends_metrics_and_advances_state():
     assert "private-boot-id" not in projection
     assert "private-spool-code" not in projection
     assert "private-edge-service" not in projection
+    assert "private-restart-result" not in projection
+    assert "987654321" not in projection
     assert "65536" not in projection
     assert "4321" not in projection
 

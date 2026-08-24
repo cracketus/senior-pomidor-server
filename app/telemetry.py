@@ -2,6 +2,7 @@ import math
 from collections.abc import Callable
 from typing import Any
 
+from app.edge_reliability import EdgeReliabilityEvaluation, evaluate_edge_reliability, reliability_alerts
 from app.validation import KNOWN_METRICS, ValidationError, parse_utc_z, validate_pod_key
 
 HEALTH_ALERT_RULES: dict[str, dict[str, float | str]] = {
@@ -381,7 +382,11 @@ def normalize_system_health(payload: dict[str, Any]) -> dict[str, Any] | None:
     return normalized
 
 
-def health_alerts(system_health: dict[str, Any] | None) -> list[dict[str, Any]]:
+def health_alerts(
+    system_health: dict[str, Any] | None,
+    *,
+    edge_reliability: EdgeReliabilityEvaluation | None = None,
+) -> list[dict[str, Any]]:
     if not system_health:
         return []
 
@@ -469,4 +474,6 @@ def health_alerts(system_health: dict[str, Any] | None) -> list[dict[str, Any]]:
                 "threshold": 0,
             }
         )
+    evaluation = edge_reliability or evaluate_edge_reliability(system_health)
+    alerts.extend(reliability_alerts(evaluation))
     return alerts
