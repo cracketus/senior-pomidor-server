@@ -19,6 +19,9 @@ Owner: maintainer performing a release or operational change. Update after every
 - Private latest/history reads derive stable watchdog, spool, and application reliability alerts.
   Node-scoped `health_summary_v1` adds a bounded `edge_reliability` component; missing or stale evidence
   is `UNKNOWN`, while server-only summaries preserve their existing shape.
+- Private operators can read the current per-edge reliability projection through
+  `senior-pomidor.operator.edge-reliability.v1`; it uses latest telemetry, explicit freshness, stable
+  nullable fields, and a privacy-bounded allowlist without changing existing read or public contracts.
 - Edge photo: `senior-pomidor.edge.photo.v1` JPEG multipart upload.
 - Derived artifacts: `state_v1`, `sensor_health_v1`, `anomaly_v1`, estimator diagnostics, private JSONL.
 - Public status: sanitized `senior-pomidor.status.v1`; optional Grafana Cloud export contains only the documented low-cardinality projection.
@@ -28,7 +31,7 @@ See [`docs/CONTRACTS.md`](../docs/CONTRACTS.md), schemas in [`docs/schemas/`](..
 
 ## Implemented vs. not implemented
 
-Implemented: telemetry/photo ingestion and reads, deterministic edge reliability evaluation, MQTT reconnect behavior, readiness/migrations, State Estimator and deterministic replay, Grafana dashboards/alerts, bounded public export, backup/restore tooling, offline vision analysis, and local daily story. Provider-neutral assistant utilities remain under `app/assistant/`, but no assistant service is active in the current Compose topology.
+Implemented: telemetry/photo ingestion and reads, deterministic edge reliability evaluation and its versioned current operator read model, MQTT reconnect behavior, readiness/migrations, State Estimator and deterministic replay, Grafana dashboards/alerts, bounded public export, backup/restore tooling, offline vision analysis, and local daily story. Provider-neutral assistant utilities remain under `app/assistant/`, but no assistant service is active in the current Compose topology.
 
 Development workflow: Feature Planner 1.1 produces draft-only Implementation Briefs through six task workflows. Its historical evaluation suite contains ten frozen cases and is validated by `python -m tools.evaluate_feature_planner`. Coding Agent 1.1 implements only approved briefs and returns a versioned Implementation Report. Reviewer 1.0 runs independently in read-only mode and returns `senior-pomidor.review-report.v1`; its published oracle-blind baseline is bound to the exact Reviewer instruction hash. The read-only context router selects compact role/path-specific packets and fails safe to the full pack for risk flags or unknown paths; a separate local recorder accepts only bounded usage metadata. The local agent-task CLI creates or safely resumes isolated branches/worktrees and renders bounded loopback-only Compose tasks with fake hardware and external export disabled. The deterministic validation orchestrator routes and caches selected checks, and declarative model/tool routers return bounded plans without invoking providers. These tools do not authorize production deployment, production access, or hardware actions.
 

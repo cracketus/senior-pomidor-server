@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add the private read-only `senior-pomidor.operator.edge-reliability.v1` endpoint for current per-edge
+  watchdog, spool, and application status, with deterministic latest selection, freshness fail-safe,
+  stable nullable fields, and no expansion of existing or public response contracts.
 - Add deterministic watchdog/spool/application reliability alerts and a node-scoped
   `health_summary_v1.components.edge_reliability` projection, with stale/missing telemetry failing to
   `UNKNOWN` and no public or Grafana Cloud payload expansion.

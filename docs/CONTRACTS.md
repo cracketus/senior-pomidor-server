@@ -219,6 +219,7 @@ Implemented read endpoints:
 - `GET /api/v1/devices/latest`
 - `GET /api/v1/devices/{device_id}/latest`
 - `GET /api/v1/devices/{device_id}/telemetry?from=&to=&since_hours=&pod=&limit=`
+- `GET /api/v1/operator/edges/{device_id}/reliability`
 - `GET /api/v1/state/latest?node_id=`
 - `GET /api/v1/state/range?node_id=&from=&to=&limit=`
 - `GET /api/v1/sensor-health/latest?node_id=`
@@ -355,6 +356,42 @@ Invoke-RestMethod "http://localhost:8000/api/v1/devices/pi-001/telemetry?since_h
 ```
 
 History responses are arrays of the same event shape used by the latest telemetry endpoint.
+
+### Operator edge reliability v1
+
+The private/LAN operator endpoint below returns the current watchdog, spool, and application state from
+the deterministically selected latest telemetry row (`timestamp_utc DESC, id DESC`):
+
+```text
+GET /api/v1/operator/edges/{device_id}/reliability
+```
+
+Its response contract is `senior-pomidor.operator.edge-reliability.v1`, defined by
+[`operator-edge-reliability-v1.schema.json`](schemas/operator-edge-reliability-v1.schema.json). A
+sanitized synthetic example is maintained as
+[`operator_edge_reliability_v1.json`](../tests/fixtures/contracts/operator_edge_reliability_v1.json).
+All nullable fields remain present as JSON `null`; consumers do not need to distinguish an absent key.
+The response is a bounded allowlist and excludes the raw payload, raw watchdog reason, boot ID, service
+name, process IDs, paths, error details, and unrestricted health dictionaries.
+
+Freshness uses the observation `timestamp_utc` and a 1200-second maximum age. Ages from zero through
+exactly 1200 seconds are `FRESH`, and the shared edge reliability evaluator supplies all status and reason
+mappings. Older observations are `STALE`: overall and subsystem statuses become `UNKNOWN`, the sole reason
+is `edge_reliability_telemetry_stale`, and safe fields remain visible as last-observed values. A future or
+invalid timestamp produces freshness/status `UNKNOWN`, reason `edge_reliability_telemetry_unavailable`, and
+no reliability details. Missing or partial reliability blocks in fresh telemetry retain the evaluator's
+`UNKNOWN` findings while other present blocks remain visible.
+
+Unsafe device IDs return HTTP `400`, a device without telemetry returns `404`, and a database read failure
+returns `503` with a fixed bounded detail. The endpoint introduces no new authentication mechanism and
+inherits the existing trusted private/LAN read-API boundary. Existing latest/history responses,
+`health_summary_v1`, public status, and the Grafana Cloud projection are unchanged.
+
+This per-edge current-state read model implements the reusable contract tracked by
+[#204](https://github.com/cracketus/senior-pomidor-server/issues/204) and is the bounded input for the future
+operator aggregation in [#205](https://github.com/cracketus/senior-pomidor-server/issues/205) and the
+`pomidorctl` client/auth work in [#206](https://github.com/cracketus/senior-pomidor-server/issues/206).
+Reliability history and metrics remain outside this contract.
 
 ## State Estimator v1
 

@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query
 from fastapi.responses import FileResponse, JSONResponse
 from sqlalchemy import desc, select
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session, load_only, selectinload
 
 from app.config import Settings, get_settings
 from app.db import get_db
@@ -23,6 +23,7 @@ from app.models import (
     StateSnapshot,
     TelemetryEvent,
 )
+from app.operator_edge_reliability import OperatorEdgeReliabilityV1, build_operator_edge_reliability
 from app.services import (
     TelemetryConflictError,
     persist_photo,
@@ -326,6 +327,40 @@ def latest_telemetry(device_id: str, db: Session = Depends(get_db)) -> dict[str,
     if event is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="device telemetry not found")
     return event_to_dict(event)
+
+
+@router.get("/operator/edges/{device_id}/reliability", response_model=OperatorEdgeReliabilityV1)
+def operator_edge_reliability(device_id: str, db: Session = Depends(get_db)) -> OperatorEdgeReliabilityV1:
+    try:
+        device_id = validate_device_id(device_id)
+    except ValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    try:
+        event = db.scalar(
+            select(TelemetryEvent)
+            .options(
+                # Keep raw payload data and unrelated ORM relationships outside this read boundary.
+                load_only(
+                    TelemetryEvent.id,
+                    TelemetryEvent.record_id,
+                    TelemetryEvent.device_id,
+                    TelemetryEvent.timestamp_utc,
+                    TelemetryEvent.system_health_jsonb,
+                    TelemetryEvent.received_at,
+                )
+            )
+            .where(TelemetryEvent.device_id == device_id)
+            .order_by(desc(TelemetryEvent.timestamp_utc), desc(TelemetryEvent.id))
+            .limit(1)
+        )
+    except SQLAlchemyError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="operator reliability storage unavailable",
+        ) from exc
+    if event is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="device telemetry not found")
+    return build_operator_edge_reliability(event, now=datetime.now(UTC))
 
 
 @router.get("/devices/{device_id}/telemetry")
