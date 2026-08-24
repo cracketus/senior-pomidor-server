@@ -15,6 +15,7 @@ from app.main import app
 from app.models import Base, Photo
 from app.readiness import get_alembic_head
 from app.services import persist_photo
+from app.telemetry import normalize_system_health
 from app.validation import PHOTO_SCHEMA, TELEMETRY_SCHEMA, TELEMETRY_SCHEMA_V2
 
 
@@ -228,6 +229,112 @@ def test_http_telemetry_v2_persists_system_health(client):
     assert body["system_health"]["rpi_core"]["cpu_temp_c"] == 56.4
     assert body["system_health"]["pod_1_hardware"]["box_climate"]["air_humidity_percent"] == 45.0
     assert body["health_alerts"] == []
+
+
+@pytest.mark.parametrize("block", ["watchdog", "spool", "application"])
+def test_reliability_normalization_distinguishes_missing_empty_and_malformed_blocks(block):
+    assert normalize_system_health({"system_health": {}}) == {}
+    assert normalize_system_health({"system_health": {block: {}}}) == {block: {}}
+    assert normalize_system_health({"system_health": {block: "malformed"}}) == {}
+
+
+def test_reliability_normalization_preserves_partial_and_nullable_fields():
+    normalized = normalize_system_health(
+        {
+            "system_health": {
+                "watchdog": {"state": "HeAlThY", "reason": None, "last_healthy_heartbeat_at_utc": None},
+                "spool": {
+                    "status": "BACKLOG",
+                    "oldest_pending_age_seconds": None,
+                    "last_delivery_result": None,
+                    "last_error_at_utc": None,
+                    "estimated_drain_seconds": None,
+                },
+                "application": {"systemd_active_state": None, "systemd_service_name": "Edge.Service"},
+            }
+        }
+    )
+
+    assert normalized == {
+        "watchdog": {"state": "HeAlThY", "reason": None, "last_healthy_heartbeat_at_utc": None},
+        "spool": {
+            "status": "BACKLOG",
+            "oldest_pending_age_seconds": None,
+            "last_delivery_result": None,
+            "last_error_at_utc": None,
+            "estimated_drain_seconds": None,
+        },
+        "application": {"systemd_active_state": None, "systemd_service_name": "Edge.Service"},
+    }
+
+
+def test_reliability_normalization_drops_malformed_unknown_and_private_fields():
+    normalized = normalize_system_health(
+        {
+            "system_health": {
+                "watchdog": {
+                    "state": "x" * 257,
+                    "attempt_count": True,
+                    "restart_count": -1,
+                    "suppression": "false",
+                    "last_healthy_heartbeat_at_utc": "2026-08-24T12:00:00+00:00",
+                    "unknown": "drop",
+                },
+                "spool": {
+                    "status": "BACKLOG",
+                    "pending_count": True,
+                    "database_size_bytes": -1,
+                    "disk_usage_percent": 100.1,
+                    "last_delivery_at_utc": "not-a-timestamp",
+                    "estimated_retention_days": -0.1,
+                    "last_error_detail": "private detail",
+                    "worker_last_error": "private worker detail",
+                    "unknown": 1,
+                },
+                "application": {
+                    "process_running": True,
+                    "process_id": True,
+                    "process_uptime_seconds": -1,
+                    "process_cpu_percent": -0.1,
+                    "errors": [{"message": "private nested error"}],
+                    "unknown": "drop",
+                },
+            }
+        }
+    )
+
+    assert normalized == {
+        "watchdog": {},
+        "spool": {"status": "BACKLOG"},
+        "application": {"process_running": True},
+    }
+
+
+def test_http_reliability_malformed_optional_fields_are_accepted_but_not_persisted(client):
+    payload = telemetry_v2_payload("2026-06-07T12:03:00Z")
+    payload["system_health"].update(
+        {
+            "watchdog": {"state": "healthy", "attempt_count": True, "unknown": "drop"},
+            "spool": {
+                "pending_count": 3,
+                "disk_usage_percent": 101,
+                "last_error_detail": "private detail",
+            },
+            "application": {
+                "process_running": True,
+                "process_id": "4321",
+                "errors": [{"message": "private nested error"}],
+            },
+        }
+    )
+
+    response = client.post("/api/v1/edge/telemetry", json=payload)
+
+    assert response.status_code == 202
+    latest = client.get("/api/v1/devices/pi-001/latest").json()["system_health"]
+    assert latest["watchdog"] == {"state": "healthy"}
+    assert latest["spool"] == {"pending_count": 3}
+    assert latest["application"] == {"process_running": True}
 
 
 def test_http_telemetry_v2_persists_network_health(client):

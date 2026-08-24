@@ -1,6 +1,8 @@
+import math
+from collections.abc import Callable
 from typing import Any
 
-from app.validation import KNOWN_METRICS, validate_pod_key
+from app.validation import KNOWN_METRICS, ValidationError, parse_utc_z, validate_pod_key
 
 HEALTH_ALERT_RULES: dict[str, dict[str, float | str]] = {
     "cpu_temp_c": {"level": "warning", "op": ">=", "threshold": 75.0, "message": "CPU temperature is high"},
@@ -36,6 +38,74 @@ NETWORK_ALERT_MESSAGES = {
     "preferred_profile_present": "Preferred Wi-Fi profile is missing",
     "last_recovery_exit_code": "Last network recovery command failed",
 }
+HEALTH_STRING_MAX_LENGTH = 256
+
+
+class _InvalidValue:
+    pass
+
+
+_INVALID = _InvalidValue()
+
+WATCHDOG_STRING_FIELDS = ("state", "reason", "result", "boot_id")
+WATCHDOG_BOOLEAN_FIELDS = ("suppression", "configured")
+WATCHDOG_COUNTER_FIELDS = ("attempt_count", "restart_count", "reboot_count")
+WATCHDOG_TIMESTAMP_FIELDS = ("last_healthy_heartbeat_at_utc",)
+
+SPOOL_STRING_FIELDS = (
+    "status",
+    "disk_status",
+    "last_reconciliation_reason",
+    "last_delivery_result",
+    "last_error_code",
+    "worker_state",
+)
+SPOOL_COUNTER_FIELDS = (
+    "pending_count",
+    "backlog_count",
+    "in_flight_count",
+    "delivered_count",
+    "dead_letter_count",
+    "reconciled_count",
+    "resolution_total",
+    "database_size_bytes",
+    "free_space_bytes",
+    "delivery_attempt_count",
+    "delivery_success_count",
+    "duplicate_count",
+    "delivery_retry_count",
+    "delivery_rejected_count",
+    "write_failure_count",
+    "written_total",
+    "success_total",
+    "failure_total",
+    "duplicate_total",
+    "replayed_total",
+    "replay_count",
+    "legacy_corrupt_count",
+)
+SPOOL_NULLABLE_SECONDS_FIELDS = ("oldest_pending_age_seconds", "outage_duration_seconds")
+SPOOL_TIMESTAMP_FIELDS = (
+    "last_reconciliation_at_utc",
+    "last_delivery_at_utc",
+    "last_successful_delivery_at_utc",
+    "last_error_at_utc",
+    "worker_last_heartbeat_at_utc",
+)
+SPOOL_ESTIMATE_FIELDS = ("estimated_drain_seconds", "estimated_retention_days")
+
+APPLICATION_STRING_FIELDS = (
+    "systemd_service_name",
+    "systemd_active_state",
+    "systemd_sub_state",
+)
+APPLICATION_BOOLEAN_FIELDS = ("process_running", "systemd_available", "systemd_service_active")
+APPLICATION_INTEGER_FIELDS = (
+    "process_id",
+    "process_uptime_seconds",
+    "process_memory_rss_bytes",
+    "systemd_main_pid",
+)
 
 
 def _plant(payload: dict[str, Any]) -> dict[str, Any]:
@@ -142,6 +212,105 @@ def optional_int(value: Any) -> int | None:
     return value
 
 
+def _bounded_string(value: Any, *, nullable: bool = True) -> str | _InvalidValue | None:
+    if value is None:
+        return None if nullable else _INVALID
+    if not isinstance(value, str) or not value or len(value) > HEALTH_STRING_MAX_LENGTH:
+        return _INVALID
+    return value
+
+
+def _boolean(value: Any) -> bool | _InvalidValue:
+    return value if isinstance(value, bool) else _INVALID
+
+
+def _nonnegative_int(value: Any, *, nullable: bool = False) -> int | _InvalidValue | None:
+    if value is None:
+        return None if nullable else _INVALID
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        return _INVALID
+    return value
+
+
+def _nonnegative_number(value: Any, *, nullable: bool = False) -> float | _InvalidValue | None:
+    if value is None:
+        return None if nullable else _INVALID
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        return _INVALID
+    result = float(value)
+    if not math.isfinite(result) or result < 0:
+        return _INVALID
+    return result
+
+
+def _percentage(value: Any) -> float | _InvalidValue:
+    result = _nonnegative_number(value)
+    if isinstance(result, _InvalidValue) or result is None or result > 100:
+        return _INVALID
+    return result
+
+
+def _utc_timestamp(value: Any) -> str | _InvalidValue | None:
+    if value is None:
+        return None
+    if not isinstance(value, str) or len(value) > HEALTH_STRING_MAX_LENGTH:
+        return _INVALID
+    try:
+        parse_utc_z(value)
+    except ValidationError:
+        return _INVALID
+    return value
+
+
+def _copy_fields(
+    source: dict[str, Any],
+    target: dict[str, Any],
+    fields: tuple[str, ...],
+    normalizer: Callable[[Any], Any],
+) -> None:
+    for field in fields:
+        if field not in source:
+            continue
+        value = normalizer(source[field])
+        if not isinstance(value, _InvalidValue):
+            target[field] = value
+
+
+def _normalize_watchdog(source: dict[str, Any]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    _copy_fields(source, result, WATCHDOG_STRING_FIELDS, _bounded_string)
+    _copy_fields(source, result, WATCHDOG_BOOLEAN_FIELDS, _boolean)
+    _copy_fields(source, result, WATCHDOG_COUNTER_FIELDS, _nonnegative_int)
+    _copy_fields(source, result, WATCHDOG_TIMESTAMP_FIELDS, _utc_timestamp)
+    return result
+
+
+def _normalize_spool(source: dict[str, Any]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    _copy_fields(source, result, SPOOL_STRING_FIELDS, _bounded_string)
+    _copy_fields(source, result, SPOOL_COUNTER_FIELDS, _nonnegative_int)
+    _copy_fields(source, result, SPOOL_NULLABLE_SECONDS_FIELDS, lambda value: _nonnegative_int(value, nullable=True))
+    _copy_fields(source, result, SPOOL_TIMESTAMP_FIELDS, _utc_timestamp)
+    _copy_fields(source, result, SPOOL_ESTIMATE_FIELDS, lambda value: _nonnegative_number(value, nullable=True))
+    if "disk_usage_percent" in source:
+        value = _percentage(source["disk_usage_percent"])
+        if not isinstance(value, _InvalidValue):
+            result["disk_usage_percent"] = value
+    return result
+
+
+def _normalize_application(source: dict[str, Any]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    _copy_fields(source, result, APPLICATION_STRING_FIELDS, _bounded_string)
+    _copy_fields(source, result, APPLICATION_BOOLEAN_FIELDS, _boolean)
+    _copy_fields(source, result, APPLICATION_INTEGER_FIELDS, _nonnegative_int)
+    if "process_cpu_percent" in source:
+        value = _nonnegative_number(source["process_cpu_percent"])
+        if not isinstance(value, _InvalidValue):
+            result["process_cpu_percent"] = value
+    return result
+
+
 def normalize_system_health(payload: dict[str, Any]) -> dict[str, Any] | None:
     source = payload.get("system_health")
     if not isinstance(source, dict):
@@ -198,6 +367,16 @@ def normalize_system_health(payload: dict[str, Any]) -> dict[str, Any] | None:
                 normalized_network[field] = value
         if normalized_network:
             normalized["network"] = normalized_network
+
+    reliability_normalizers = {
+        "watchdog": _normalize_watchdog,
+        "spool": _normalize_spool,
+        "application": _normalize_application,
+    }
+    for block_name, normalizer in reliability_normalizers.items():
+        block = source.get(block_name)
+        if isinstance(block, dict):
+            normalized[block_name] = normalizer(block)
 
     return normalized
 

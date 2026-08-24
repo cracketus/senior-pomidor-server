@@ -25,6 +25,54 @@
       "last_recovery_result": "not_needed",
       "last_recovery_exit_code": 0
     },
+    "watchdog": {
+      "state": "healthy",
+      "reason": null,
+      "result": "healthy",
+      "suppression": false,
+      "configured": true,
+      "attempt_count": 0,
+      "restart_count": 0,
+      "reboot_count": 0,
+      "last_healthy_heartbeat_at_utc": "2026-07-02T11:59:58Z",
+      "boot_id": "synthetic-boot-001"
+    },
+    "spool": {
+      "status": "OK",
+      "disk_status": "OK",
+      "pending_count": 0,
+      "backlog_count": 0,
+      "in_flight_count": 0,
+      "delivered_count": 12,
+      "dead_letter_count": 0,
+      "reconciled_count": 1,
+      "database_size_bytes": 32768,
+      "free_space_bytes": 1073741824,
+      "disk_usage_percent": 25.0,
+      "oldest_pending_age_seconds": null,
+      "outage_duration_seconds": null,
+      "last_delivery_result": "accepted",
+      "last_delivery_at_utc": "2026-07-02T11:50:00Z",
+      "last_error_code": null,
+      "last_error_at_utc": null,
+      "estimated_drain_seconds": null,
+      "estimated_retention_days": 30.0,
+      "worker_state": "running",
+      "worker_last_heartbeat_at_utc": "2026-07-02T11:59:59Z"
+    },
+    "application": {
+      "process_id": 1234,
+      "process_running": true,
+      "process_uptime_seconds": 3600,
+      "process_memory_rss_bytes": 67108864,
+      "process_cpu_percent": 1.2,
+      "systemd_available": true,
+      "systemd_service_name": "senior-pomidor-edge",
+      "systemd_active_state": "active",
+      "systemd_sub_state": "running",
+      "systemd_service_active": true,
+      "systemd_main_pid": 1234
+    },
     "errors": []
   }
 }
