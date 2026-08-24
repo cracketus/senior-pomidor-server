@@ -1,0 +1,50 @@
+{
+  "schema_version": "senior-pomidor.operator.edge-reliability.v1",
+  "device_id": "pi-001",
+  "record_id": "spool:pi-001:20260824T120000Z",
+  "generated_at_utc": "2026-08-24T12:00:12Z",
+  "observed_at_utc": "2026-08-24T12:00:00Z",
+  "received_at_utc": "2026-08-24T12:00:01Z",
+  "status": "WARN",
+  "freshness": {"status": "FRESH", "age_seconds": 12, "max_age_seconds": 1200},
+  "reasons": [
+    {"code": "edge_watchdog_restart_recovery", "status": "WARN", "message": "Edge watchdog restart recovery is in progress"}
+  ],
+  "watchdog": {
+    "status": "WARN",
+    "state": "recovering",
+    "result": "restart_accepted",
+    "suppression": false,
+    "configured": true,
+    "attempt_count": 1,
+    "restart_count": 1,
+    "reboot_count": 0,
+    "last_healthy_heartbeat_at_utc": "2026-08-24T11:59:55Z"
+  },
+  "spool": {
+    "status": "OK",
+    "reported_status": "OK",
+    "disk_status": "OK",
+    "pending_count": 0,
+    "backlog_count": 0,
+    "in_flight_count": 0,
+    "dead_letter_count": 0,
+    "oldest_pending_age_seconds": null,
+    "outage_duration_seconds": null,
+    "disk_usage_percent": 25,
+    "last_delivery_result": "accepted",
+    "last_successful_delivery_at_utc": "2026-08-24T12:00:00Z",
+    "last_error_code": null,
+    "worker_state": "running",
+    "worker_last_heartbeat_at_utc": "2026-08-24T12:00:00Z"
+  },
+  "application": {
+    "status": "OK",
+    "process_running": true,
+    "process_uptime_seconds": 3600,
+    "systemd_available": true,
+    "systemd_active_state": "active",
+    "systemd_sub_state": "running",
+    "systemd_service_active": true
+  }
+}

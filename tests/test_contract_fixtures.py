@@ -3,6 +3,7 @@ from pathlib import Path
 
 from jsonschema import Draft202012Validator
 
+from app.operator_edge_reliability import OperatorEdgeReliabilityV1
 from app.validation import PHOTO_SCHEMA, TELEMETRY_SCHEMA, TELEMETRY_SCHEMA_V2, validate_telemetry_payload
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -50,6 +51,16 @@ def test_telemetry_v2_fixture_serialization_round_trip() -> None:
     telemetry_v2 = load_json(FIXTURE_DIR / "telemetry_v2.json")
 
     assert json.loads(json.dumps(telemetry_v2, sort_keys=True)) == telemetry_v2
+
+
+def test_operator_edge_reliability_fixture_schema_and_pydantic_round_trip() -> None:
+    schema = load_json(SCHEMA_DIR / "operator-edge-reliability-v1.schema.json")
+    fixture = load_json(FIXTURE_DIR / "operator_edge_reliability_v1.json")
+
+    Draft202012Validator(schema).validate(fixture)
+    parsed = OperatorEdgeReliabilityV1.model_validate(fixture)
+
+    assert parsed.model_dump(mode="json") == fixture
 
 
 def test_server_and_copied_edge_reliability_fixtures_validate_and_round_trip() -> None:

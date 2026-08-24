@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://senior-pomidor.local/schemas/operator-edge-reliability-v1.schema.json",
+  "title": "Senior Pomidor operator edge reliability v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "device_id", "record_id", "generated_at_utc", "observed_at_utc", "received_at_utc", "status", "freshness", "reasons", "watchdog", "spool", "application"],
+  "properties": {
+    "schema_version": {"const": "senior-pomidor.operator.edge-reliability.v1"},
+    "device_id": {"type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9_.-]+$"},
+    "record_id": {"type": ["string", "null"], "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9_.:-]+$"},
+    "generated_at_utc": {"type": "string", "format": "date-time"},
+    "observed_at_utc": {"type": ["string", "null"], "format": "date-time"},
+    "received_at_utc": {"type": ["string", "null"], "format": "date-time"},
+    "status": {"$ref": "#/$defs/reliability_status"},
+    "freshness": {"$ref": "#/$defs/freshness"},
+    "reasons": {"type": "array", "items": {"$ref": "#/$defs/reason"}},
+    "watchdog": {"$ref": "#/$defs/watchdog"},
+    "spool": {"$ref": "#/$defs/spool"},
+    "application": {"$ref": "#/$defs/application"}
+  },
+  "$defs": {
+    "reliability_status": {"type": "string", "enum": ["OK", "WARN", "ALERT", "UNKNOWN"]},
+    "nullable_string": {"type": ["string", "null"]},
+    "nullable_boolean": {"type": ["boolean", "null"]},
+    "nullable_counter": {"type": ["integer", "null"], "minimum": 0},
+    "nullable_timestamp": {"type": ["string", "null"], "format": "date-time"},
+    "freshness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "age_seconds", "max_age_seconds"],
+      "properties": {
+        "status": {"type": "string", "enum": ["FRESH", "STALE", "UNKNOWN"]},
+        "age_seconds": {"type": ["number", "null"], "minimum": 0},
+        "max_age_seconds": {"const": 1200}
+      }
+    },
+    "reason": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "status", "message"],
+      "properties": {
+        "code": {"type": "string", "minLength": 1},
+        "status": {"$ref": "#/$defs/reliability_status"},
+        "message": {"type": "string", "minLength": 1}
+      }
+    },
+    "watchdog": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "state", "result", "suppression", "configured", "attempt_count", "restart_count", "reboot_count", "last_healthy_heartbeat_at_utc"],
+      "properties": {
+        "status": {"$ref": "#/$defs/reliability_status"},
+        "state": {"$ref": "#/$defs/nullable_string"},
+        "result": {"$ref": "#/$defs/nullable_string"},
+        "suppression": {"$ref": "#/$defs/nullable_boolean"},
+        "configured": {"$ref": "#/$defs/nullable_boolean"},
+        "attempt_count": {"$ref": "#/$defs/nullable_counter"},
+        "restart_count": {"$ref": "#/$defs/nullable_counter"},
+        "reboot_count": {"$ref": "#/$defs/nullable_counter"},
+        "last_healthy_heartbeat_at_utc": {"$ref": "#/$defs/nullable_timestamp"}
+      }
+    },
+    "spool": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "reported_status", "disk_status", "pending_count", "backlog_count", "in_flight_count", "dead_letter_count", "oldest_pending_age_seconds", "outage_duration_seconds", "disk_usage_percent", "last_delivery_result", "last_successful_delivery_at_utc", "last_error_code", "worker_state", "worker_last_heartbeat_at_utc"],
+      "properties": {
+        "status": {"$ref": "#/$defs/reliability_status"},
+        "reported_status": {"$ref": "#/$defs/nullable_string"},
+        "disk_status": {"$ref": "#/$defs/nullable_string"},
+        "pending_count": {"$ref": "#/$defs/nullable_counter"},
+        "backlog_count": {"$ref": "#/$defs/nullable_counter"},
+        "in_flight_count": {"$ref": "#/$defs/nullable_counter"},
+        "dead_letter_count": {"$ref": "#/$defs/nullable_counter"},
+        "oldest_pending_age_seconds": {"$ref": "#/$defs/nullable_counter"},
+        "outage_duration_seconds": {"$ref": "#/$defs/nullable_counter"},
+        "disk_usage_percent": {"type": ["number", "null"], "minimum": 0, "maximum": 100},
+        "last_delivery_result": {"$ref": "#/$defs/nullable_string"},
+        "last_successful_delivery_at_utc": {"$ref": "#/$defs/nullable_timestamp"},
+        "last_error_code": {"$ref": "#/$defs/nullable_string"},
+        "worker_state": {"$ref": "#/$defs/nullable_string"},
+        "worker_last_heartbeat_at_utc": {"$ref": "#/$defs/nullable_timestamp"}
+      }
+    },
+    "application": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "process_running", "process_uptime_seconds", "systemd_available", "systemd_active_state", "systemd_sub_state", "systemd_service_active"],
+      "properties": {
+        "status": {"$ref": "#/$defs/reliability_status"},
+        "process_running": {"$ref": "#/$defs/nullable_boolean"},
+        "process_uptime_seconds": {"$ref": "#/$defs/nullable_counter"},
+        "systemd_available": {"$ref": "#/$defs/nullable_boolean"},
+        "systemd_active_state": {"$ref": "#/$defs/nullable_string"},
+        "systemd_sub_state": {"$ref": "#/$defs/nullable_string"},
+        "systemd_service_active": {"$ref": "#/$defs/nullable_boolean"}
+      }
+    }
+  }
+}
