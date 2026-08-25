@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add a low-cardinality public edge reliability metrics projection, a separate PostgreSQL-backed Grafana
+  dashboard, and four provisioned reliability alert rules with fail-safe freshness and privacy semantics.
 - Add the private read-only `senior-pomidor.operator.edge-reliability.v1` endpoint for current per-edge
   watchdog, spool, and application status, with deterministic latest selection, freshness fail-safe,
   stable nullable fields, and no expansion of existing or public response contracts.

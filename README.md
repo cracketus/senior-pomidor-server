@@ -108,6 +108,9 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile observa
 Grafana is available at `http://localhost:3000`. The default local admin credentials are documented in `.env.example` and can be changed in `.env`.
 Grafana uses the dedicated readonly PostgreSQL role from `GRAFANA_DB_USER` and `GRAFANA_DB_PASSWORD`, not the app database credentials.
 The `Senior Pomidor Telemetry` dashboard is provisioned automatically and includes device/pod filters, raw telemetry panels, canonical state panels, latest sensor health, active anomalies, latest status, and recent photo metadata links.
+The separate `Senior Pomidor Edge Reliability` dashboard is also provisioned with a device filter, explicit
+`UNKNOWN` handling, current watchdog/spool/application state, freshness, recovery counters, backlog/storage
+pressure, and recovery/degradation timelines.
 The `Senior Pomidor Alerts` rule group is provisioned automatically and surfaces collection freshness, sensor error, system health, critical dry-soil, raw telemetry VPD, canonical state VPD, state confidence, active anomaly, and stale state alerts in Grafana Alerting. VPD ranges are documented in [docs/VPD_ALERTS.md](docs/VPD_ALERTS.md).
 On a fresh PostgreSQL data directory this role is initialized automatically. On an existing directory, re-apply the readonly grants after migrations:
 
@@ -127,7 +130,12 @@ GRAFANA_CLOUD_API_TOKEN=<metrics-publisher-token>
 docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile cloud-export up -d grafana-cloud-exporter
 ```
 
-Only low-cardinality raw telemetry plant metrics are exported, using metric names prefixed with `senior_pomidor_` and labels limited to `device_id` and `pod_key`. Canonical state estimator metrics are not exported to Grafana Cloud in this iteration. Photos, raw payload JSON, system health, sensor error text, host/network details, database credentials, file paths, and MQTT topics are not exported. Grafana Cloud is a public read-only projection; PostgreSQL remains the local source of truth.
+Only allowlisted low-cardinality plant and edge reliability metrics are exported, using metric names prefixed
+with `senior_pomidor_`. Plant labels are limited to `device_id` and `pod_key`; reliability labels are limited to
+`device_id` plus fixed `status`/`state` enums. Canonical state estimator metrics, photos, raw payload JSON,
+reliability reasons/results/errors, boot IDs, service names, PIDs, host/network details, database credentials,
+file paths, and MQTT topics are not exported. Grafana Cloud is a public read-only projection; PostgreSQL remains
+the local source of truth. The exact metric allowlist is documented in [docs/CONTRACTS.md](docs/CONTRACTS.md#edge-reliability-observability).
 
 For active API/edge contracts and example requests/responses, see [docs/CONTRACTS.md](docs/CONTRACTS.md).
 For deployment checks, backups, restore, and Raspberry Pi configuration examples, see [docs/OPERATIONS.md](docs/OPERATIONS.md).

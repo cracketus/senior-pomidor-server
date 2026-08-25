@@ -1,0 +1,78 @@
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "graphTooltip": 1,
+  "panels": [
+    {
+      "id": 1,
+      "title": "Current Reliability States",
+      "type": "table",
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 0},
+      "datasource": {"type": "postgres", "uid": "senior-pomidor-postgres"},
+      "targets": [{
+        "refId": "A", "format": "table", "rawQuery": true,
+        "datasource": {"type": "postgres", "uid": "senior-pomidor-postgres"},
+        "rawSql": "WITH latest AS (\n  SELECT d.device_id, e.timestamp_utc, e.system_health_jsonb\n  FROM devices d\n  LEFT JOIN LATERAL (\n    SELECT te.timestamp_utc, te.system_health_jsonb\n    FROM telemetry_events te\n    WHERE te.device_id = d.device_id\n    ORDER BY te.timestamp_utc DESC, te.id DESC\n    LIMIT 1\n  ) e ON true\n  WHERE ('${device_id:csv}' = 'All' OR d.device_id IN (${device_id:sqlstring}))\n), states AS (\n  SELECT device_id, timestamp_utc,\n    CASE WHEN timestamp_utc IS NULL OR timestamp_utc > now() OR timestamp_utc < now() - interval '20 minutes' THEN 'UNKNOWN'\n      WHEN coalesce(system_health_jsonb->'watchdog', '{}'::jsonb) = '{}'::jsonb THEN 'UNKNOWN'\n      WHEN system_health_jsonb #>> '{watchdog,configured}' = 'false' THEN 'OK'\n      WHEN system_health_jsonb #>> '{watchdog,suppression}' = 'true' OR system_health_jsonb #>> '{watchdog,state}' IN ('suppressed','budget_exhausted','recovery_suppressed') OR coalesce(system_health_jsonb #>> '{watchdog,result}', system_health_jsonb #>> '{watchdog,state}', '') LIKE '%_failed' THEN 'ALERT'\n      WHEN system_health_jsonb #>> '{watchdog,state}' IN ('starting','cooldown','maintenance','recovering','recovered','suppression_cleared') THEN 'WARN'\n      WHEN system_health_jsonb #>> '{watchdog,state}' = 'healthy' THEN 'OK' ELSE 'UNKNOWN' END AS watchdog_status,\n    CASE WHEN timestamp_utc IS NULL OR timestamp_utc > now() OR timestamp_utc < now() - interval '20 minutes' THEN 'UNKNOWN'\n      WHEN system_health_jsonb #>> '{spool,status}' IN ('DEGRADED','CRITICAL') OR system_health_jsonb #>> '{spool,disk_status}' IN ('DEGRADED','CRITICAL') OR system_health_jsonb #>> '{spool,worker_state}' = 'error' THEN 'ALERT'\n      WHEN system_health_jsonb #>> '{spool,status}' = 'BACKLOG' OR system_health_jsonb #>> '{spool,disk_status}' = 'WARNING' OR coalesce((system_health_jsonb #>> '{spool,pending_count}')::bigint,0) > 0 OR coalesce((system_health_jsonb #>> '{spool,backlog_count}')::bigint,0) > 0 OR coalesce((system_health_jsonb #>> '{spool,in_flight_count}')::bigint,0) > 0 THEN 'WARN'\n      WHEN system_health_jsonb #>> '{spool,status}' = 'OK' AND system_health_jsonb #>> '{spool,disk_status}' = 'OK' AND system_health_jsonb #> '{spool,pending_count}' IS NOT NULL AND system_health_jsonb #> '{spool,backlog_count}' IS NOT NULL AND system_health_jsonb #> '{spool,in_flight_count}' IS NOT NULL THEN 'OK' ELSE 'UNKNOWN' END AS spool_status,\n    CASE WHEN timestamp_utc IS NULL OR timestamp_utc > now() OR timestamp_utc < now() - interval '20 minutes' THEN 'UNKNOWN'\n      WHEN system_health_jsonb #>> '{application,process_running}' = 'false' OR system_health_jsonb #>> '{application,systemd_service_active}' = 'false' THEN 'ALERT'\n      WHEN system_health_jsonb #>> '{application,systemd_available}' = 'false' THEN 'WARN'\n      WHEN system_health_jsonb #>> '{application,process_running}' = 'true' AND system_health_jsonb #>> '{application,systemd_available}' = 'true' AND system_health_jsonb #>> '{application,systemd_service_active}' = 'true' AND coalesce(system_health_jsonb #>> '{application,systemd_active_state}', 'active') = 'active' THEN 'OK' ELSE 'UNKNOWN' END AS application_status\n  FROM latest\n)\nSELECT device_id,\n  CASE WHEN 'ALERT' IN (watchdog_status, spool_status, application_status) THEN 'ALERT' WHEN 'WARN' IN (watchdog_status, spool_status, application_status) THEN 'WARN' WHEN 'UNKNOWN' IN (watchdog_status, spool_status, application_status) THEN 'UNKNOWN' ELSE 'OK' END AS overall_status,\n  watchdog_status, spool_status, application_status,\n  CASE WHEN timestamp_utc IS NULL OR timestamp_utc > now() THEN 'UNKNOWN' WHEN timestamp_utc < now() - interval '20 minutes' THEN 'STALE' ELSE 'FRESH' END AS freshness_status\nFROM states ORDER BY device_id"
+      }]
+    },
+    {
+      "id": 2, "title": "Suppression And Recovery Counters", "type": "table",
+      "gridPos": {"h": 7, "w": 12, "x": 0, "y": 8},
+      "datasource": {"type": "postgres", "uid": "senior-pomidor-postgres"},
+      "targets": [{"refId": "A", "format": "table", "rawQuery": true, "datasource": {"type": "postgres", "uid": "senior-pomidor-postgres"},
+        "rawSql": "SELECT d.device_id, CASE WHEN e.system_health_jsonb #>> '{watchdog,suppression}' IN ('true','false') THEN (e.system_health_jsonb #>> '{watchdog,suppression}')::boolean ELSE NULL END AS suppression, CASE WHEN jsonb_typeof(e.system_health_jsonb #> '{watchdog,attempt_count}') = 'number' THEN (e.system_health_jsonb #>> '{watchdog,attempt_count}')::bigint END AS attempt_count, CASE WHEN jsonb_typeof(e.system_health_jsonb #> '{watchdog,restart_count}') = 'number' THEN (e.system_health_jsonb #>> '{watchdog,restart_count}')::bigint END AS restart_count, CASE WHEN jsonb_typeof(e.system_health_jsonb #> '{watchdog,reboot_count}') = 'number' THEN (e.system_health_jsonb #>> '{watchdog,reboot_count}')::bigint END AS reboot_count FROM devices d LEFT JOIN LATERAL (SELECT te.system_health_jsonb FROM telemetry_events te WHERE te.device_id=d.device_id ORDER BY te.timestamp_utc DESC, te.id DESC LIMIT 1) e ON true WHERE ('${device_id:csv}' = 'All' OR d.device_id IN (${device_id:sqlstring})) ORDER BY d.device_id"}]
+    },
+    {
+      "id": 3, "title": "Telemetry And Reliability Freshness", "type": "timeseries",
+      "gridPos": {"h": 7, "w": 12, "x": 12, "y": 8},
+      "datasource": {"type": "postgres", "uid": "senior-pomidor-postgres"},
+      "targets": [{"refId": "A", "format": "time_series", "rawQuery": true, "datasource": {"type": "postgres", "uid": "senior-pomidor-postgres"},
+        "rawSql": "SELECT now() AS time, d.device_id || ' telemetry' AS metric, CASE WHEN e.timestamp_utc IS NULL OR e.timestamp_utc > now() THEN NULL ELSE extract(epoch FROM now()-e.timestamp_utc)::double precision END AS value FROM devices d LEFT JOIN LATERAL (SELECT te.timestamp_utc FROM telemetry_events te WHERE te.device_id=d.device_id ORDER BY te.timestamp_utc DESC, te.id DESC LIMIT 1) e ON true WHERE ('${device_id:csv}' = 'All' OR d.device_id IN (${device_id:sqlstring}))"}]
+    },
+    {
+      "id": 4, "title": "Backlog And Storage Pressure", "type": "table",
+      "gridPos": {"h": 7, "w": 24, "x": 0, "y": 15},
+      "datasource": {"type": "postgres", "uid": "senior-pomidor-postgres"},
+      "targets": [{"refId": "A", "format": "table", "rawQuery": true, "datasource": {"type": "postgres", "uid": "senior-pomidor-postgres"},
+        "rawSql": "SELECT d.device_id, CASE WHEN jsonb_typeof(e.system_health_jsonb #> '{spool,pending_count}')='number' THEN (e.system_health_jsonb #>> '{spool,pending_count}')::bigint END AS pending_records, CASE WHEN jsonb_typeof(e.system_health_jsonb #> '{spool,backlog_count}')='number' THEN (e.system_health_jsonb #>> '{spool,backlog_count}')::bigint END AS backlog_records, CASE WHEN jsonb_typeof(e.system_health_jsonb #> '{spool,in_flight_count}')='number' THEN (e.system_health_jsonb #>> '{spool,in_flight_count}')::bigint END AS in_flight_records, CASE WHEN jsonb_typeof(e.system_health_jsonb #> '{spool,dead_letter_count}')='number' THEN (e.system_health_jsonb #>> '{spool,dead_letter_count}')::bigint END AS dead_letter_records, CASE WHEN jsonb_typeof(e.system_health_jsonb #> '{spool,oldest_pending_age_seconds}')='number' THEN (e.system_health_jsonb #>> '{spool,oldest_pending_age_seconds}')::bigint END AS oldest_pending_age_seconds, CASE WHEN jsonb_typeof(e.system_health_jsonb #> '{spool,outage_duration_seconds}')='number' THEN (e.system_health_jsonb #>> '{spool,outage_duration_seconds}')::bigint END AS outage_duration_seconds, CASE WHEN jsonb_typeof(e.system_health_jsonb #> '{spool,database_size_bytes}')='number' THEN (e.system_health_jsonb #>> '{spool,database_size_bytes}')::bigint END AS database_size_bytes, CASE WHEN jsonb_typeof(e.system_health_jsonb #> '{spool,free_space_bytes}')='number' THEN (e.system_health_jsonb #>> '{spool,free_space_bytes}')::bigint END AS free_space_bytes, CASE WHEN jsonb_typeof(e.system_health_jsonb #> '{spool,disk_usage_percent}')='number' THEN (e.system_health_jsonb #>> '{spool,disk_usage_percent}')::double precision END AS disk_usage_percent FROM devices d LEFT JOIN LATERAL (SELECT te.system_health_jsonb FROM telemetry_events te WHERE te.device_id=d.device_id ORDER BY te.timestamp_utc DESC, te.id DESC LIMIT 1) e ON true WHERE ('${device_id:csv}' = 'All' OR d.device_id IN (${device_id:sqlstring})) ORDER BY d.device_id"}]
+    },
+    {
+      "id": 5, "title": "Restart And Reboot Timeline", "type": "timeseries",
+      "gridPos": {"h": 7, "w": 12, "x": 0, "y": 22},
+      "datasource": {"type": "postgres", "uid": "senior-pomidor-postgres"},
+      "targets": [{"refId": "A", "format": "time_series", "rawQuery": true, "datasource": {"type": "postgres", "uid": "senior-pomidor-postgres"},
+        "rawSql": "SELECT timestamp_utc AS time, device_id || ' restart' AS metric, (system_health_jsonb #>> '{watchdog,restart_count}')::double precision AS value FROM telemetry_events WHERE $__timeFilter(timestamp_utc) AND jsonb_typeof(system_health_jsonb #> '{watchdog,restart_count}')='number' AND ('${device_id:csv}' = 'All' OR device_id IN (${device_id:sqlstring})) UNION ALL SELECT timestamp_utc AS time, device_id || ' reboot' AS metric, (system_health_jsonb #>> '{watchdog,reboot_count}')::double precision AS value FROM telemetry_events WHERE $__timeFilter(timestamp_utc) AND jsonb_typeof(system_health_jsonb #> '{watchdog,reboot_count}')='number' AND ('${device_id:csv}' = 'All' OR device_id IN (${device_id:sqlstring})) ORDER BY time"}]
+    },
+    {
+      "id": 6, "title": "Backlog Timeline", "type": "timeseries",
+      "gridPos": {"h": 7, "w": 12, "x": 12, "y": 22},
+      "datasource": {"type": "postgres", "uid": "senior-pomidor-postgres"},
+      "targets": [{"refId": "A", "format": "time_series", "rawQuery": true, "datasource": {"type": "postgres", "uid": "senior-pomidor-postgres"},
+        "rawSql": "SELECT timestamp_utc AS time, device_id AS metric, (system_health_jsonb #>> '{spool,backlog_count}')::double precision AS value FROM telemetry_events WHERE $__timeFilter(timestamp_utc) AND jsonb_typeof(system_health_jsonb #> '{spool,backlog_count}')='number' AND ('${device_id:csv}' = 'All' OR device_id IN (${device_id:sqlstring})) ORDER BY time"}]
+    },
+    {
+      "id": 7, "title": "Recovery And Degradation State Timeline", "type": "state-timeline",
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 29},
+      "datasource": {"type": "postgres", "uid": "senior-pomidor-postgres"},
+      "targets": [{"refId": "A", "format": "table", "rawQuery": true, "datasource": {"type": "postgres", "uid": "senior-pomidor-postgres"},
+        "rawSql": "SELECT timestamp_utc AS time, device_id || ' watchdog' AS metric, CASE WHEN coalesce(system_health_jsonb #>> '{watchdog,result}', system_health_jsonb #>> '{watchdog,state}', '') LIKE '%_failed' THEN 'recovery_failed' WHEN system_health_jsonb #>> '{watchdog,state}' IN ('healthy','starting','cooldown','maintenance','recovering','suppressed','budget_exhausted','recovery_suppressed','recovered','suppression_cleared') THEN system_health_jsonb #>> '{watchdog,state}' ELSE 'UNKNOWN' END AS state FROM telemetry_events WHERE $__timeFilter(timestamp_utc) AND ('${device_id:csv}' = 'All' OR device_id IN (${device_id:sqlstring})) UNION ALL SELECT timestamp_utc AS time, device_id || ' spool' AS metric, CASE WHEN system_health_jsonb #>> '{spool,status}' IN ('OK','BACKLOG','DEGRADED','CRITICAL') THEN system_health_jsonb #>> '{spool,status}' ELSE 'UNKNOWN' END AS state FROM telemetry_events WHERE $__timeFilter(timestamp_utc) AND ('${device_id:csv}' = 'All' OR device_id IN (${device_id:sqlstring})) ORDER BY time"}]
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["senior-pomidor", "edge-reliability"],
+  "templating": {"list": [{
+    "name": "device_id", "label": "Device", "type": "query", "includeAll": true, "multi": true,
+    "current": {"selected": true, "text": "All", "value": "$__all"},
+    "datasource": {"type": "postgres", "uid": "senior-pomidor-postgres"},
+    "definition": "SELECT device_id AS __text, device_id AS __value FROM devices ORDER BY device_id",
+    "query": "SELECT device_id AS __text, device_id AS __value FROM devices ORDER BY device_id",
+    "refresh": 1, "sort": 1
+  }]},
+  "time": {"from": "now-24h", "to": "now"},
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Senior Pomidor Edge Reliability",
+  "uid": "senior-pomidor-edge-reliability",
+  "version": 1
+}

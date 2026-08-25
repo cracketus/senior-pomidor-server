@@ -1,6 +1,6 @@
 # Current state
 
-Owner: maintainer performing a release or operational change. Update after every deployed subsystem, contract, topology, season, or rehearsal change and review at least monthly during the active season. Snapshot date: 2026-08-24. Do not add addresses, credentials, hostnames, or other private infrastructure values.
+Owner: maintainer performing a release or operational change. Update after every deployed subsystem, contract, topology, season, or rehearsal change and review at least monthly during the active season. Snapshot date: 2026-08-25. Do not add addresses, credentials, hostnames, or other private infrastructure values.
 
 ## Running/deployable services
 
@@ -24,14 +24,15 @@ Owner: maintainer performing a release or operational change. Update after every
   nullable fields, and a privacy-bounded allowlist without changing existing read or public contracts.
 - Edge photo: `senior-pomidor.edge.photo.v1` JPEG multipart upload.
 - Derived artifacts: `state_v1`, `sensor_health_v1`, `anomaly_v1`, estimator diagnostics, private JSONL.
-- Public status: sanitized `senior-pomidor.status.v1`; optional Grafana Cloud export contains only the documented low-cardinality projection.
+- Public status: sanitized `senior-pomidor.status.v1`; optional Grafana Cloud export contains only the documented
+  low-cardinality plant and edge reliability projections.
 - PostgreSQL is the durable source of truth for application records; uploaded photos and private estimator logs use application-owned persistent paths.
 
 See [`docs/CONTRACTS.md`](../docs/CONTRACTS.md), schemas in [`docs/schemas/`](../docs/schemas/), and fixtures in [`tests/fixtures/contracts/`](../tests/fixtures/contracts/).
 
 ## Implemented vs. not implemented
 
-Implemented: telemetry/photo ingestion and reads, deterministic edge reliability evaluation and its versioned current operator read model, MQTT reconnect behavior, readiness/migrations, State Estimator and deterministic replay, Grafana dashboards/alerts, bounded public export, backup/restore tooling, offline vision analysis, and local daily story. Provider-neutral assistant utilities remain under `app/assistant/`, but no assistant service is active in the current Compose topology.
+Implemented: telemetry/photo ingestion and reads, deterministic edge reliability evaluation and its versioned current operator read model, MQTT reconnect behavior, readiness/migrations, State Estimator and deterministic replay, separate telemetry and edge-reliability Grafana dashboards/alerts, bounded plant and reliability public metrics export, backup/restore tooling, offline vision analysis, and local daily story. Provider-neutral assistant utilities remain under `app/assistant/`, but no assistant service is active in the current Compose topology.
 
 Development workflow: Feature Planner 1.1 produces draft-only Implementation Briefs through six task workflows. Its historical evaluation suite contains ten frozen cases and is validated by `python -m tools.evaluate_feature_planner`. Coding Agent 1.1 implements only approved briefs and returns a versioned Implementation Report. Reviewer 1.0 runs independently in read-only mode and returns `senior-pomidor.review-report.v1`; its published oracle-blind baseline is bound to the exact Reviewer instruction hash. The read-only context router selects compact role/path-specific packets and fails safe to the full pack for risk flags or unknown paths; a separate local recorder accepts only bounded usage metadata. The local agent-task CLI creates or safely resumes isolated branches/worktrees and renders bounded loopback-only Compose tasks with fake hardware and external export disabled. The deterministic validation orchestrator routes and caches selected checks, and declarative model/tool routers return bounded plans without invoking providers. These tools do not authorize production deployment, production access, or hardware actions.
 

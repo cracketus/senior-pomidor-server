@@ -1,0 +1,212 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: Senior Pomidor Edge Reliability Alerts
+    folder: Senior Pomidor Alerts
+    interval: 60s
+    rules:
+      - uid: sp_edge_reliability_unavailable_stale
+        title: Edge reliability unavailable or stale
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: senior-pomidor-postgres
+            relativeTimeRange: {from: 1800, to: 0}
+            model:
+              datasource: {type: postgres, uid: senior-pomidor-postgres}
+              editorMode: code
+              format: table
+              intervalMs: 1000
+              maxDataPoints: 43200
+              rawQuery: true
+              refId: A
+              rawSql: |
+                SELECT
+                  d.device_id,
+                  CASE WHEN e.timestamp_utc IS NULL THEN 'UNKNOWN' ELSE 'STALE' END AS observed,
+                  1::double precision AS value
+                FROM devices d
+                LEFT JOIN LATERAL (
+                  SELECT te.timestamp_utc
+                  FROM telemetry_events te
+                  WHERE te.device_id = d.device_id
+                  ORDER BY te.timestamp_utc DESC, te.id DESC
+                  LIMIT 1
+                ) e ON true
+                WHERE e.timestamp_utc IS NULL
+                   OR e.timestamp_utc > now()
+                   OR e.timestamp_utc < now() - interval '20 minutes'
+          - refId: B
+            datasourceUid: __expr__
+            relativeTimeRange: {from: 0, to: 0}
+            model: &threshold_model
+              conditions:
+                - evaluator: {params: [0], type: gt}
+                  operator: {type: and}
+                  query: {params: [B]}
+                  reducer: {params: [], type: last}
+                  type: query
+              datasource: {type: __expr__, uid: __expr__}
+              expression: A
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: B
+              type: threshold
+        dashboardUid: senior-pomidor-edge-reliability
+        noDataState: OK
+        execErrState: Alerting
+        for: 5m
+        annotations:
+          summary: Edge reliability telemetry is unavailable or stale for more than 20 minutes.
+        labels: {severity: warning, category: edge-reliability}
+
+      - uid: sp_edge_watchdog_critical
+        title: Edge watchdog critical
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: senior-pomidor-postgres
+            relativeTimeRange: {from: 1800, to: 0}
+            model:
+              datasource: {type: postgres, uid: senior-pomidor-postgres}
+              editorMode: code
+              format: table
+              intervalMs: 1000
+              maxDataPoints: 43200
+              rawQuery: true
+              refId: A
+              rawSql: |
+                SELECT
+                  d.device_id,
+                  CASE
+                    WHEN e.system_health_jsonb #>> '{watchdog,suppression}' = 'true' THEN 'suppressed'
+                    WHEN e.system_health_jsonb #>> '{watchdog,state}' IN ('budget_exhausted','recovery_suppressed') THEN e.system_health_jsonb #>> '{watchdog,state}'
+                    WHEN e.system_health_jsonb #>> '{watchdog,result}' IN ('budget_exhausted','recovery_suppressed') THEN e.system_health_jsonb #>> '{watchdog,result}'
+                    ELSE 'recovery_failed'
+                  END AS observed,
+                  1::double precision AS value
+                FROM devices d
+                LEFT JOIN LATERAL (
+                  SELECT te.timestamp_utc, te.system_health_jsonb
+                  FROM telemetry_events te
+                  WHERE te.device_id = d.device_id
+                  ORDER BY te.timestamp_utc DESC, te.id DESC
+                  LIMIT 1
+                ) e ON true
+                WHERE e.timestamp_utc >= now() - interval '20 minutes'
+                  AND e.timestamp_utc <= now()
+                  AND (
+                    e.system_health_jsonb #>> '{watchdog,suppression}' = 'true'
+                    OR e.system_health_jsonb #>> '{watchdog,state}' IN ('suppressed','budget_exhausted','recovery_suppressed')
+                    OR e.system_health_jsonb #>> '{watchdog,result}' IN ('budget_exhausted','recovery_suppressed')
+                    OR coalesce(e.system_health_jsonb #>> '{watchdog,result}', e.system_health_jsonb #>> '{watchdog,state}', '') LIKE '%_failed'
+                  )
+          - refId: B
+            datasourceUid: __expr__
+            relativeTimeRange: {from: 0, to: 0}
+            model: *threshold_model
+        dashboardUid: senior-pomidor-edge-reliability
+        noDataState: OK
+        execErrState: Alerting
+        for: 1m
+        annotations:
+          summary: Edge watchdog recovery is suppressed, exhausted, or failed.
+        labels: {severity: critical, category: edge-reliability}
+
+      - uid: sp_edge_spool_critical
+        title: Edge spool or disk critical
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: senior-pomidor-postgres
+            relativeTimeRange: {from: 1800, to: 0}
+            model:
+              datasource: {type: postgres, uid: senior-pomidor-postgres}
+              editorMode: code
+              format: table
+              intervalMs: 1000
+              maxDataPoints: 43200
+              rawQuery: true
+              refId: A
+              rawSql: |
+                SELECT
+                  d.device_id,
+                  CASE
+                    WHEN e.system_health_jsonb #>> '{spool,worker_state}' = 'error' THEN 'worker_error'
+                    WHEN e.system_health_jsonb #>> '{spool,status}' IN ('DEGRADED','CRITICAL') THEN e.system_health_jsonb #>> '{spool,status}'
+                    ELSE e.system_health_jsonb #>> '{spool,disk_status}'
+                  END AS observed,
+                  1::double precision AS value
+                FROM devices d
+                LEFT JOIN LATERAL (
+                  SELECT te.timestamp_utc, te.system_health_jsonb
+                  FROM telemetry_events te
+                  WHERE te.device_id = d.device_id
+                  ORDER BY te.timestamp_utc DESC, te.id DESC
+                  LIMIT 1
+                ) e ON true
+                WHERE e.timestamp_utc >= now() - interval '20 minutes'
+                  AND e.timestamp_utc <= now()
+                  AND (
+                    e.system_health_jsonb #>> '{spool,status}' IN ('DEGRADED','CRITICAL')
+                    OR e.system_health_jsonb #>> '{spool,disk_status}' IN ('DEGRADED','CRITICAL')
+                    OR e.system_health_jsonb #>> '{spool,worker_state}' = 'error'
+                  )
+          - refId: B
+            datasourceUid: __expr__
+            relativeTimeRange: {from: 0, to: 0}
+            model: *threshold_model
+        dashboardUid: senior-pomidor-edge-reliability
+        noDataState: OK
+        execErrState: Alerting
+        for: 5m
+        annotations:
+          summary: Edge spool, disk, or delivery worker is degraded or critical.
+        labels: {severity: critical, category: edge-reliability}
+
+      - uid: sp_edge_application_inactive
+        title: Edge application inactive
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: senior-pomidor-postgres
+            relativeTimeRange: {from: 1800, to: 0}
+            model:
+              datasource: {type: postgres, uid: senior-pomidor-postgres}
+              editorMode: code
+              format: table
+              intervalMs: 1000
+              maxDataPoints: 43200
+              rawQuery: true
+              refId: A
+              rawSql: |
+                SELECT
+                  d.device_id,
+                  CASE WHEN e.system_health_jsonb #>> '{application,process_running}' = 'false' THEN 'process_stopped' ELSE 'service_inactive' END AS observed,
+                  1::double precision AS value
+                FROM devices d
+                LEFT JOIN LATERAL (
+                  SELECT te.timestamp_utc, te.system_health_jsonb
+                  FROM telemetry_events te
+                  WHERE te.device_id = d.device_id
+                  ORDER BY te.timestamp_utc DESC, te.id DESC
+                  LIMIT 1
+                ) e ON true
+                WHERE e.timestamp_utc >= now() - interval '20 minutes'
+                  AND e.timestamp_utc <= now()
+                  AND (
+                    e.system_health_jsonb #>> '{application,process_running}' = 'false'
+                    OR e.system_health_jsonb #>> '{application,systemd_service_active}' = 'false'
+                  )
+          - refId: B
+            datasourceUid: __expr__
+            relativeTimeRange: {from: 0, to: 0}
+            model: *threshold_model
+        dashboardUid: senior-pomidor-edge-reliability
+        noDataState: OK
+        execErrState: Alerting
+        for: 1m
+        annotations:
+          summary: Edge application process or systemd service is inactive.
+        labels: {severity: critical, category: edge-reliability}

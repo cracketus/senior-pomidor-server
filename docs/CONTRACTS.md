@@ -294,7 +294,8 @@ recovery policy or perform any action.
 
 Public status continues to publish only its existing sanitized projection. Its aggregate state may
 become `degraded` because it counts private alerts, but it does not publish reliability reason codes or
-payload fields. The Grafana Cloud projection is unchanged.
+payload fields. The optional Grafana Cloud projection adds only the bounded reliability metrics documented
+below; it never exports the private response's reasons or unrestricted payload fields.
 
 Example latest telemetry call:
 
@@ -385,13 +386,58 @@ no reliability details. Missing or partial reliability blocks in fresh telemetry
 Unsafe device IDs return HTTP `400`, a device without telemetry returns `404`, and a database read failure
 returns `503` with a fixed bounded detail. The endpoint introduces no new authentication mechanism and
 inherits the existing trusted private/LAN read-API boundary. Existing latest/history responses,
-`health_summary_v1`, public status, and the Grafana Cloud projection are unchanged.
+`health_summary_v1`, and public status are unchanged. The Grafana Cloud exporter consumes the same latest
+telemetry row independently and does not alter this HTTP response contract.
 
 This per-edge current-state read model implements the reusable contract tracked by
 [#204](https://github.com/cracketus/senior-pomidor-server/issues/204) and is the bounded input for the future
 operator aggregation in [#205](https://github.com/cracketus/senior-pomidor-server/issues/205) and the
 `pomidorctl` client/auth work in [#206](https://github.com/cracketus/senior-pomidor-server/issues/206).
 Reliability history and metrics remain outside this contract.
+
+### Edge reliability observability
+
+The provisioned `Senior Pomidor Edge Reliability` dashboard (`uid=senior-pomidor-edge-reliability`) is a
+trusted-LAN, read-only PostgreSQL consumer. Current-state queries start from `devices` and use a lateral
+latest-event join ordered by `timestamp_utc DESC, id DESC`; a missing event, missing block, future timestamp,
+stale observation, or unrecognized state is shown as `UNKNOWN`. History panels use only fixed state
+allowlists and the normalized watchdog, spool, and application keys. The four provisioned rules cover
+unavailable/stale evidence, critical watchdog recovery, critical spool/disk/worker state, and inactive
+application process/service. Notification routing remains outside this contract.
+
+On every enabled exporter cycle, the latest telemetry event for each registered device is projected at the
+export timestamp. This snapshot is repeated even when no new plant reading exists; the existing plant metric
+timestamps, cursor, and checkpoint behavior are unchanged. Status metrics are one-hot state sets:
+
+- `senior_pomidor_edge_reliability_status`, `senior_pomidor_edge_watchdog_status`,
+  `senior_pomidor_edge_spool_status`, and `senior_pomidor_edge_application_status`:
+  `OK|WARN|ALERT|UNKNOWN`;
+- `senior_pomidor_edge_watchdog_state`: `healthy|starting|cooldown|maintenance|recovering|suppressed|`
+  `budget_exhausted|recovery_suppressed|recovered|suppression_cleared|recovery_failed|unknown`;
+- `senior_pomidor_edge_spool_disk_status`: `OK|WARNING|DEGRADED|CRITICAL|UNKNOWN`;
+- `senior_pomidor_edge_reliability_freshness_status`: `FRESH|STALE|UNKNOWN`.
+
+The exporter emits numeric gauges only when a normalized value exists:
+
+- watchdog: `senior_pomidor_edge_watchdog_suppression`, `senior_pomidor_edge_watchdog_configured`,
+  `senior_pomidor_edge_watchdog_attempt_count`, `senior_pomidor_edge_watchdog_restart_count`,
+  `senior_pomidor_edge_watchdog_reboot_count`, and
+  `senior_pomidor_edge_watchdog_healthy_heartbeat_age_seconds`;
+- spool: `senior_pomidor_edge_spool_pending_records`, `senior_pomidor_edge_spool_backlog_records`,
+  `senior_pomidor_edge_spool_in_flight_records`, `senior_pomidor_edge_spool_dead_letter_records`,
+  `senior_pomidor_edge_spool_oldest_pending_age_seconds`,
+  `senior_pomidor_edge_spool_outage_duration_seconds`, `senior_pomidor_edge_spool_database_size_bytes`,
+  `senior_pomidor_edge_spool_free_space_bytes`, and `senior_pomidor_edge_spool_disk_usage_percent`;
+- application: `senior_pomidor_edge_application_process_running`,
+  `senior_pomidor_edge_application_process_uptime_seconds`,
+  `senior_pomidor_edge_application_systemd_available`, and
+  `senior_pomidor_edge_application_systemd_service_active`;
+- overall: `senior_pomidor_edge_reliability_freshness_seconds`.
+
+It does not invent zero for a missing value and does not publish backlog bytes. The only labels are sanitized
+`device_id` and the fixed `status` or `state` label of a state set. Reason/result/error strings, boot IDs,
+service names, PIDs, network identifiers, paths, raw JSON, and arbitrary labels are excluded. PostgreSQL
+remains the source of truth.
 
 ## State Estimator v1
 

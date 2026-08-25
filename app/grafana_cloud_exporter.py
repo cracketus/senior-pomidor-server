@@ -20,7 +20,8 @@ from sqlalchemy.orm import Session
 from app.config import Settings, settings
 from app.db import SessionLocal
 from app.logging_config import configure_logging
-from app.models import PodReading, TelemetryEvent
+from app.models import Device, PodReading, TelemetryEvent
+from app.operator_edge_reliability import build_operator_edge_reliability
 
 LOGGER = logging.getLogger(__name__)
 METRIC_PREFIX = "senior_pomidor_"
@@ -45,6 +46,23 @@ NON_EXPORTED_FLAT_FIELDS: tuple[str, ...] = (
 MAX_LABEL_VALUE_LENGTH = 80
 PRIVATE_LABEL_PATTERN = re.compile(r"[/\\]|(?:^|[^0-9])(?:\d{1,3}\.){3}\d{1,3}(?:[^0-9]|$)")
 SAFE_LABEL_CHARS = re.compile(r"[^A-Za-z0-9_.-]+")
+RELIABILITY_STATUSES: tuple[str, ...] = ("OK", "WARN", "ALERT", "UNKNOWN")
+FRESHNESS_STATUSES: tuple[str, ...] = ("FRESH", "STALE", "UNKNOWN")
+WATCHDOG_STATES: tuple[str, ...] = (
+    "healthy",
+    "starting",
+    "cooldown",
+    "maintenance",
+    "recovering",
+    "suppressed",
+    "budget_exhausted",
+    "recovery_suppressed",
+    "recovered",
+    "suppression_cleared",
+    "recovery_failed",
+    "unknown",
+)
+SPOOL_DISK_STATUSES: tuple[str, ...] = ("OK", "WARNING", "DEGRADED", "CRITICAL", "UNKNOWN")
 
 
 class ExporterConfigError(RuntimeError):
@@ -102,6 +120,7 @@ class ExportResult:
     sent_samples: int
     plant_samples: int = 0
     freshness_samples: int = 0
+    reliability_samples: int = 0
     skipped_reason: str | None = None
     max_source_timestamp: datetime | None = None
     max_source_reading_id: int | None = None
@@ -221,6 +240,230 @@ def freshness_sample(row: ExportRow, exported_at: datetime) -> MetricSample | No
     )
 
 
+def _state_set_samples(
+    name: str,
+    device_id: object,
+    label_name: str,
+    values: tuple[str, ...],
+    current: str,
+    exported_at: datetime,
+) -> list[MetricSample]:
+    labels = {"device_id": sanitize_label_value(device_id)}
+    sample_timestamp_ms = timestamp_ms(exported_at)
+    return [
+        MetricSample(
+            name=name,
+            labels={**labels, label_name: value},
+            value=1.0 if value == current else 0.0,
+            timestamp_ms=sample_timestamp_ms,
+        )
+        for value in values
+    ]
+
+
+def _single_value_sample(
+    name: str,
+    device_id: object,
+    value: object,
+    exported_at: datetime,
+    *,
+    maximum: float | None = None,
+) -> MetricSample | None:
+    number = _numeric_or_none(value)
+    if number is None or number < 0 or (maximum is not None and number > maximum):
+        return None
+    return MetricSample(
+        name=name,
+        labels={"device_id": sanitize_label_value(device_id)},
+        value=number,
+        timestamp_ms=timestamp_ms(exported_at),
+    )
+
+
+def _boolean_sample(name: str, device_id: object, value: object, exported_at: datetime) -> MetricSample | None:
+    if not isinstance(value, bool):
+        return None
+    return _single_value_sample(name, device_id, 1 if value else 0, exported_at)
+
+
+def _watchdog_state(value: object) -> str:
+    if isinstance(value, str) and value.endswith("_failed"):
+        return "recovery_failed"
+    if isinstance(value, str) and value in WATCHDOG_STATES:
+        return value
+    return "unknown"
+
+
+def _disk_status(value: object) -> str:
+    return value if isinstance(value, str) and value in SPOOL_DISK_STATUSES else "UNKNOWN"
+
+
+def _age_seconds(value: datetime | None, exported_at: datetime) -> float | None:
+    if value is None:
+        return None
+    age = (as_utc(exported_at) - as_utc(value)).total_seconds()
+    return age if age >= 0 else None
+
+
+def edge_reliability_metric_samples(event: TelemetryEvent, exported_at: datetime) -> list[MetricSample]:
+    """Build the public, low-cardinality reliability snapshot for one device."""
+    exported_at = as_utc(exported_at)
+    projection = build_operator_edge_reliability(event, now=exported_at)
+    device_id = projection.device_id
+    health = event.system_health_jsonb if isinstance(event.system_health_jsonb, dict) else {}
+    spool_value = health.get("spool")
+    spool: dict[str, object] = (
+        spool_value if isinstance(spool_value, dict) and projection.freshness.age_seconds is not None else {}
+    )
+
+    samples = _state_set_samples(
+        f"{METRIC_PREFIX}edge_reliability_status",
+        device_id,
+        "status",
+        RELIABILITY_STATUSES,
+        projection.status,
+        exported_at,
+    )
+    for name, current in (
+        ("edge_watchdog_status", projection.watchdog.status),
+        ("edge_spool_status", projection.spool.status),
+        ("edge_application_status", projection.application.status),
+    ):
+        samples.extend(
+            _state_set_samples(
+                f"{METRIC_PREFIX}{name}",
+                device_id,
+                "status",
+                RELIABILITY_STATUSES,
+                current,
+                exported_at,
+            )
+        )
+    samples.extend(
+        _state_set_samples(
+            f"{METRIC_PREFIX}edge_watchdog_state",
+            device_id,
+            "state",
+            WATCHDOG_STATES,
+            _watchdog_state(projection.watchdog.state),
+            exported_at,
+        )
+    )
+    samples.extend(
+        _state_set_samples(
+            f"{METRIC_PREFIX}edge_spool_disk_status",
+            device_id,
+            "status",
+            SPOOL_DISK_STATUSES,
+            _disk_status(projection.spool.disk_status),
+            exported_at,
+        )
+    )
+    samples.extend(
+        _state_set_samples(
+            f"{METRIC_PREFIX}edge_reliability_freshness_status",
+            device_id,
+            "status",
+            FRESHNESS_STATUSES,
+            projection.freshness.status,
+            exported_at,
+        )
+    )
+
+    optional_samples = [
+        _boolean_sample(
+            f"{METRIC_PREFIX}edge_watchdog_suppression", device_id, projection.watchdog.suppression, exported_at
+        ),
+        _boolean_sample(
+            f"{METRIC_PREFIX}edge_watchdog_configured", device_id, projection.watchdog.configured, exported_at
+        ),
+        _single_value_sample(
+            f"{METRIC_PREFIX}edge_watchdog_attempt_count", device_id, projection.watchdog.attempt_count, exported_at
+        ),
+        _single_value_sample(
+            f"{METRIC_PREFIX}edge_watchdog_restart_count", device_id, projection.watchdog.restart_count, exported_at
+        ),
+        _single_value_sample(
+            f"{METRIC_PREFIX}edge_watchdog_reboot_count", device_id, projection.watchdog.reboot_count, exported_at
+        ),
+        _single_value_sample(
+            f"{METRIC_PREFIX}edge_watchdog_healthy_heartbeat_age_seconds",
+            device_id,
+            _age_seconds(projection.watchdog.last_healthy_heartbeat_at_utc, exported_at),
+            exported_at,
+        ),
+        _single_value_sample(
+            f"{METRIC_PREFIX}edge_spool_pending_records", device_id, projection.spool.pending_count, exported_at
+        ),
+        _single_value_sample(
+            f"{METRIC_PREFIX}edge_spool_backlog_records", device_id, projection.spool.backlog_count, exported_at
+        ),
+        _single_value_sample(
+            f"{METRIC_PREFIX}edge_spool_in_flight_records", device_id, projection.spool.in_flight_count, exported_at
+        ),
+        _single_value_sample(
+            f"{METRIC_PREFIX}edge_spool_dead_letter_records", device_id, projection.spool.dead_letter_count, exported_at
+        ),
+        _single_value_sample(
+            f"{METRIC_PREFIX}edge_spool_oldest_pending_age_seconds",
+            device_id,
+            projection.spool.oldest_pending_age_seconds,
+            exported_at,
+        ),
+        _single_value_sample(
+            f"{METRIC_PREFIX}edge_spool_outage_duration_seconds",
+            device_id,
+            projection.spool.outage_duration_seconds,
+            exported_at,
+        ),
+        _single_value_sample(
+            f"{METRIC_PREFIX}edge_spool_database_size_bytes", device_id, spool.get("database_size_bytes"), exported_at
+        ),
+        _single_value_sample(
+            f"{METRIC_PREFIX}edge_spool_free_space_bytes", device_id, spool.get("free_space_bytes"), exported_at
+        ),
+        _single_value_sample(
+            f"{METRIC_PREFIX}edge_spool_disk_usage_percent",
+            device_id,
+            projection.spool.disk_usage_percent,
+            exported_at,
+            maximum=100,
+        ),
+        _boolean_sample(
+            f"{METRIC_PREFIX}edge_application_process_running",
+            device_id,
+            projection.application.process_running,
+            exported_at,
+        ),
+        _single_value_sample(
+            f"{METRIC_PREFIX}edge_application_process_uptime_seconds",
+            device_id,
+            projection.application.process_uptime_seconds,
+            exported_at,
+        ),
+        _boolean_sample(
+            f"{METRIC_PREFIX}edge_application_systemd_available",
+            device_id,
+            projection.application.systemd_available,
+            exported_at,
+        ),
+        _boolean_sample(
+            f"{METRIC_PREFIX}edge_application_systemd_service_active",
+            device_id,
+            projection.application.systemd_service_active,
+            exported_at,
+        ),
+        _single_value_sample(
+            f"{METRIC_PREFIX}edge_reliability_freshness_seconds",
+            device_id,
+            projection.freshness.age_seconds,
+            exported_at,
+        ),
+    ]
+    samples.extend(sample for sample in optional_samples if sample is not None)
+    return samples
+
+
 def non_exported_fields(row: ExportRow) -> list[str]:
     fields = [
         field_name for field_name in NON_EXPORTED_FLAT_FIELDS if _numeric_or_none(getattr(row, field_name)) is not None
@@ -284,6 +527,18 @@ def fetch_latest_rows_by_pod(db: Session, until: datetime) -> list[ExportRow]:
         key = (reading.device_id, reading.pod_key)
         if key not in latest:
             latest[key] = _row_from_orm(reading, event_timestamp)
+    return list(latest.values())
+
+
+def fetch_latest_reliability_events(db: Session) -> list[TelemetryEvent]:
+    statement = (
+        select(TelemetryEvent)
+        .join(Device, Device.device_id == TelemetryEvent.device_id)
+        .order_by(TelemetryEvent.device_id, TelemetryEvent.timestamp_utc.desc(), TelemetryEvent.id.desc())
+    )
+    latest: dict[str, TelemetryEvent] = {}
+    for event in db.scalars(statement):
+        latest.setdefault(event.device_id, event)
     return list(latest.values())
 
 
@@ -447,7 +702,12 @@ def export_once(
         for row in fetch_latest_rows_by_pod(db, exported_at)
         if (sample := freshness_sample(row, exported_at)) is not None
     ]
-    samples = plant_samples + freshness_samples
+    reliability_samples = [
+        sample
+        for event in fetch_latest_reliability_events(db)
+        for sample in edge_reliability_metric_samples(event, exported_at)
+    ]
+    samples = plant_samples + freshness_samples + reliability_samples
     exporter_transport.send(samples)
 
     max_source_timestamp = max((as_utc(row.timestamp_utc) for row in rows), default=None)
@@ -456,15 +716,17 @@ def export_once(
         state.last_reading_id = max(row.reading_id for row in rows if as_utc(row.timestamp_utc) == max_source_timestamp)
 
     LOGGER.info(
-        "Exported %s Grafana Cloud samples: plant=%s freshness=%s",
+        "Exported %s Grafana Cloud samples: plant=%s freshness=%s reliability=%s",
         len(samples),
         len(plant_samples),
         len(freshness_samples),
+        len(reliability_samples),
     )
     return ExportResult(
         sent_samples=len(samples),
         plant_samples=len(plant_samples),
         freshness_samples=len(freshness_samples),
+        reliability_samples=len(reliability_samples),
         max_source_timestamp=max_source_timestamp,
         max_source_reading_id=state.last_reading_id if max_source_timestamp is not None else None,
     )

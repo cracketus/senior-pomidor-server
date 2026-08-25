@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="810" viewBox="0 0 1440 810" role="img" aria-labelledby="title desc">
+  <title id="title">Sanitized synthetic Senior Pomidor Edge Reliability dashboard</title>
+  <desc id="desc">Synthetic Grafana-style dashboard for demo-edge-01 with current state, freshness, counters, storage pressure, and timelines.</desc>
+  <rect width="1440" height="810" fill="#111217"/>
+  <rect x="0" y="0" width="1440" height="58" fill="#181b1f"/>
+  <text x="28" y="37" fill="#f4f5f5" font-family="Arial, sans-serif" font-size="24" font-weight="700">Senior Pomidor Edge Reliability</text>
+  <rect x="1150" y="13" width="250" height="34" rx="4" fill="#24292e" stroke="#3d444d"/>
+  <text x="1170" y="35" fill="#c7d0d9" font-family="Arial, sans-serif" font-size="15">Device: demo-edge-01</text>
+      <text x="28" y="82" fill="#8e9aa5" font-family="Arial, sans-serif" font-size="13">SANITIZED SYNTHETIC DATA - RELATIVE TIME ONLY</text>
+
+  <g font-family="Arial, sans-serif">
+    <g transform="translate(28 102)">
+      <rect width="330" height="125" rx="6" fill="#181b1f" stroke="#2b3138"/>
+      <text x="18" y="28" fill="#c7d0d9" font-size="14">Overall reliability</text>
+      <text x="18" y="83" fill="#ffb357" font-size="36" font-weight="700">WARN</text>
+      <text x="18" y="108" fill="#8e9aa5" font-size="13">current projection</text>
+    </g>
+    <g transform="translate(379 102)">
+      <rect width="330" height="125" rx="6" fill="#181b1f" stroke="#2b3138"/>
+      <text x="18" y="28" fill="#c7d0d9" font-size="14">Watchdog</text>
+      <text x="18" y="83" fill="#ffb357" font-size="30" font-weight="700">RECOVERING</text>
+      <text x="18" y="108" fill="#8e9aa5" font-size="13">suppression: off</text>
+    </g>
+    <g transform="translate(730 102)">
+      <rect width="330" height="125" rx="6" fill="#181b1f" stroke="#2b3138"/>
+      <text x="18" y="28" fill="#c7d0d9" font-size="14">Spool</text>
+      <text x="18" y="83" fill="#ffb357" font-size="36" font-weight="700">BACKLOG</text>
+      <text x="18" y="108" fill="#8e9aa5" font-size="13">disk: OK</text>
+    </g>
+    <g transform="translate(1081 102)">
+      <rect width="331" height="125" rx="6" fill="#181b1f" stroke="#2b3138"/>
+      <text x="18" y="28" fill="#c7d0d9" font-size="14">Application</text>
+      <text x="18" y="83" fill="#73bf69" font-size="36" font-weight="700">OK</text>
+      <text x="18" y="108" fill="#8e9aa5" font-size="13">process and service active</text>
+    </g>
+
+    <g transform="translate(28 248)">
+      <rect width="681" height="232" rx="6" fill="#181b1f" stroke="#2b3138"/>
+      <text x="18" y="30" fill="#c7d0d9" font-size="15">Freshness and recovery counters</text>
+      <line x1="20" y1="190" x2="660" y2="190" stroke="#3d444d"/>
+      <polyline points="20,80 150,84 280,72 410,92 540,76 660,81" fill="none" stroke="#5794f2" stroke-width="3"/>
+      <text x="28" y="218" fill="#8e9aa5" font-size="13">now - 6h</text>
+      <text x="590" y="218" fill="#8e9aa5" font-size="13">now</text>
+      <text x="435" y="55" fill="#c7d0d9" font-size="14">restart  2</text>
+      <text x="545" y="55" fill="#c7d0d9" font-size="14">reboot  0</text>
+    </g>
+    <g transform="translate(730 248)">
+      <rect width="682" height="232" rx="6" fill="#181b1f" stroke="#2b3138"/>
+      <text x="18" y="30" fill="#c7d0d9" font-size="15">Backlog and storage pressure</text>
+      <text x="28" y="83" fill="#f4f5f5" font-size="28" font-weight="700">24</text>
+      <text x="28" y="106" fill="#8e9aa5" font-size="13">pending records</text>
+      <text x="215" y="83" fill="#f4f5f5" font-size="28" font-weight="700">18 min</text>
+      <text x="215" y="106" fill="#8e9aa5" font-size="13">oldest pending</text>
+      <text x="440" y="83" fill="#73bf69" font-size="28" font-weight="700">31%</text>
+      <text x="440" y="106" fill="#8e9aa5" font-size="13">disk usage</text>
+      <rect x="28" y="150" width="610" height="18" rx="9" fill="#24292e"/>
+      <rect x="28" y="150" width="189" height="18" rx="9" fill="#73bf69"/>
+      <text x="28" y="197" fill="#8e9aa5" font-size="13">database and free-space gauges shown without paths</text>
+    </g>
+
+    <g transform="translate(28 501)">
+      <rect width="1384" height="272" rx="6" fill="#181b1f" stroke="#2b3138"/>
+      <text x="18" y="31" fill="#c7d0d9" font-size="15">Recovery and degradation state timeline</text>
+      <text x="18" y="88" fill="#8e9aa5" font-size="14">watchdog</text>
+      <rect x="125" y="58" width="310" height="42" fill="#73bf69"/>
+      <rect x="435" y="58" width="250" height="42" fill="#ffb357"/>
+      <rect x="685" y="58" width="671" height="42" fill="#73bf69"/>
+      <text x="245" y="84" fill="#111217" font-size="13" font-weight="700">healthy</text>
+      <text x="520" y="84" fill="#111217" font-size="13" font-weight="700">recovering</text>
+      <text x="980" y="84" fill="#111217" font-size="13" font-weight="700">healthy</text>
+      <text x="18" y="160" fill="#8e9aa5" font-size="14">spool</text>
+      <rect x="125" y="130" width="420" height="42" fill="#73bf69"/>
+      <rect x="545" y="130" width="430" height="42" fill="#ffb357"/>
+      <rect x="975" y="130" width="381" height="42" fill="#73bf69"/>
+      <text x="315" y="156" fill="#111217" font-size="13" font-weight="700">OK</text>
+      <text x="725" y="156" fill="#111217" font-size="13" font-weight="700">BACKLOG</text>
+      <text x="1140" y="156" fill="#111217" font-size="13" font-weight="700">OK</text>
+      <text x="125" y="225" fill="#8e9aa5" font-size="13">now - 24h</text>
+      <text x="1315" y="225" fill="#8e9aa5" font-size="13">now</text>
+    </g>
+  </g>
+</svg>
