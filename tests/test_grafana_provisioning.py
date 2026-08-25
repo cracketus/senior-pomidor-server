@@ -3,9 +3,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 DASHBOARD_PATH = ROOT / "docker/grafana/provisioning/dashboards/json/senior-pomidor-telemetry.json"
+EDGE_DASHBOARD_PATH = ROOT / "docker/grafana/provisioning/dashboards/json/senior-pomidor-edge-reliability.json"
 DATASOURCE_PATH = ROOT / "docker/grafana/provisioning/datasources/postgres.yml"
 PROVIDER_PATH = ROOT / "docker/grafana/provisioning/dashboards/senior-pomidor.yml"
 ALERTS_PATH = ROOT / "docker/grafana/provisioning/alerting/senior-pomidor-alerts.yml"
+EDGE_ALERTS_PATH = ROOT / "docker/grafana/provisioning/alerting/edge-reliability-alerts.yml"
+EDGE_SCREENSHOT_PATH = ROOT / "docs/images/edge-reliability-dashboard-demo.svg"
 
 
 def load_dashboard() -> dict:
@@ -33,6 +36,9 @@ def test_grafana_dashboard_provisioning_files_reference_checked_in_dashboard():
     assert "path: /etc/grafana/provisioning/dashboards/json" in provider
     assert DASHBOARD_PATH.is_file()
     assert ALERTS_PATH.is_file()
+    assert EDGE_DASHBOARD_PATH.is_file()
+    assert EDGE_ALERTS_PATH.is_file()
+    assert EDGE_SCREENSHOT_PATH.is_file()
 
 
 def test_grafana_dashboard_json_covers_issue_15_acceptance_criteria():
@@ -210,3 +216,92 @@ def test_grafana_alerting_provisioning_covers_collection_and_health_alerts():
         "latest_state_ts < now() - interval '20 minutes'",
     ):
         assert threshold in alerts
+
+
+def test_edge_reliability_dashboard_has_safe_current_and_history_views():
+    dashboard = json.loads(EDGE_DASHBOARD_PATH.read_text(encoding="utf-8"))
+    queries = panel_queries(dashboard)
+    panel_titles = {panel["title"] for panel in dashboard["panels"]}
+
+    assert dashboard["uid"] == "senior-pomidor-edge-reliability"
+    assert dashboard["title"] == "Senior Pomidor Edge Reliability"
+    assert {variable["name"] for variable in dashboard["templating"]["list"]} == {"device_id"}
+    assert "senior-pomidor-postgres" in json.dumps(dashboard)
+    assert {
+        "Current Reliability States",
+        "Suppression And Recovery Counters",
+        "Telemetry And Reliability Freshness",
+        "Backlog And Storage Pressure",
+        "Restart And Reboot Timeline",
+        "Backlog Timeline",
+        "Recovery And Degradation State Timeline",
+    }.issubset(panel_titles)
+
+    current = find_panel(dashboard, "Current Reliability States")["targets"][0]["rawSql"]
+    assert "FROM devices d" in current
+    assert "LEFT JOIN LATERAL" in current
+    assert "ORDER BY te.timestamp_utc DESC, te.id DESC" in current
+    assert "THEN 'UNKNOWN'" in current
+    assert "interval '20 minutes'" in current
+    for allowlist in (
+        "('suppressed','budget_exhausted','recovery_suppressed')",
+        "('starting','cooldown','maintenance','recovering','recovered','suppression_cleared')",
+        "('DEGRADED','CRITICAL')",
+    ):
+        assert allowlist in current
+
+    assert "$__timeFilter(timestamp_utc)" in queries
+    assert "database_size_bytes" in queries
+    assert "free_space_bytes" in queries
+    assert "backlog_bytes" not in queries
+    for sensitive in (
+        "reason",
+        "last_error_code",
+        "boot_id",
+        "systemd_service_name",
+        "process_id",
+        "ip_address",
+        "ssid",
+        "raw_payload_jsonb",
+    ):
+        assert sensitive not in queries
+
+
+def test_edge_reliability_alerts_cover_four_failure_classes_without_hiding_missing_devices():
+    alerts = EDGE_ALERTS_PATH.read_text(encoding="utf-8")
+
+    assert alerts.count("      - uid: sp_edge_") == 4
+    assert "dashboardUid: senior-pomidor-edge-reliability" in alerts
+    assert alerts.count("noDataState: OK") == 4
+    assert alerts.count("execErrState: Alerting") == 4
+    assert "title: Edge reliability unavailable or stale" in alerts
+    assert "title: Edge watchdog critical" in alerts
+    assert "title: Edge spool or disk critical" in alerts
+    assert "title: Edge application inactive" in alerts
+    assert "for: 5m" in alerts
+    assert "for: 1m" in alerts
+
+    unavailable_query = alerts.split("title: Edge reliability unavailable or stale", 1)[1].split(
+        "title: Edge watchdog critical", 1
+    )[0]
+    assert "FROM devices d" in unavailable_query
+    assert "LEFT JOIN LATERAL" in unavailable_query
+    assert "e.timestamp_utc IS NULL" in unavailable_query
+    assert "interval '20 minutes'" in unavailable_query
+    assert "system_health_jsonb #>> '{watchdog,suppression}' = 'true'" in alerts
+    assert "LIKE '%_failed'" in alerts
+    assert "#>> '{spool,status}' IN ('DEGRADED','CRITICAL')" in alerts
+    assert "#>> '{spool,disk_status}' IN ('DEGRADED','CRITICAL')" in alerts
+    assert "#>> '{spool,worker_state}' = 'error'" in alerts
+    assert "#>> '{application,process_running}' = 'false'" in alerts
+    assert "#>> '{application,systemd_service_active}' = 'false'" in alerts
+
+
+def test_edge_reliability_documentation_example_is_synthetic_and_sanitized():
+    image = EDGE_SCREENSHOT_PATH.read_text(encoding="utf-8")
+
+    assert "demo-edge-01" in image
+    assert "SANITIZED SYNTHETIC DATA" in image
+    assert "now - 24h" in image
+    for sensitive in ("ssid", "ip_address", "boot_id", "service_name", "reason", "2026-"):
+        assert sensitive not in image.lower()

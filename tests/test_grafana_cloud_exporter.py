@@ -15,6 +15,7 @@ from app.grafana_cloud_exporter import (
     MetricSample,
     RemoteWriteError,
     RemoteWriteTransport,
+    edge_reliability_metric_samples,
     encode_write_request,
     export_once,
     public_labels,
@@ -142,6 +143,47 @@ def telemetry_payload(timestamp: str, *, enabled: bool = True, moisture: float |
             "spool": {"last_error_code": "private-spool-code", "database_size_bytes": 65536},
             "application": {"systemd_service_name": "private-edge-service", "process_id": 4321},
             "errors": [{"sensor": "wifi", "message": "do not export"}],
+        },
+    }
+
+
+def reliability_system_health() -> dict:
+    return {
+        "watchdog": {
+            "configured": True,
+            "suppression": False,
+            "state": "healthy",
+            "result": "not_needed",
+            "attempt_count": 2,
+            "restart_count": 1,
+            "reboot_count": 0,
+            "last_healthy_heartbeat_at_utc": "2026-06-07T12:01:30Z",
+            "reason": "private watchdog reason",
+            "boot_id": "private-boot-id",
+        },
+        "spool": {
+            "status": "OK",
+            "disk_status": "OK",
+            "pending_count": 3,
+            "backlog_count": 4,
+            "in_flight_count": 1,
+            "dead_letter_count": 0,
+            "oldest_pending_age_seconds": 45,
+            "outage_duration_seconds": 30,
+            "database_size_bytes": 65536,
+            "free_space_bytes": 2147483648,
+            "disk_usage_percent": 27.5,
+            "last_error_code": "private-spool-code",
+            "worker_state": "running",
+        },
+        "application": {
+            "process_running": True,
+            "process_uptime_seconds": 3600,
+            "process_id": 4321,
+            "systemd_available": True,
+            "systemd_service_active": True,
+            "systemd_active_state": "active",
+            "systemd_service_name": "private-edge-service",
         },
     }
 
@@ -287,9 +329,225 @@ def test_export_once_reads_postgres_rows_sends_metrics_and_advances_state():
     assert "private-spool-code" not in projection
     assert "private-edge-service" not in projection
     assert "private-restart-result" not in projection
-    assert "987654321" not in projection
-    assert "65536" not in projection
-    assert "4321" not in projection
+    assert "process_id" not in projection
+
+
+def test_edge_reliability_projection_has_exact_metrics_labels_and_one_hot_states():
+    engine, db = make_db()
+    try:
+        payload = telemetry_payload("2026-06-07T12:02:00Z")
+        payload["system_health"] = reliability_system_health()
+        event = persist_telemetry(db, payload, source="mqtt")
+        samples = edge_reliability_metric_samples(event, datetime(2026, 6, 7, 12, 3, tzinfo=UTC))
+    finally:
+        db.close()
+        engine.dispose()
+
+    state_names = {
+        "senior_pomidor_edge_reliability_status",
+        "senior_pomidor_edge_watchdog_status",
+        "senior_pomidor_edge_watchdog_state",
+        "senior_pomidor_edge_spool_status",
+        "senior_pomidor_edge_spool_disk_status",
+        "senior_pomidor_edge_application_status",
+        "senior_pomidor_edge_reliability_freshness_status",
+    }
+    numeric_names = {
+        "senior_pomidor_edge_watchdog_suppression",
+        "senior_pomidor_edge_watchdog_configured",
+        "senior_pomidor_edge_watchdog_attempt_count",
+        "senior_pomidor_edge_watchdog_restart_count",
+        "senior_pomidor_edge_watchdog_reboot_count",
+        "senior_pomidor_edge_watchdog_healthy_heartbeat_age_seconds",
+        "senior_pomidor_edge_spool_pending_records",
+        "senior_pomidor_edge_spool_backlog_records",
+        "senior_pomidor_edge_spool_in_flight_records",
+        "senior_pomidor_edge_spool_dead_letter_records",
+        "senior_pomidor_edge_spool_oldest_pending_age_seconds",
+        "senior_pomidor_edge_spool_outage_duration_seconds",
+        "senior_pomidor_edge_spool_database_size_bytes",
+        "senior_pomidor_edge_spool_free_space_bytes",
+        "senior_pomidor_edge_spool_disk_usage_percent",
+        "senior_pomidor_edge_application_process_running",
+        "senior_pomidor_edge_application_process_uptime_seconds",
+        "senior_pomidor_edge_application_systemd_available",
+        "senior_pomidor_edge_application_systemd_service_active",
+        "senior_pomidor_edge_reliability_freshness_seconds",
+    }
+    assert {sample.name for sample in samples} == state_names | numeric_names
+    for name in state_names:
+        state_samples = [sample for sample in samples if sample.name == name]
+        assert sum(sample.value for sample in state_samples) == 1.0
+        assert all(
+            set(sample.labels)
+            == ({"device_id", "state"} if name.endswith("watchdog_state") else {"device_id", "status"})
+            for sample in state_samples
+        )
+    assert all(set(sample.labels) == {"device_id"} for sample in samples if sample.name in numeric_names)
+    values = {sample.name: sample.value for sample in samples if sample.name in numeric_names}
+    assert values["senior_pomidor_edge_watchdog_healthy_heartbeat_age_seconds"] == 90.0
+    assert values["senior_pomidor_edge_reliability_freshness_seconds"] == 60.0
+    assert values["senior_pomidor_edge_spool_database_size_bytes"] == 65536.0
+
+    encoded = encode_write_request(samples)
+    for private_value in (
+        b"private watchdog reason",
+        b"private-boot-id",
+        b"private-spool-code",
+        b"private-edge-service",
+        b"not_needed",
+        b"4321",
+    ):
+        assert private_value not in encoded
+
+
+@pytest.mark.parametrize(
+    ("watchdog_update", "expected_state", "expected_status"),
+    [
+        ({"state": "recovering"}, "recovering", "WARN"),
+        ({"state": "suppressed", "suppression": True}, "suppressed", "ALERT"),
+        ({"state": "budget_exhausted"}, "budget_exhausted", "ALERT"),
+        ({"state": "restart_failed", "result": "restart_failed"}, "recovery_failed", "ALERT"),
+    ],
+)
+def test_edge_reliability_projection_maps_watchdog_states(watchdog_update, expected_state, expected_status):
+    engine, db = make_db()
+    try:
+        payload = telemetry_payload("2026-06-07T12:02:00Z")
+        payload["system_health"] = reliability_system_health()
+        payload["system_health"]["watchdog"].update(watchdog_update)
+        event = persist_telemetry(db, payload, source="mqtt")
+        samples = edge_reliability_metric_samples(event, datetime(2026, 6, 7, 12, 3, tzinfo=UTC))
+    finally:
+        db.close()
+        engine.dispose()
+
+    assert (
+        next(
+            sample.value
+            for sample in samples
+            if sample.name == "senior_pomidor_edge_watchdog_state" and sample.labels["state"] == expected_state
+        )
+        == 1.0
+    )
+    assert (
+        next(
+            sample.value
+            for sample in samples
+            if sample.name == "senior_pomidor_edge_watchdog_status" and sample.labels["status"] == expected_status
+        )
+        == 1.0
+    )
+
+
+def test_edge_reliability_projection_uses_unknown_for_missing_blocks_and_stale_data():
+    engine, db = make_db()
+    try:
+        missing_payload = telemetry_payload("2026-06-07T12:02:00Z")
+        missing_payload["device_id"] = "pi-missing"
+        missing_payload["system_health"] = {}
+        missing_event = persist_telemetry(db, missing_payload, source="mqtt")
+
+        stale_payload = telemetry_payload("2026-06-07T11:00:00Z")
+        stale_payload["device_id"] = "pi-stale"
+        stale_payload["system_health"] = reliability_system_health()
+        stale_event = persist_telemetry(db, stale_payload, source="mqtt")
+        now = datetime(2026, 6, 7, 12, 3, tzinfo=UTC)
+        missing = edge_reliability_metric_samples(missing_event, now)
+        stale = edge_reliability_metric_samples(stale_event, now)
+    finally:
+        db.close()
+        engine.dispose()
+
+    for metric in (
+        "senior_pomidor_edge_reliability_status",
+        "senior_pomidor_edge_watchdog_status",
+        "senior_pomidor_edge_spool_status",
+        "senior_pomidor_edge_application_status",
+    ):
+        assert (
+            next(sample.value for sample in missing if sample.name == metric and sample.labels["status"] == "UNKNOWN")
+            == 1.0
+        )
+        assert (
+            next(sample.value for sample in stale if sample.name == metric and sample.labels["status"] == "UNKNOWN")
+            == 1.0
+        )
+    assert not any("watchdog_attempt_count" in sample.name for sample in missing)
+    assert (
+        next(
+            sample.value
+            for sample in stale
+            if sample.name == "senior_pomidor_edge_reliability_freshness_status" and sample.labels["status"] == "STALE"
+        )
+        == 1.0
+    )
+
+
+@pytest.mark.parametrize(
+    ("block", "updates", "metric"),
+    [
+        ("spool", {"status": "DEGRADED"}, "senior_pomidor_edge_spool_status"),
+        ("application", {"process_running": False}, "senior_pomidor_edge_application_status"),
+    ],
+)
+def test_edge_reliability_projection_maps_critical_spool_and_application(block, updates, metric):
+    engine, db = make_db()
+    try:
+        payload = telemetry_payload("2026-06-07T12:02:00Z")
+        payload["system_health"] = reliability_system_health()
+        payload["system_health"][block].update(updates)
+        event = persist_telemetry(db, payload, source="mqtt")
+        samples = edge_reliability_metric_samples(event, datetime(2026, 6, 7, 12, 3, tzinfo=UTC))
+    finally:
+        db.close()
+        engine.dispose()
+
+    assert (
+        next(sample.value for sample in samples if sample.name == metric and sample.labels["status"] == "ALERT") == 1.0
+    )
+
+
+def test_export_once_marks_future_latest_reliability_event_unknown_instead_of_using_older_state():
+    engine, db = make_db()
+    transport = RecordingTransport()
+    try:
+        healthy = telemetry_payload("2026-06-07T12:00:00Z")
+        healthy["system_health"] = reliability_system_health()
+        persist_telemetry(db, healthy, source="mqtt")
+        future = telemetry_payload("2026-06-07T12:10:00Z")
+        future["system_health"] = reliability_system_health()
+        future["system_health"]["watchdog"].update({"state": "suppressed", "suppression": True})
+        persist_telemetry(db, future, source="mqtt")
+
+        export_once(
+            db,
+            enabled_settings(),
+            ExportState(since=datetime(2026, 6, 7, 11, 59, tzinfo=UTC)),
+            transport=transport,
+            now=datetime(2026, 6, 7, 12, 3, tzinfo=UTC),
+        )
+    finally:
+        db.close()
+        engine.dispose()
+
+    assert (
+        next(
+            sample.value
+            for sample in transport.samples
+            if sample.name == "senior_pomidor_edge_reliability_status" and sample.labels["status"] == "UNKNOWN"
+        )
+        == 1.0
+    )
+    assert not any(
+        sample.name
+        in {
+            "senior_pomidor_edge_watchdog_suppression",
+            "senior_pomidor_edge_spool_database_size_bytes",
+            "senior_pomidor_edge_spool_free_space_bytes",
+        }
+        for sample in transport.samples
+    )
 
 
 def test_export_once_does_not_skip_rows_inserted_later_at_checkpoint_timestamp():
@@ -358,6 +616,72 @@ def test_export_once_sends_freshness_for_latest_enabled_pod():
     assert freshness[0].value == 240.0
     assert result.plant_samples == 0
     assert result.freshness_samples == 1
+
+
+def test_export_once_republishes_latest_reliability_snapshot_without_advancing_plant_cursor():
+    engine, db = make_db()
+    first_transport = RecordingTransport()
+    second_transport = RecordingTransport()
+    try:
+        old_payload = telemetry_payload("2026-06-07T12:00:00Z")
+        old_payload["system_health"] = reliability_system_health()
+        old_payload["system_health"]["watchdog"]["state"] = "suppressed"
+        old_payload["system_health"]["watchdog"]["suppression"] = True
+        persist_telemetry(db, old_payload, source="mqtt")
+
+        latest_payload = telemetry_payload("2026-06-07T12:02:00Z")
+        latest_payload["system_health"] = reliability_system_health()
+        persist_telemetry(db, latest_payload, source="mqtt")
+
+        second_device = telemetry_payload("2026-06-07T12:01:00Z")
+        second_device["device_id"] = "pi-002"
+        second_device["system_health"] = reliability_system_health()
+        second_device["system_health"]["spool"].update({"status": "DEGRADED", "disk_status": "DEGRADED"})
+        persist_telemetry(db, second_device, source="mqtt")
+
+        state = ExportState(since=datetime(2026, 6, 7, 12, 1, 30, tzinfo=UTC))
+        first = export_once(
+            db,
+            enabled_settings(),
+            state,
+            transport=first_transport,
+            now=datetime(2026, 6, 7, 12, 3, tzinfo=UTC),
+        )
+        checkpoint = (state.since, state.last_reading_id)
+        second = export_once(
+            db,
+            enabled_settings(),
+            state,
+            transport=second_transport,
+            now=datetime(2026, 6, 7, 12, 4, tzinfo=UTC),
+        )
+    finally:
+        db.close()
+        engine.dispose()
+
+    for transport in (first_transport, second_transport):
+        overall = [sample for sample in transport.samples if sample.name == "senior_pomidor_edge_reliability_status"]
+        assert {sample.labels["device_id"] for sample in overall} == {"pi-001", "pi-002"}
+        assert (
+            next(
+                sample.value
+                for sample in transport.samples
+                if sample.name == "senior_pomidor_edge_watchdog_state"
+                and sample.labels == {"device_id": "pi-001", "state": "healthy"}
+            )
+            == 1.0
+        )
+        assert not any(
+            sample.name == "senior_pomidor_edge_watchdog_state"
+            and sample.labels == {"device_id": "pi-001", "state": "suppressed"}
+            and sample.value == 1.0
+            for sample in transport.samples
+        )
+    assert first.plant_samples > 0
+    assert first.reliability_samples > 0
+    assert second.plant_samples == 0
+    assert second.reliability_samples == first.reliability_samples
+    assert (state.since, state.last_reading_id) == checkpoint
 
 
 def test_remote_write_transport_posts_snappy_protobuf_with_basic_auth():

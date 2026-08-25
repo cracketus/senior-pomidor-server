@@ -11,7 +11,7 @@ Raspberry Pi edge nodes
 
 FastAPI API --> /dashboard and /api/v1 read APIs
 PostgreSQL --> Grafana local dashboard and alerts using raw telemetry and canonical state
-PostgreSQL --> optional Grafana Cloud exporter with sanitized low-cardinality raw telemetry metrics
+PostgreSQL --> optional Grafana Cloud exporter with sanitized low-cardinality plant/reliability metrics
 ```
 
 The API, MQTT broker, PostgreSQL port, dashboard, and Grafana UI are intended for trusted LAN use. For any remote access, put the service behind a VPN, firewall allow-list, or reverse proxy with authentication and TLS.
@@ -119,7 +119,15 @@ Before tagging or publishing a server release:
    Grafana is available at `http://localhost:3000`. Default local admin credentials are defined by `GRAFANA_ADMIN_USER` and `GRAFANA_ADMIN_PASSWORD` in `.env.example`.
    Its PostgreSQL datasource uses `GRAFANA_DB_USER` and `GRAFANA_DB_PASSWORD`, which default to the readonly `grafana_reader` role.
    The `Senior Pomidor Alerts` rule group is provisioned in Grafana Alerting. This first version is Grafana-only and does not configure external email or webhook notifications.
-   Confirm the dashboard includes the raw telemetry panels plus `Latest State Summary`, `Canonical Env VPD`, `State Confidence`, `Average Soil Moisture`, `Latest Sensor Health Summary`, and `Active Anomalies`.
+   Confirm the telemetry dashboard includes the raw telemetry panels plus `Latest State Summary`, `Canonical Env VPD`, `State Confidence`, `Average Soil Moisture`, `Latest Sensor Health Summary`, and `Active Anomalies`.
+   Confirm the separate `Senior Pomidor Edge Reliability` dashboard (`uid=senior-pomidor-edge-reliability`)
+   includes current states, suppression/recovery counters, freshness, backlog/storage pressure, restart/reboot
+   and backlog timelines, and a recovery/degradation state timeline. Missing or unrecognized evidence must
+   display `UNKNOWN`.
+
+   Sanitized synthetic example (`demo-edge-01`; no real timestamps, network identifiers, or raw reasons):
+
+   ![Sanitized synthetic Edge Reliability dashboard](images/edge-reliability-dashboard-demo.svg)
 
 9. If the PostgreSQL volume already existed before Grafana DB access was configured, re-apply the readonly role and grants after migrations:
 
@@ -492,6 +500,14 @@ The default alert set covers:
 - low canonical state confidence using `state_snapshots.payload_jsonb #>> '{quality,state_confidence}'`
 - active high or critical state estimator anomalies from `anomaly_records`
 - stale or missing state snapshots when telemetry is current
+- edge reliability unavailable or stale for more than 20 minutes (warning, 5-minute hold)
+- watchdog suppression, exhausted recovery budget, or recovery failure (critical, 1-minute hold)
+- spool/disk degradation or critical state, or a spool worker error (critical, 5-minute hold)
+- inactive edge application process or systemd service (critical, 1-minute hold)
+
+The edge reliability unavailable/stale query starts from every registered device, so a missing telemetry row
+still produces an alert row even though the provisioned rule uses `noDataState: OK`. Datasource execution errors
+remain `Alerting`. Notification/contact-point configuration is intentionally not provisioned here.
 
 VPD threshold ranges and operational interpretation are documented in [VPD_ALERTS.md](VPD_ALERTS.md).
 
