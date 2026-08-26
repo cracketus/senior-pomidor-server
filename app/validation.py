@@ -212,7 +212,6 @@ def validate_telemetry_payload(payload: Any) -> tuple[str, datetime]:
 
 
 def validate_topic_device(topic: str, topic_prefix: str, payload_device_id_value: str) -> None:
-    parts = topic.split("/")
-    expected = [topic_prefix, payload_device_id_value, "telemetry"]
-    if parts != expected:
+    expected = f"{topic_prefix}/{payload_device_id_value}/telemetry"
+    if topic != expected:
         raise ValidationError("MQTT topic must match {topic_prefix}/{device_id}/telemetry")

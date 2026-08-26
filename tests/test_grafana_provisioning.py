@@ -33,6 +33,7 @@ def test_grafana_dashboard_provisioning_files_reference_checked_in_dashboard():
 
     assert "uid: senior-pomidor-postgres" in datasource
     assert "name: Senior Pomidor PostgreSQL" in datasource
+    assert "database: ${POSTGRES_DB}" in datasource
     assert "path: /etc/grafana/provisioning/dashboards/json" in provider
     assert DASHBOARD_PATH.is_file()
     assert ALERTS_PATH.is_file()

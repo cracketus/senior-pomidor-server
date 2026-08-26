@@ -34,6 +34,57 @@ Before tagging or publishing a server release:
 - Confirm release notes state the trusted-LAN security boundary, optional bearer-token behavior, MQTT default auth posture, and public dataset/export limitations.
 - Confirm `git status -sb` is clean on the intended release branch before tagging.
 
+### Epic #225 release qualification
+
+The `docker-e2e` CI job is a separate pull-request check. Repository branch protection must require that exact
+check name in addition to `test`, `quality`, and `security`; adding the workflow job alone does not change GitHub
+branch-protection settings. The job builds the exact checkout in a disposable Compose project, binds only
+loopback ports, uses synthetic credentials and a unique MQTT namespace, disables Grafana Cloud export, verifies
+migrations/readiness/worker health, and exercises HTTP/MQTT idempotency, PostgreSQL, latest/history, State
+Estimator, health summary, operator reliability, Grafana provisioning, and all four reliability alert SQL
+non-firing/firing/recovery transitions. On failure it prints only bounded state/log tails. Cleanup uses the same
+project and verified task-owned bind root; it never runs `down -v`.
+
+The manually dispatched `Release qualification` workflow exposes RC checks named `system-invariants`,
+`edge-core-e2e`, and `release-validation`. Pin the Core SHA/image/digest and Edge SHA/image/digest. Store only
+sanitized reports under `docs/release-evidence/<report-id>/` on the selected evidence ref:
+
+```text
+docs/release-evidence/<report-id>/edge-core-compatibility.json
+docs/release-evidence/<report-id>/release-validation.json
+```
+
+The workflow generates the invariant report from the exact Core checkout. It validates the other two reports
+with `--require-pass` and rejects missing scenarios, identity drift, synthetic compatibility evidence, wrong
+evidence scope, impossible counts, duplicate IDs, inconsistent alert outcomes, and every required `FAIL` or
+`NOT_RUN`. These checks validate bounded evidence; they do not run or authorize staging, canary, or production.
+
+Before producing a compatibility report, use a persistent isolated staging environment with a distinct project
+name, synthetic credentials, unique MQTT namespace, isolated PostgreSQL/Grafana/Mosquitto/application paths,
+loopback-only published ports, simulated sensor boundary, and real Edge and Core applications. Prove the
+Grafana Cloud exporter/profile is absent and remote writes are zero. Record normal delivery, Core outage/spool
+growth, full recovery drain, lost acknowledgement after persistence, HTTP/MQTT duplicates, Edge restart with
+pending records, fresh observations during replay, recovering/suppressed watchdog, degraded/critical spool, and
+delayed/stale/future/out-of-order observations. A 24-hour software-staging soak fails on a crash, unrecovered
+unhealthy state, unbounded resource/spool growth, silent durable loss, unexpected duplicates, or Edge/Core count
+mismatch.
+
+The server-side persistent environment, exact render/start commands, reserved device identity boundary, and
+non-destructive stop rules are defined in [STAGING.md](STAGING.md).
+
+For exact-bundle rehearsal, record the Core candidate SHA, runtime-bundle SHA-256, and Edge image digest, deploy
+those immutable artifacts without rebuilding, and compare rendered production overlays to candidate inputs
+without connecting production paths or enabling external export. Rehearse application-only rollback to
+`v0.2.4`; preserve PostgreSQL, Grafana, Ollama, and all volumes, then verify ingestion and reads and that additive
+Edge fields remain safely ignored.
+
+Production rollout still requires separate human authorization. Record pre-change version, `/health`, `/ready`,
+worker freshness, representative counts, and a fresh verified backup/checksum. Roll out Core first and then one
+Edge canary. Observe for at least 60 minutes and two freshness windows; keep all other Edge instances unchanged.
+Abort on readiness/worker/ingestion/count/duplicate/stale-to-healthy/alert-transition/privacy/export failure.
+Rollback only the application image through the normal script and repeat health/data checks. Do not close #225
+until the canary, rollback, and 24-hour stable production observation are sanitized, attached, and `PASS`.
+
 ## LAN Deployment Checklist
 
 1. Install Docker Engine or Docker Desktop on the home server.

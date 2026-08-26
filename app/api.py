@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session, load_only, selectinload
 
 from app.config import Settings, get_settings
 from app.db import get_db
+from app.environment_boundary import validate_environment_device
 from app.models import (
     ActionSimulation,
     AnomalyRecord,
@@ -194,6 +195,11 @@ async def ingest_telemetry(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
     try:
+        validate_environment_device(
+            payload.get("device_id"),
+            deployment_mode=settings.deployment_mode,
+            staging_device_prefix=settings.staging_device_prefix,
+        )
         result = persist_telemetry_result(db, payload, source="http")
     except ValidationError as exc:
         db.rollback()
@@ -263,6 +269,11 @@ async def upload_photo(
     if not content.startswith(b"\xff\xd8"):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="photo must be JPEG")
     try:
+        validate_environment_device(
+            device_id,
+            deployment_mode=settings.deployment_mode,
+            staging_device_prefix=settings.staging_device_prefix,
+        )
         stored, created = persist_photo(
             db,
             photo_id=photo_id,

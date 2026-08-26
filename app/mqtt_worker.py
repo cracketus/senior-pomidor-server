@@ -10,6 +10,7 @@ import paho.mqtt.client as mqtt
 
 from app.config import settings
 from app.db import SessionLocal
+from app.environment_boundary import validate_environment_device
 from app.logging_config import configure_logging
 from app.services import TelemetryConflictError, persist_telemetry_result
 from app.validation import ValidationError, optional_record_id, validate_telemetry_payload, validate_topic_device
@@ -47,6 +48,11 @@ def on_message(_client: mqtt.Client, _userdata: object, message: mqtt.MQTTMessag
         payload = json.loads(message.payload.decode("utf-8"))
         record_id = optional_record_id(payload)
         device_id, _timestamp = validate_telemetry_payload(payload)
+        validate_environment_device(
+            device_id,
+            deployment_mode=settings.deployment_mode,
+            staging_device_prefix=settings.staging_device_prefix,
+        )
         validate_topic_device(message.topic, settings.mqtt_topic_prefix, device_id)
     except (json.JSONDecodeError, UnicodeDecodeError, ValidationError):
         logger.warning(

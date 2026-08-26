@@ -1,0 +1,187 @@
+name: Release qualification
+
+on:
+  workflow_dispatch:
+    inputs:
+      core_sha:
+        description: Exact 40-character Core candidate SHA
+        required: true
+        type: string
+      core_image:
+        description: Immutable Core image reference
+        required: true
+        type: string
+      core_digest:
+        description: Exact Core sha256 image digest
+        required: true
+        type: string
+      edge_sha:
+        description: Exact 40-character Edge candidate SHA
+        required: true
+        type: string
+      edge_image:
+        description: Immutable Edge image reference
+        required: true
+        type: string
+      edge_digest:
+        description: Exact Edge sha256 image digest
+        required: true
+        type: string
+      evidence_ref:
+        description: Ref containing sanitized docs/release-evidence reports
+        required: true
+        type: string
+      report_id:
+        description: Bounded directory name under docs/release-evidence
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-qualification-${{ inputs.core_sha }}-${{ inputs.edge_digest }}
+  cancel-in-progress: false
+
+jobs:
+  system-invariants:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact Core candidate
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.core_sha }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: python -m pip install -e ".[dev]"
+
+      - name: Run invariant consumer tests
+        run: >-
+          python -m pytest -q -p no:cacheprovider
+          tests/test_contract_fixtures.py
+          tests/test_edge_integration_fixtures.py
+          tests/test_edge_reliability.py
+          tests/test_operator_edge_reliability.py
+          tests/test_health_summary.py
+          tests/test_public_status.py
+          tests/test_release_qualification.py
+
+      - name: Generate bounded invariant report
+        env:
+          CORE_SHA: ${{ inputs.core_sha }}
+          CORE_IMAGE: ${{ inputs.core_image }}
+          CORE_DIGEST: ${{ inputs.core_digest }}
+          EDGE_SHA: ${{ inputs.edge_sha }}
+          EDGE_IMAGE: ${{ inputs.edge_image }}
+          EDGE_DIGEST: ${{ inputs.edge_digest }}
+        run: >-
+          python -m tools.release_qualification system-invariants
+          --core-sha "$CORE_SHA" --core-image "$CORE_IMAGE" --core-digest "$CORE_DIGEST"
+          --edge-sha "$EDGE_SHA" --edge-image "$EDGE_IMAGE" --edge-digest "$EDGE_DIGEST"
+          --output qualification-artifacts/system-invariants.json
+
+      - name: Upload invariant evidence
+        uses: actions/upload-artifact@v6
+        with:
+          name: system-invariants-${{ inputs.core_sha }}
+          path: qualification-artifacts/system-invariants.json
+          if-no-files-found: error
+          retention-days: 30
+
+  edge-core-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact Core candidate
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.core_sha }}
+
+      - name: Check out sanitized evidence ref
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.evidence_ref }}
+          path: _qualification_evidence
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: python -m pip install -e ".[dev]"
+
+      - name: Validate real Edge/Core staging evidence
+        env:
+          REPORT_ID: ${{ inputs.report_id }}
+          CORE_SHA: ${{ inputs.core_sha }}
+          CORE_IMAGE: ${{ inputs.core_image }}
+          CORE_DIGEST: ${{ inputs.core_digest }}
+          EDGE_SHA: ${{ inputs.edge_sha }}
+          EDGE_IMAGE: ${{ inputs.edge_image }}
+          EDGE_DIGEST: ${{ inputs.edge_digest }}
+        run: |
+          if [[ ! "$REPORT_ID" =~ ^[a-z0-9][a-z0-9._-]{0,63}$ ]]; then
+            echo "invalid bounded report_id"
+            exit 1
+          fi
+          python -m tools.release_qualification validate \
+            --kind edge-core-compatibility \
+            --report "_qualification_evidence/docs/release-evidence/$REPORT_ID/edge-core-compatibility.json" \
+            --require-pass --core-sha "$CORE_SHA" --core-image "$CORE_IMAGE" \
+            --core-digest "$CORE_DIGEST" --edge-sha "$EDGE_SHA" \
+            --edge-image "$EDGE_IMAGE" --edge-digest "$EDGE_DIGEST"
+
+  release-validation:
+    needs: [system-invariants, edge-core-e2e]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact Core candidate
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.core_sha }}
+
+      - name: Check out sanitized evidence ref
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.evidence_ref }}
+          path: _qualification_evidence
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: python -m pip install -e ".[dev]"
+
+      - name: Validate complete release evidence
+        env:
+          REPORT_ID: ${{ inputs.report_id }}
+          CORE_SHA: ${{ inputs.core_sha }}
+          CORE_IMAGE: ${{ inputs.core_image }}
+          CORE_DIGEST: ${{ inputs.core_digest }}
+          EDGE_SHA: ${{ inputs.edge_sha }}
+          EDGE_IMAGE: ${{ inputs.edge_image }}
+          EDGE_DIGEST: ${{ inputs.edge_digest }}
+        run: |
+          if [[ ! "$REPORT_ID" =~ ^[a-z0-9][a-z0-9._-]{0,63}$ ]]; then
+            echo "invalid bounded report_id"
+            exit 1
+          fi
+          python -m tools.release_qualification validate \
+            --kind release-validation \
+            --report "_qualification_evidence/docs/release-evidence/$REPORT_ID/release-validation.json" \
+            --require-pass --core-sha "$CORE_SHA" --core-image "$CORE_IMAGE" \
+            --core-digest "$CORE_DIGEST" --edge-sha "$EDGE_SHA" \
+            --edge-image "$EDGE_IMAGE" --edge-digest "$EDGE_DIGEST"

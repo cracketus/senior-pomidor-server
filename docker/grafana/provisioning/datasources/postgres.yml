@@ -10,7 +10,7 @@ datasources:
     secureJsonData:
       password: ${GRAFANA_DB_PASSWORD}
     jsonData:
-      database: senior_pomidor
+      database: ${POSTGRES_DB}
       sslmode: disable
       postgresVersion: 1600
       timescaledb: false
