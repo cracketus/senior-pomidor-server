@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import yaml
+
 ROOT = Path(__file__).resolve().parents[1]
 TEMPLATES = ROOT / ".github" / "ISSUE_TEMPLATE"
 
@@ -60,3 +62,16 @@ def test_workflow_docs_require_github_authentication_preflight_and_ci_readback()
         "NOT_RUN",
     ):
         assert required in content
+
+
+def test_ci_has_separate_bounded_docker_e2e_pull_request_job() -> None:
+    workflow_path = ROOT / ".github" / "workflows" / "ci.yml"
+    workflow = yaml.safe_load(workflow_path.read_text(encoding="utf-8"))
+    job = workflow["jobs"]["docker-e2e"]
+    rendered = workflow_path.read_text(encoding="utf-8")
+
+    assert job["timeout-minutes"] == 20
+    assert job["env"]["RUN_DOCKER_E2E"] == "1"
+    assert "github.run_id" in job["env"]["SENIOR_POMIDOR_E2E_PROJECT"]
+    assert "tests/test_docker_e2e.py" in rendered
+    assert "pull_request:" in rendered

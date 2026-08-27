@@ -1,7 +1,7 @@
 import tempfile
 from functools import lru_cache
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -11,6 +11,8 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     database_url: str = "sqlite:///./senior_pomidor.db"
+    deployment_mode: Literal["development", "staging", "rehearsal", "production"] = "development"
+    staging_device_prefix: str = "edge-staging-"
     api_host: str = "0.0.0.0"
     api_port: int = 8000
     mqtt_host: str = "localhost"

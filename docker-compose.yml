@@ -9,6 +9,8 @@ x-default-logging: &default-logging
 
 x-app-environment: &app-environment
   DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://senior_pomidor:senior_pomidor@postgres:5432/senior_pomidor}
+  DEPLOYMENT_MODE: ${DEPLOYMENT_MODE:-development}
+  STAGING_DEVICE_PREFIX: ${STAGING_DEVICE_PREFIX:-edge-staging-}
 
 services:
   migrate:

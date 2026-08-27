@@ -461,6 +461,41 @@ POST /api/v1/state-estimator/replay
 
 Set `STATE_ESTIMATOR_REPLAY_ENABLED=true` to enable it for local deterministic replay inputs.
 
+## Release qualification artifacts
+
+Release qualification uses three internal, machine-readable contracts. They do not change telemetry,
+storage, read APIs, or public output:
+
+- `senior-pomidor.system-invariants.v1` records the exact Core and Edge revisions/images plus deterministic
+  current-system invariant scenarios. The server CI/tooling is the producer; the RC workflow and reviewer are
+  consumers. Stable `sp-inv-001..008` definitions and positive/failure test mappings live in
+  `docs/system-invariants-v1.yaml`. The three action/control scenarios remain `NOT_IMPLEMENTED` and `NOT_RUN`
+  until the physical Control/Guardrails/Executor subsystem exists.
+- `senior-pomidor.edge-core-compatibility-report.v1` is produced by the approved real Edge/Core staging
+  workflow. It records the supported old-Edge/new-Core and new-Edge/rollback-Core window and all required
+  outage, drain, retry, duplicate, restart, backlog, watchdog, spool, and time-order scenarios. Server-only or
+  synthetic evidence cannot satisfy its RC gate.
+- `senior-pomidor.release-validation.v1` is assembled by the release owner after software, Docker, staging,
+  exact-bundle rehearsal, canary, rollback, and observation. The RC workflow and epic #225 evidence record are
+  consumers. A release report cannot pass while any required gate or implemented scenario is `FAIL` or
+  `NOT_RUN`.
+
+All three contracts require 40-character lowercase Git SHAs, immutable `sha256` image digests, UTC timestamps
+ending in `Z`, unique bounded scenario IDs, non-negative generated/persisted/read-back/duplicate/missing/unknown
+counts, bounded alert outcomes, and an aggregate `PASS|FAIL|NOT_RUN`. `persisted` cannot exceed `generated`, and
+`read_back` cannot exceed `persisted`. Reports are sanitized evidence: they must not contain raw payloads,
+reasons/errors, boot IDs, paths, service names, network identifiers, credentials, or unbounded logs.
+
+For compatibility reports, `generated` counts unique scientific observations; delivery retries are counted in
+`duplicates`. Every required PASS scenario has at least one generated observation, zero missing observations,
+and exact `generated == persisted == read_back` counts. Image references must end in and match the declared
+immutable digest. Release PASS additionally enforces at least 24 hours for cross-repository staging and production
+observation, at least 60 minutes for the canary, and a positive duration for every other gate.
+
+Schemas are stored under `docs/schemas/`. `python -m tools.release_qualification validate` performs schema and
+semantic checks; `--require-pass` also requires real staging/rehearsal evidence for compatibility and the exact
+CI/staging/rehearsal/canary/production scope for each release gate.
+
 ## Operational Boundaries
 
 Current capabilities include telemetry v1/v2 ingestion, MQTT ingestion, HTTP fallback ingestion, photo upload/list/download, local dashboard, Grafana/PostgreSQL observability, Grafana Cloud public metrics export, public status JSON, and offline AI analysis.

@@ -1,4 +1,9 @@
+import json
+import os
+import subprocess
 from pathlib import Path
+
+import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 BASE = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")
@@ -34,6 +39,12 @@ def test_local_overlay_contains_complete_shared_infrastructure() -> None:
     assert "build: ." in DEV
 
 
+def test_grafana_reader_init_uses_socket_during_initdb_and_honors_libpq_host() -> None:
+    script = (ROOT / "docker/postgres/init-grafana-reader.sh").read_text(encoding="utf-8")
+    assert 'POSTGRES_HOST="${POSTGRES_HOST:-${PGHOST:-/var/run/postgresql}}"' in script
+    assert 'POSTGRES_PORT="${POSTGRES_PORT:-${PGPORT:-5432}}"' in script
+
+
 def test_production_environment_exposes_only_platform_interfaces() -> None:
     for setting in ("PLATFORM_DOCKER_NETWORK", "POSTGRES_HOST", "POSTGRES_PORT", "DATABASE_URL"):
         assert f"{setting}=" in ENV
@@ -48,6 +59,48 @@ def test_production_environment_exposes_only_platform_interfaces() -> None:
         assert removed not in ENV
     assert "COMPOSE_PROFILES=cloud-export" in ENV
     assert "DAILY_STORY_OLLAMA_HOST=http://ollama:11434" in ENV
+
+
+def test_production_overlay_forces_production_mode_without_new_env_file_field() -> None:
+    production = yaml.safe_load(PROD)
+    for service in (
+        "migrate",
+        "api",
+        "worker",
+        "state-estimator-worker",
+        "grafana-cloud-exporter",
+        "daily-story-worker",
+    ):
+        assert production["services"][service]["environment"]["DEPLOYMENT_MODE"] == "production"
+
+    environment = os.environ.copy()
+    environment.pop("DEPLOYMENT_MODE", None)
+    environment["APP_IMAGE"] = "senior-pomidor-server:production-config-test"
+    rendered = subprocess.run(
+        [
+            "docker",
+            "compose",
+            "-f",
+            "docker-compose.yml",
+            "-f",
+            "docker-compose.prod.yml",
+            "--profile",
+            "*",
+            "config",
+            "--format",
+            "json",
+        ],
+        cwd=ROOT,
+        env=environment,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        capture_output=True,
+        check=True,
+    )
+    config = json.loads(rendered.stdout)
+    for service in production["services"]:
+        assert config["services"][service]["environment"]["DEPLOYMENT_MODE"] == "production"
 
 
 def test_secure_central_paths_and_root_orchestration() -> None:

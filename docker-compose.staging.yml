@@ -1,0 +1,123 @@
+---
+# Persistent, isolated software staging overlay. Combine with docker-compose.yml only.
+x-staging-environment: &staging-environment
+  DATABASE_URL: ${STAGING_DATABASE_URL:?STAGING_DATABASE_URL must select the isolated staging database}
+  DEPLOYMENT_MODE: staging
+  STAGING_DEVICE_PREFIX: ${STAGING_DEVICE_PREFIX:-edge-staging-}
+
+x-staging-labels: &staging-labels
+  senior-pomidor.environment: staging
+  senior-pomidor.external-export: "disabled"
+
+services:
+  migrate:
+    environment: *staging-environment
+    labels: *staging-labels
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    environment:
+      <<: *staging-environment
+      MQTT_TOPIC_PREFIX: ${STAGING_MQTT_TOPIC_PREFIX:?STAGING_MQTT_TOPIC_PREFIX is required}
+      TELEMETRY_UPLOAD_TOKEN: ${STAGING_TELEMETRY_UPLOAD_TOKEN:?STAGING_TELEMETRY_UPLOAD_TOKEN is required}
+      PHOTO_UPLOAD_TOKEN: ${STAGING_PHOTO_UPLOAD_TOKEN:?STAGING_PHOTO_UPLOAD_TOKEN is required}
+      GRAFANA_CLOUD_EXPORT_ENABLED: "false"
+      GRAFANA_CLOUD_REMOTE_WRITE_URL: ""
+      GRAFANA_CLOUD_INSTANCE_ID: ""
+      GRAFANA_CLOUD_API_TOKEN: ""
+    labels: *staging-labels
+    ports: !override
+      - "127.0.0.1:${STAGING_API_PUBLISHED_PORT:?STAGING_API_PUBLISHED_PORT is required}:8000"
+    volumes:
+      - ${STAGING_PHOTO_DATA_DIR:?STAGING_PHOTO_DATA_DIR is required}:/app/data/photos
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  worker:
+    environment:
+      <<: *staging-environment
+      MQTT_TOPIC_PREFIX: ${STAGING_MQTT_TOPIC_PREFIX:?STAGING_MQTT_TOPIC_PREFIX is required}
+      GRAFANA_CLOUD_EXPORT_ENABLED: "false"
+    labels: *staging-labels
+    volumes:
+      - ${STAGING_PHOTO_DATA_DIR:?STAGING_PHOTO_DATA_DIR is required}:/app/data/photos
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  state-estimator-worker:
+    environment: *staging-environment
+    labels: *staging-labels
+    volumes:
+      - ${STAGING_ESTIMATOR_PRIVATE_DATA_DIR:?STAGING_ESTIMATOR_PRIVATE_DATA_DIR is required}:/app/data/private
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  grafana-cloud-exporter:
+    environment:
+      <<: *staging-environment
+      GRAFANA_CLOUD_EXPORT_ENABLED: "false"
+      GRAFANA_CLOUD_REMOTE_WRITE_URL: ""
+      GRAFANA_CLOUD_INSTANCE_ID: ""
+      GRAFANA_CLOUD_API_TOKEN: ""
+    labels: *staging-labels
+
+  mosquitto:
+    labels: *staging-labels
+    ports: !override
+      - "127.0.0.1:${STAGING_MQTT_PUBLISHED_PORT:?STAGING_MQTT_PUBLISHED_PORT is required}:1883"
+    volumes:
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - ${STAGING_MOSQUITTO_DATA_DIR:?STAGING_MOSQUITTO_DATA_DIR is required}:/mosquitto/data
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    labels: *staging-labels
+    environment:
+      POSTGRES_DB: ${STAGING_POSTGRES_DB:?STAGING_POSTGRES_DB is required}
+      POSTGRES_USER: ${STAGING_POSTGRES_USER:?STAGING_POSTGRES_USER is required}
+      POSTGRES_PASSWORD: ${STAGING_POSTGRES_PASSWORD:?STAGING_POSTGRES_PASSWORD is required}
+      GRAFANA_DB_USER: ${STAGING_GRAFANA_DB_USER:?STAGING_GRAFANA_DB_USER is required}
+      GRAFANA_DB_PASSWORD: ${STAGING_GRAFANA_DB_PASSWORD:?STAGING_GRAFANA_DB_PASSWORD is required}
+    ports:
+      - "127.0.0.1:${STAGING_POSTGRES_PUBLISHED_PORT:?STAGING_POSTGRES_PUBLISHED_PORT is required}:5432"
+    volumes:
+      - ${STAGING_POSTGRES_DATA_DIR:?STAGING_POSTGRES_DATA_DIR is required}:/var/lib/postgresql/data
+      - ./docker/postgres/init-grafana-reader.sh:/docker-entrypoint-initdb.d/20-grafana-reader.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  grafana:
+    image: grafana/grafana-oss:11.5.0
+    restart: unless-stopped
+    profiles: [observability]
+    labels: *staging-labels
+    environment:
+      GF_SECURITY_ADMIN_USER: ${STAGING_GRAFANA_ADMIN_USER:?STAGING_GRAFANA_ADMIN_USER is required}
+      GF_SECURITY_ADMIN_PASSWORD: ${STAGING_GRAFANA_ADMIN_PASSWORD:?STAGING_GRAFANA_ADMIN_PASSWORD is required}
+      GRAFANA_DB_USER: ${STAGING_GRAFANA_DB_USER:?STAGING_GRAFANA_DB_USER is required}
+      GRAFANA_DB_PASSWORD: ${STAGING_GRAFANA_DB_PASSWORD:?STAGING_GRAFANA_DB_PASSWORD is required}
+      POSTGRES_DB: ${STAGING_POSTGRES_DB:?STAGING_POSTGRES_DB is required}
+    ports:
+      - "127.0.0.1:${STAGING_GRAFANA_PUBLISHED_PORT:?STAGING_GRAFANA_PUBLISHED_PORT is required}:3000"
+    volumes:
+      - ${STAGING_GRAFANA_DATA_DIR:?STAGING_GRAFANA_DATA_DIR is required}:/var/lib/grafana
+      - ./docker/grafana/provisioning:/etc/grafana/provisioning:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://127.0.0.1:3000/api/health >/dev/null"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s

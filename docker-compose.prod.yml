@@ -1,6 +1,21 @@
 ---
 # Production overlay. The platform administrator owns this external network and
 # the PostgreSQL, Grafana, and Ollama services attached to it.
+services:
+  migrate:
+    environment: &production-environment
+      DEPLOYMENT_MODE: production
+  api:
+    environment: *production-environment
+  worker:
+    environment: *production-environment
+  state-estimator-worker:
+    environment: *production-environment
+  grafana-cloud-exporter:
+    environment: *production-environment
+  daily-story-worker:
+    environment: *production-environment
+
 networks:
   default:
     external: true

@@ -1,0 +1,59 @@
+schema_version: senior-pomidor.system-invariant-catalog.v1
+owner: architecture-and-reliability
+invariants:
+  - invariant_id: sp-inv-001
+    statement: A durably accepted observation is never silently lost.
+    implementation_state: IMPLEMENTED
+    evidence_scope: [CI, STAGING]
+    components: [http-ingestion, mqtt-ingestion, postgresql, read-api]
+    positive_tests: [tests/test_api.py::test_http_telemetry_ingest_and_latest, tests/test_docker_e2e.py::test_docker_compose_stack_ingests_and_serves_data]
+    failure_tests: [tests/test_api.py::test_record_id_storage_failure_is_retryable_without_exception_details]
+  - invariant_id: sp-inv-002
+    statement: Duplicate delivery cannot create an unintended duplicate scientific observation.
+    implementation_state: IMPLEMENTED
+    evidence_scope: [CI, STAGING]
+    components: [http-ingestion, mqtt-ingestion, postgresql]
+    positive_tests: [tests/test_api.py::test_record_id_accepts_and_deduplicates_with_exact_ack]
+    failure_tests: [tests/test_api.py::test_record_id_rejects_content_and_observation_identity_conflicts, tests/test_edge_integration_fixtures.py::test_reliability_fixture_cross_transport_replay_is_duplicate]
+  - invariant_id: sp-inv-003
+    statement: Physical observation time is preserved independently of receive and replay time.
+    implementation_state: IMPLEMENTED
+    evidence_scope: [CI, STAGING]
+    components: [telemetry-contract, postgresql, latest-history-api]
+    positive_tests: [tests/test_temporal_integrity.py::test_delayed_out_of_order_delivery_preserves_observation_time_and_latest_order, tests/test_temporal_integrity.py::test_europe_vienna_dst_fold_changes_local_offset_without_changing_utc_identity]
+    failure_tests: [tests/test_temporal_integrity.py::test_duplicate_delivery_with_later_receive_attempt_does_not_rewrite_stored_times, tests/test_temporal_integrity.py::test_clock_skew_and_exact_freshness_boundary_fail_safe]
+  - invariant_id: sp-inv-004
+    statement: Missing, stale, future, or unknown required input is never promoted to healthy state.
+    implementation_state: IMPLEMENTED
+    evidence_scope: [CI, STAGING]
+    components: [edge-reliability, health-summary, operator-api, grafana]
+    positive_tests: [tests/test_operator_edge_reliability.py::test_freshness_exact_boundaries]
+    failure_tests: [tests/test_edge_reliability.py::test_missing_and_partial_blocks_are_unknown_but_not_alerts]
+  - invariant_id: sp-inv-005
+    statement: Invalid and legacy payloads fail or degrade explicitly without partial canonical corruption.
+    implementation_state: IMPLEMENTED
+    evidence_scope: [CI, STAGING]
+    components: [validation, telemetry-normalization, state-estimator]
+    positive_tests: [tests/test_contract_fixtures.py::test_telemetry_contract_fixtures_match_runtime_validation]
+    failure_tests: [tests/test_api.py::test_rejects_malformed_timestamp]
+  - invariant_id: sp-inv-006
+    statement: One action identity cannot produce duplicate dose-bearing execution.
+    implementation_state: NOT_IMPLEMENTED
+    evidence_scope: [SIMULATION, HIL]
+    components: [executor]
+    positive_tests: []
+    failure_tests: []
+  - invariant_id: sp-inv-007
+    statement: Expired or unsupported action proposals cannot reach physical dispatch.
+    implementation_state: NOT_IMPLEMENTED
+    evidence_scope: [SIMULATION, HIL]
+    components: [control, guardrails, executor]
+    positive_tests: []
+    failure_tests: []
+  - invariant_id: sp-inv-008
+    statement: AI or LLM output cannot bypass typed Control, Guardrails, and Executor boundaries.
+    implementation_state: NOT_IMPLEMENTED
+    evidence_scope: [SIMULATION, HIL]
+    components: [llm-vlm, control, guardrails, executor]
+    positive_tests: []
+    failure_tests: []

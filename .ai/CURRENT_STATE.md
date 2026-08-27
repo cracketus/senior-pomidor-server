@@ -1,6 +1,6 @@
 # Current state
 
-Owner: maintainer performing a release or operational change. Update after every deployed subsystem, contract, topology, season, or rehearsal change and review at least monthly during the active season. Snapshot date: 2026-08-25. Do not add addresses, credentials, hostnames, or other private infrastructure values.
+Owner: maintainer performing a release or operational change. Update after every deployed subsystem, contract, topology, season, or rehearsal change and review at least monthly during the active season. Snapshot date: 2026-08-26. Do not add addresses, credentials, hostnames, or other private infrastructure values.
 
 ## Running/deployable services
 
@@ -9,6 +9,9 @@ Owner: maintainer performing a release or operational change. Update after every
 - `state-estimator-worker`: canonical state, confidence, health, anomaly, diagnostics, and private JSONL generation.
 - `migrate`: one-shot Alembic migration gate.
 - Local-development overlay: PostgreSQL, Mosquitto, optional Grafana, Ollama, daily story, and Grafana Cloud exporter profiles.
+- Persistent software-staging overlay: isolated PostgreSQL, Mosquitto, Grafana and application paths/credentials,
+  loopback-only ports, reserved `edge-staging-*` identities, and external export disabled. Runtime staging evidence
+  is not yet recorded.
 - Production application: source-free immutable bundle managed by systemd/Compose. PostgreSQL, Grafana, and Ollama are separate shared platform services on `srv-platform`; the application must not lifecycle-manage them.
 
 ## Active contracts and storage
@@ -27,6 +30,8 @@ Owner: maintainer performing a release or operational change. Update after every
 - Public status: sanitized `senior-pomidor.status.v1`; optional Grafana Cloud export contains only the documented
   low-cardinality plant and edge reliability projections.
 - PostgreSQL is the durable source of truth for application records; uploaded photos and private estimator logs use application-owned persistent paths.
+- Release evidence contracts: `senior-pomidor.system-invariants.v1`,
+  `senior-pomidor.edge-core-compatibility-report.v1`, and `senior-pomidor.release-validation.v1`.
 
 See [`docs/CONTRACTS.md`](../docs/CONTRACTS.md), schemas in [`docs/schemas/`](../docs/schemas/), and fixtures in [`tests/fixtures/contracts/`](../tests/fixtures/contracts/).
 
@@ -43,6 +48,9 @@ Not implemented as active physical-control contracts: World Model forecasts, Wea
 - The growing season is active: prefer availability, ingestion correctness, data preservation, and small reversible changes over unrelated refactoring.
 - Coding agents do not have production secrets, production shell/database access, real GPIO, actuators, or permission to deploy by default.
 - Standard CI is software-only. Camera, cable, Wi-Fi, SD-card, sensor, GPIO, and biological outcomes need explicit manual evidence.
+- PR CI includes a separately named Docker E2E job; RC qualification separately requires fail-closed system
+  invariant, real Edge/Core compatibility, and release-validation reports. Repository branch protection must be
+  configured by a maintainer to require the Docker job.
 - Backups and restore tooling exist, but recovery confidence depends on a recent isolated restore rehearsal; a backup file alone is not proof.
 - Rehearsal uses a distinct Compose project, loopback-only ports, isolated paths/credentials, and must not enable the Grafana Cloud exporter.
 - Windows and Linux remain relevant to development and migration; filesystem, permissions, path, and temporary-directory behavior must be checked deliberately.
@@ -50,7 +58,12 @@ Not implemented as active physical-control contracts: World Model forecasts, Wea
 
 ## Deployment and rehearsal
 
-Local development uses `docker-compose.yml` plus `docker-compose.dev.yml`. Production uses `docker-compose.yml` plus `docker-compose.prod.yml` and platform-managed dependencies as documented in [`docs/UBUNTU_HOST.md`](../docs/UBUNTU_HOST.md). Migration/cutover and isolated rehearsal are documented in [`docs/MIGRATION_WINDOWS_TO_UBUNTU.md`](../docs/MIGRATION_WINDOWS_TO_UBUNTU.md); rollback must stop only the application and preserve shared services/data.
+Local development uses `docker-compose.yml` plus `docker-compose.dev.yml`. Persistent software staging uses
+`docker-compose.yml` plus `docker-compose.staging.yml` as documented in [`docs/STAGING.md`](../docs/STAGING.md).
+Production uses `docker-compose.yml` plus `docker-compose.prod.yml` and platform-managed dependencies as
+documented in [`docs/UBUNTU_HOST.md`](../docs/UBUNTU_HOST.md). Migration/cutover and isolated rehearsal are
+documented in [`docs/MIGRATION_WINDOWS_TO_UBUNTU.md`](../docs/MIGRATION_WINDOWS_TO_UBUNTU.md); rollback must stop
+only the application and preserve shared services/data.
 
 ## Known gaps requiring follow-up
 

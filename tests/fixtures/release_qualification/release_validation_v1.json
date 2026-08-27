@@ -1,0 +1,20 @@
+{
+  "schema_version": "senior-pomidor.release-validation.v1",
+  "generated_at_utc": "2026-08-26T10:00:00Z",
+  "status": "NOT_RUN",
+  "core": {"git_sha": "c71d019f5d5511899b6134c7bc57ebf867d61755", "image_ref": "ghcr.io/cracketus/senior-pomidor-server@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "image_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
+  "edge": {"git_sha": "e1244ae0f9e4f08e5b272839c970e13f4fb7dcc9", "image_ref": "ghcr.io/cracketus/senior-pomidor-edge@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", "image_digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"},
+  "runtime_bundle_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "rollback_core_version": "v0.2.4",
+  "gates": [
+    {"gate_id": "software-ci", "evidence_scope": "CI", "status": "NOT_RUN", "started_at_utc": "2026-08-26T10:00:00Z", "finished_at_utc": "2026-08-26T10:00:00Z", "evidence_refs": ["replace-with-ci-run"]},
+    {"gate_id": "docker-compose-e2e", "evidence_scope": "CI", "status": "NOT_RUN", "started_at_utc": "2026-08-26T10:00:00Z", "finished_at_utc": "2026-08-26T10:00:00Z", "evidence_refs": ["replace-with-docker-e2e-run"]},
+    {"gate_id": "cross-repository-staging", "evidence_scope": "STAGING", "status": "NOT_RUN", "started_at_utc": "2026-08-26T10:00:00Z", "finished_at_utc": "2026-08-26T10:00:00Z", "evidence_refs": ["replace-with-compatibility-report"]},
+    {"gate_id": "exact-bundle-rehearsal", "evidence_scope": "REHEARSAL", "status": "NOT_RUN", "started_at_utc": "2026-08-26T10:00:00Z", "finished_at_utc": "2026-08-26T10:00:00Z", "evidence_refs": ["replace-with-rehearsal-evidence"]},
+    {"gate_id": "server-rollout-canary", "evidence_scope": "CANARY", "status": "NOT_RUN", "started_at_utc": "2026-08-26T10:00:00Z", "finished_at_utc": "2026-08-26T10:00:00Z", "evidence_refs": ["replace-with-canary-evidence"]},
+    {"gate_id": "production-24h-observation", "evidence_scope": "PRODUCTION", "status": "NOT_RUN", "started_at_utc": "2026-08-26T10:00:00Z", "finished_at_utc": "2026-08-26T10:00:00Z", "evidence_refs": ["replace-with-sanitized-24h-evidence"]}
+  ],
+  "scenarios": [
+    {"scenario_id": "release-candidate-qualification", "applicability": "IMPLEMENTED", "evidence_scope": "SYNTHETIC", "started_at_utc": "2026-08-26T10:00:00Z", "finished_at_utc": "2026-08-26T10:00:00Z", "status": "NOT_RUN", "counts": {"generated": 0, "persisted": 0, "read_back": 0, "duplicates": 0, "missing": 0, "unknown": 0}, "alert_outcomes": [{"rule_id": "edge-reliability-alerts", "expected": "NOT_RUN", "observed": "NOT_RUN", "status": "NOT_RUN"}], "notes": ["Template fixture only; it is not release evidence."]}
+  ]
+}

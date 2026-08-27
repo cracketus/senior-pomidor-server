@@ -1,0 +1,7 @@
+---
+# Test-only overlay: accelerate the four Edge reliability alert rules without
+# mutating their file-provisioned production definitions through Grafana's API.
+services:
+  grafana:
+    volumes:
+      - ${E2E_GRAFANA_PROVISIONING_DIR:?E2E_GRAFANA_PROVISIONING_DIR is required}:/etc/grafana/provisioning:ro
