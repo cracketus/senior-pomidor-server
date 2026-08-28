@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "senior-pomidor.core.release-candidate.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "git_sha", "image_ref", "image_digest", "platforms", "workflow_ref"],
+  "properties": {
+    "schema_version": {"const": "senior-pomidor.core.release-candidate.v1"},
+    "git_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "image_ref": {"type": "string", "pattern": "@sha256:[0-9a-f]{64}$"},
+    "image_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "platforms": {"const": ["linux/amd64", "linux/arm64"]},
+    "workflow_ref": {"type": "string", "minLength": 1, "maxLength": 256, "pattern": "^[^\\r\\n]+$"}
+  }
+}

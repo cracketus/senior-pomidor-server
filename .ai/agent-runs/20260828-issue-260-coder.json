@@ -1,0 +1,37 @@
+{
+  "schema": "agent_run_v1",
+  "run_id": "20260828-issue-260-coder",
+  "issue_ref": "ISSUE-260",
+  "pr_ref": null,
+  "role": "coder",
+  "agent_id": "codex-local",
+  "prompt_version": "human-approved-implementation-brief-v1",
+  "started_at_utc": "2026-08-28T09:00:00Z",
+  "finished_at_utc": "2026-08-28T09:45:00Z",
+  "input_refs": ["AGENTS.md", ".ai/CORE_INVARIANTS.md", ".ai/context-manifest.yaml", ".ai/implementation-briefs/ISSUE-260-core-release-candidate-and-staging.md"],
+  "output_refs": ["docs/implementation-reports/ISSUE-260.md", ".ai/agent-runs/20260828-issue-260-coder.json"],
+  "status": "completed",
+  "commands": [
+    {"name": "focused-tests", "status": "PASS"},
+    {"name": "full-pytest", "status": "PASS"},
+    {"name": "quality", "status": "PASS"},
+    {"name": "security", "status": "PASS"},
+    {"name": "dependency-audit", "status": "PASS"},
+    {"name": "compose-config", "status": "PASS"},
+    {"name": "diff-check", "status": "PASS"}
+  ],
+  "validation_results": [
+    {"name": "schema-validation", "status": "PASS"},
+    {"name": "serialization-round-trip", "status": "PASS"},
+    {"name": "fixture-replay", "status": "PASS"},
+    {"name": "named-consumers", "status": "PASS"},
+    {"name": "edge-staging-soak", "status": "NOT_RUN"},
+    {"name": "exact-bundle-rollback", "status": "NOT_RUN"},
+    {"name": "edge-canary", "status": "NOT_RUN"},
+    {"name": "production-observation", "status": "NOT_RUN"}
+  ],
+  "human_edits": [],
+  "findings": [],
+  "errors": [],
+  "usage": {"file_count": 14, "input_characters": 90000, "tool_output_bytes": 260000, "elapsed_seconds": 2700}
+}

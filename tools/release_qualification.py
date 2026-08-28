@@ -189,7 +189,15 @@ def _validate_scenarios(
         raise QualificationError(f"report status {report['status']} does not match scenario status {expected_status}")
 
 
-def validate_report(kind: str, report: dict[str, Any], *, require_pass: bool = False) -> None:
+def validate_report(
+    kind: str,
+    report: dict[str, Any],
+    *,
+    require_pass: bool = False,
+    mode: str = "full",
+) -> None:
+    if mode not in {"preproduction", "full"}:
+        raise QualificationError("mode must be preproduction or full")
     if kind not in SCHEMAS:
         raise QualificationError(f"unknown report kind: {kind}")
     schema_version, schema_path = SCHEMAS[kind]
@@ -248,15 +256,37 @@ def validate_report(kind: str, report: dict[str, Any], *, require_pass: bool = F
             if finished < started:
                 raise QualificationError(f"gate {gate['gate_id']} finishes before it starts")
             expected_scope = RELEASE_GATES.get(gate["gate_id"])
-            if require_pass and gate["status"] != "PASS":
+            required_gate = mode == "full" or gate["gate_id"] in {
+                "software-ci",
+                "docker-compose-e2e",
+                "cross-repository-staging",
+                "exact-bundle-rehearsal",
+            }
+            if require_pass and required_gate and gate["status"] != "PASS":
                 raise QualificationError(f"required gate {gate['gate_id']} is {gate['status']}")
-            if require_pass and expected_scope is not None and gate["evidence_scope"] != expected_scope:
+            if (
+                require_pass
+                and required_gate
+                and expected_scope is not None
+                and gate["evidence_scope"] != expected_scope
+            ):
                 raise QualificationError(f"gate {gate['gate_id']} must use {expected_scope} evidence")
             minimum_seconds = MINIMUM_GATE_DURATION_SECONDS.get(gate["gate_id"])
-            if require_pass and minimum_seconds is not None and (finished - started).total_seconds() < minimum_seconds:
+            if (
+                require_pass
+                and required_gate
+                and minimum_seconds is not None
+                and (finished - started).total_seconds() < minimum_seconds
+            ):
                 raise QualificationError(
                     f"gate {gate['gate_id']} is shorter than its required {minimum_seconds}-second duration"
                 )
+            if (
+                mode == "preproduction"
+                and gate["gate_id"] in {"server-rollout-canary", "production-24h-observation"}
+                and gate["status"] != "NOT_RUN"
+            ):
+                raise QualificationError(f"preproduction gate {gate['gate_id']} must remain NOT_RUN")
         statuses = [gate["status"] for gate in gates]
         statuses.extend(
             scenario["status"] for scenario in report["scenarios"] if scenario["applicability"] == "IMPLEMENTED"
@@ -287,6 +317,15 @@ def validate_identity(
     for owner, field, value in expected:
         if value is not None and report[owner][field] != value:
             raise QualificationError(f"{owner}.{field} does not match the requested immutable candidate")
+
+
+def validate_core_release_candidate(report: dict[str, Any]) -> None:
+    """Validate the small, secret-free artifact emitted by the main-branch RC job."""
+    schema_path = SCHEMA_DIR / "core-release-candidate-v1.schema.json"
+    schema = _load_json(schema_path)
+    Draft202012Validator(schema, format_checker=FormatChecker()).validate(report)
+    if not report["image_ref"].endswith(f"@{report['image_digest']}"):
+        raise QualificationError("release-candidate image_ref is not pinned to its declared digest")
 
 
 def _revision(git_sha: str, image_ref: str, image_digest: str) -> dict[str, str]:
@@ -509,6 +548,7 @@ def _parser() -> argparse.ArgumentParser:
     validate.add_argument("--kind", choices=sorted(SCHEMAS), required=True)
     validate.add_argument("--report", type=Path, required=True)
     validate.add_argument("--require-pass", action="store_true")
+    validate.add_argument("--mode", choices=("preproduction", "full"), default="full")
     validate.add_argument("--core-sha")
     validate.add_argument("--core-image")
     validate.add_argument("--core-digest")
@@ -532,7 +572,7 @@ def main() -> int:
     try:
         if args.command == "validate":
             report = _load_json(args.report)
-            validate_report(args.kind, report, require_pass=args.require_pass)
+            validate_report(args.kind, report, require_pass=args.require_pass, mode=args.mode)
             validate_identity(
                 report,
                 core_sha=args.core_sha,

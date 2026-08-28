@@ -35,6 +35,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    networks: [default, staging-interop]
 
   worker:
     environment:
@@ -47,6 +48,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    networks: [default, staging-interop]
 
   state-estimator-worker:
     environment: *staging-environment
@@ -71,8 +73,11 @@ services:
     ports: !override
       - "127.0.0.1:${STAGING_MQTT_PUBLISHED_PORT:?STAGING_MQTT_PUBLISHED_PORT is required}:1883"
     volumes:
-      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - ${STAGING_MOSQUITTO_CONFIG_FILE:?STAGING_MOSQUITTO_CONFIG_FILE is required}:/mosquitto/config/mosquitto.conf:ro
+      - ${STAGING_MOSQUITTO_PASSWORD_FILE:?STAGING_MOSQUITTO_PASSWORD_FILE is required}:/mosquitto/config/password_file:ro
+      - ${STAGING_MOSQUITTO_ACL_FILE:?STAGING_MOSQUITTO_ACL_FILE is required}:/mosquitto/config/acl_file:ro
       - ${STAGING_MOSQUITTO_DATA_DIR:?STAGING_MOSQUITTO_DATA_DIR is required}:/mosquitto/data
+    networks: [default, staging-interop]
 
   postgres:
     image: postgres:16-alpine
@@ -121,3 +126,8 @@ services:
       timeout: 10s
       retries: 5
       start_period: 30s
+
+networks:
+  staging-interop:
+    name: ${STAGING_INTEROP_NETWORK:-senior-pomidor-staging-interop}
+    internal: true
