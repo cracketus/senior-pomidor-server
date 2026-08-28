@@ -35,6 +35,12 @@ on:
         description: Bounded directory name under docs/release-evidence
         required: true
         type: string
+      mode:
+        description: Qualification mode; preproduction leaves canary and production NOT_RUN
+        required: false
+        default: preproduction
+        type: choice
+        options: [preproduction, full]
 
 permissions:
   contents: read
@@ -181,6 +187,7 @@ jobs:
           fi
           python -m tools.release_qualification validate \
             --kind release-validation \
+            --mode "${{ inputs.mode }}" \
             --report "_qualification_evidence/docs/release-evidence/$REPORT_ID/release-validation.json" \
             --require-pass --core-sha "$CORE_SHA" --core-image "$CORE_IMAGE" \
             --core-digest "$CORE_DIGEST" --edge-sha "$EDGE_SHA" \

@@ -153,6 +153,10 @@ def test_staging_compose_is_explicitly_isolated_and_export_disabled() -> None:
     assert STAGING_COMPOSE.count("ports: !override") == 2
     assert "cloud-export" not in STAGING_ENV
     assert "./data/staging/" in STAGING_ENV
+    assert "STAGING_MOSQUITTO_PASSWORD_FILE" in STAGING_ENV
+    assert "STAGING_MOSQUITTO_ACL_FILE" in STAGING_ENV
+    assert "STAGING_INTEROP_NETWORK=senior-pomidor-staging-interop" in STAGING_ENV
+    assert "senior-pomidor-staging/#" in (ROOT / "deploy/staging/mosquitto.acl.example").read_text(encoding="utf-8")
 
 
 def test_production_and_staging_modes_are_explicit_without_api_contract_change() -> None:

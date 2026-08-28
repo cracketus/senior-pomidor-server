@@ -11,6 +11,7 @@ from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
 from tools.release_qualification import (
     QualificationError,
     build_system_invariants_report,
+    validate_core_release_candidate,
     validate_identity,
     validate_report,
 )
@@ -162,6 +163,30 @@ def test_release_template_cannot_satisfy_rc_gate_until_all_exact_scope_gates_pas
         validate_report("release-validation", too_short, require_pass=True)
 
 
+def test_preproduction_requires_first_four_gates_and_keeps_canary_production_not_run() -> None:
+    report = load(FIXTURES / "release_validation_v1.json")
+    report["scenarios"][0]["status"] = "PASS"
+    report["scenarios"][0]["alert_outcomes"][0].update(
+        {"expected": "RECOVERED", "observed": "RECOVERED", "status": "PASS"}
+    )
+    for gate in report["gates"][:4]:
+        gate["status"] = "PASS"
+        started = datetime.fromisoformat(gate["started_at_utc"].replace("Z", "+00:00"))
+        duration = {"cross-repository-staging": 24 * 60 * 60}.get(gate["gate_id"], 1)
+        gate["finished_at_utc"] = (started + timedelta(seconds=duration)).isoformat().replace("+00:00", "Z")
+    report["status"] = "NOT_RUN"
+    validate_report("release-validation", report, require_pass=True, mode="preproduction")
+
+    unsafe = deepcopy(report)
+    unsafe["gates"][-1]["status"] = "PASS"
+    with pytest.raises(QualificationError, match="must remain NOT_RUN"):
+        validate_report("release-validation", unsafe, require_pass=True, mode="preproduction")
+
+    unsafe["status"] = "PASS"
+    with pytest.raises(QualificationError, match="must remain NOT_RUN"):
+        validate_report("release-validation", unsafe, mode="preproduction")
+
+
 def test_semantic_validator_rejects_duplicate_scenarios_impossible_counts_and_alert_mismatch() -> None:
     original = load(FIXTURES / "system_invariants_v1.json")
 
@@ -206,6 +231,21 @@ def test_report_images_must_be_immutable_digest_refs_matching_declared_identity(
     report = load(FIXTURES / "system_invariants_v1.json")
     with pytest.raises(QualificationError, match="image_ref does not match"):
         validate_identity(report, core_image=f"core@sha256:{'f' * 64}")
+
+
+def test_core_release_candidate_artifact_is_digest_pinned() -> None:
+    candidate = {
+        "schema_version": "senior-pomidor.core.release-candidate.v1",
+        "git_sha": "a" * 40,
+        "image_ref": f"ghcr.io/example/core@sha256:{'b' * 64}",
+        "image_digest": f"sha256:{'b' * 64}",
+        "platforms": ["linux/amd64", "linux/arm64"],
+        "workflow_ref": "example/.github/workflows/ci.yml@refs/heads/main",
+    }
+    validate_core_release_candidate(candidate)
+    candidate["image_ref"] = f"ghcr.io/example/core@sha256:{'c' * 64}"
+    with pytest.raises(QualificationError, match="not pinned"):
+        validate_core_release_candidate(candidate)
 
 
 def test_report_validator_rejects_private_field_names_hidden_in_notes() -> None:

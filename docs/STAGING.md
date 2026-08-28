@@ -27,6 +27,15 @@ photo, and MQTT ingress. Production rejects that same reserved prefix. Configure
 with a matching identity and `STAGING_MQTT_TOPIC_PREFIX`; sensor values may be simulated, but the Edge and Core
 applications must be real immutable artifacts for compatibility evidence.
 
+The staging overlay attaches Core API/worker/MQTT to the named internal
+`senior-pomidor-staging-interop` network. The fixed Edge container name is
+`senior-pomidor-edge-staging`; the bounded controller verifies that connection before qualification. Mosquitto
+must use operator-provided password and ACL files, with the ACL limited to `senior-pomidor-staging/#`.
+
+For bounded checks use `python -m tools.staging_qualification preflight`, then one of the allowlisted
+`scenario <scenario-id>`, `soak-check`, or `finalize` commands. These commands never accept shell fragments,
+print command output, or turn unavailable Edge/fault evidence into a PASS.
+
 Stopping staging uses `docker compose ... down` without `--volumes`. Data reset is intentionally not automated
 here: a human must verify the exact staging project and resolved bind paths, retain required evidence, and use a
 separately approved backup/reset procedure. Never point this overlay at production paths or shared volumes.
