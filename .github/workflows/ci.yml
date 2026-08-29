@@ -166,7 +166,7 @@ jobs:
             '{schema_version:"senior-pomidor.core.release-candidate.v1", git_sha:$sha, image_ref:$image, image_digest:$digest, platforms:["linux/amd64","linux/arm64"], workflow_ref:$workflow_ref}' \
             > qualification-artifacts/senior-pomidor.core.release-candidate.v1.json
       - name: Upload Core release-candidate metadata
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: senior-pomidor.core.release-candidate.v1
           path: qualification-artifacts/senior-pomidor.core.release-candidate.v1.json

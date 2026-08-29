@@ -94,7 +94,7 @@ jobs:
           --output qualification-artifacts/system-invariants.json
 
       - name: Upload invariant evidence
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: system-invariants-${{ inputs.core_sha }}
           path: qualification-artifacts/system-invariants.json
