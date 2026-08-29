@@ -78,6 +78,20 @@ services:
       - ${STAGING_MOSQUITTO_ACL_FILE:?STAGING_MOSQUITTO_ACL_FILE is required}:/mosquitto/config/acl_file:ro
       - ${STAGING_MOSQUITTO_DATA_DIR:?STAGING_MOSQUITTO_DATA_DIR is required}:/mosquitto/data
     networks: [default, staging-interop]
+    environment:
+      MQTT_HEALTHCHECK_USERNAME: ${STAGING_MQTT_USERNAME:?STAGING_MQTT_USERNAME is required}
+      MQTT_HEALTHCHECK_PASSWORD: ${STAGING_MQTT_PASSWORD:?STAGING_MQTT_PASSWORD is required}
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - mosquitto_pub -h 127.0.0.1
+          -u "$$MQTT_HEALTHCHECK_USERNAME"
+          -P "$$MQTT_HEALTHCHECK_PASSWORD"
+          -t healthcheck -m ok
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
   postgres:
     image: postgres:16-alpine

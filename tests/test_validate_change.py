@@ -9,7 +9,13 @@ from typing import cast
 import pytest
 
 from tools.agent_task import RepositoryContext, create_task
-from tools.validate_change import CommandResult, _nox_reuse_ready, _validation_storage_paths, validate_change
+from tools.validate_change import (
+    CommandResult,
+    _harness_validation_mode,
+    _nox_reuse_ready,
+    _validation_storage_paths,
+    validate_change,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -178,3 +184,57 @@ def test_docs_only_skips_pytest_and_compose(validation_repo: tuple[Path, Reposit
     by_id = {item["id"]: item for item in payload["checks"]}
     assert by_id["full_pytest"]["selected"] is False
     assert by_id["compose_config"]["selected"] is False
+
+
+def test_harness_python_changes_run_only_mapped_focused_tests(
+    validation_repo: tuple[Path, RepositoryContext, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo, context, base = validation_repo
+    metadata = create_task(
+        context, "TOMATO-AI-41", "harness-focused", "feature", worktree=False, task_classes=("pure_software",)
+    )
+    source = repo / "tools" / "agent_task.py"
+    source.write_text("HARNESS_CHANGE = True\n", encoding="utf-8")
+    calls: list[list[str]] = []
+
+    def runner(command: list[str], **_: object) -> CommandResult:
+        calls.append(command)
+        return CommandResult(0, 0, 0.01)
+
+    code, payload = validate_change(root=repo, base=base, task_key=metadata["task_key"], force_full=True, runner=runner)
+
+    assert code == 0
+    assert len(calls) == 1
+    assert calls[0][1:4] == ["-m", "pytest", "-q"]
+    assert "tests/test_agent_task.py" in calls[0]
+    assert not any("nox" in command for command in calls)
+    assert {item["id"] for item in payload["checks"] if item["selected"]} == {"focused_tests"}
+    assert payload["validation_mode"] == "harness_focused"
+
+
+def test_harness_documentation_changes_run_no_tests(validation_repo: tuple[Path, RepositoryContext, str]) -> None:
+    repo, context, base = validation_repo
+    metadata = create_task(
+        context, "TOMATO-AI-42", "harness-docs", "feature", worktree=False, task_classes=("pure_software",)
+    )
+    docs_path = repo / "docs" / "AI_VALIDATION_WORKFLOW.md"
+    docs_path.parent.mkdir(parents=True)
+    docs_path.write_text("harness documentation change\n", encoding="utf-8")
+    calls: list[list[str]] = []
+
+    def runner(command: list[str], **_: object) -> CommandResult:
+        calls.append(command)
+        return CommandResult(0, 0, 0.01)
+
+    code, payload = validate_change(root=repo, base=base, task_key=metadata["task_key"], force_full=True, runner=runner)
+
+    assert code == 0
+    assert calls == []
+    assert not any(item["selected"] for item in payload["checks"])
+    assert payload["validation_mode"] == "harness_no_tests"
+
+
+def test_mixed_harness_and_application_changes_keep_matrix_mode() -> None:
+    assert _harness_validation_mode(("tools/agent_task.py", "app/api.py")) is None
+    assert _harness_validation_mode(("tools/agent_task.py", ".ai/agent-runs/run.json")) == "harness_focused"
+    assert _harness_validation_mode((".ai/implementation-briefs/run.md",)) == "harness_no_tests"

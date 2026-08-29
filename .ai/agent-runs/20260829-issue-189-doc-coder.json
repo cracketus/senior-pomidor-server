@@ -1,0 +1,52 @@
+{
+  "schema": "agent_run_v1",
+  "run_id": "20260829-issue-189-doc-coder",
+  "issue_ref": "#189",
+  "pr_ref": null,
+  "role": "coder",
+  "agent_id": "codex-local",
+  "prompt_version": "issue-189-v1",
+  "started_at_utc": "2026-08-29T09:45:00Z",
+  "finished_at_utc": "2026-08-29T10:25:00Z",
+  "input_refs": [
+    ".ai/CORE_INVARIANTS.md",
+    ".ai/context-manifest.yaml",
+    "docs/CONTRACTS.md",
+    "docs/OPERATIONS.md"
+  ],
+  "output_refs": [
+    "docs/ISSUE_189_PRODUCTION_PROMOTION_VERIFICATION.md",
+    ".ai/agent-runs/20260829-issue-189-doc-coder.json"
+  ],
+  "status": "completed",
+  "commands": [
+    {"name": "context-routing", "status": "PASS"},
+    {"name": "documentation-check", "status": "PASS"},
+    {"name": "focused-tests", "status": "PASS"},
+    {"name": "compose-render", "status": "PASS"},
+    {"name": "security-check", "status": "PASS"},
+    {"name": "dependency-audit", "status": "PASS"}
+  ],
+  "validation_results": [
+    {"name": "changed-links-paths-commands", "status": "PASS"},
+    {"name": "fixture-replay", "status": "PASS"},
+    {"name": "named-consumers", "status": "PASS"},
+    {"name": "compose-config", "status": "PASS"},
+    {"name": "security", "status": "PASS"},
+    {"name": "dependency-audit", "status": "PASS"},
+    {"name": "edge-canary", "status": "NOT_RUN"},
+    {"name": "isolated-restore", "status": "NOT_RUN"},
+    {"name": "production-rehearsal", "status": "NOT_RUN"}
+  ],
+  "human_edits": [],
+  "findings": [
+    {"category": "workflow", "outcome": "open", "role": "coder"}
+  ],
+  "errors": [],
+  "usage": {
+    "file_count": 14,
+    "input_characters": 127013,
+    "tool_output_bytes": 0,
+    "elapsed_seconds": 2400
+  }
+}

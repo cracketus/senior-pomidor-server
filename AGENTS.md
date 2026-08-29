@@ -28,6 +28,16 @@ Run the checks selected by canonical [`.ai/test-matrix.yaml`](.ai/test-matrix.ya
 summaries are navigation aids, not independent routing sources. Record automated and manual evidence as
 `PASS`, `FAIL`, or `NOT_RUN`; CI never proves a physical-world outcome.
 
+For a Markdown-only change that documents existing behavior without changing executable code,
+configuration, schema, fixtures, or runtime contracts, use `documentation_only`. Do not add operational
+risk flags solely because the prose discusses deployment, backup, restore, security, compatibility, or
+physical safety. Validate the changed Markdown, local links, referenced repository paths, and command names;
+do not run Compose, security/dependency audits, fixture replay, hardware, staging, or production checks for
+such a documentation-only task unless the human explicitly requests them. Record those operational checks as
+`NOT_RUN` when they are relevant to the documented procedure. If any executable artifact changes alongside
+the documentation, drop this exception, classify the executable change normally, and apply all matching risk
+overlays and checks from the canonical matrix.
+
 Prohibited: production deployment or writes; reading or exposing production secrets/private
 infrastructure; real GPIO/actuator use; bypassing Guardrails or Executor; direct LLM-to-actuator paths;
 destructive database/volume operations; external export in rehearsal; or unapproved contract breaks.

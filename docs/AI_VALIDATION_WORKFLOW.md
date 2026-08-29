@@ -12,6 +12,11 @@ inferred from changed paths. `--explain` reports selected and skipped checks. De
 the changed test files as a bounded focused check and defers full pytest, quality, security,
 dependency, and Compose checks; `--force full` runs the complete selected final set.
 
+Harness-only changes are a bounded exception: changes limited to the agent harness Python files and
+their focused tests run only the mapped focused tests, even when `--force full` is supplied. Changes
+limited to harness documentation/templates run no tests. A change mixed with application Python,
+packaging, deployment, schema, or other non-harness paths uses the normal matrix.
+
 Results are written atomically to `.agent-tasks/<key>/validation.json`. Every selected check is
 `PASS`, `FAIL`, or `NOT_RUN`; manual evidence remains `NOT_RUN` until a human records it. Cached
 results are keyed by the relevant diff content, exact command, bounded platform identity, and
