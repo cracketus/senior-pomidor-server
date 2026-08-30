@@ -114,10 +114,19 @@ jobs:
             echo "exists=true" >> "$GITHUB_OUTPUT"
           else
             if docker buildx imagetools inspect "$IMAGE:$COMMIT_SHA" >/dev/null 2>&1; then
-              echo "$IMAGE:$COMMIT_SHA already exists without $IMAGE:$VERSION; refusing ambiguous release" >&2
-              exit 1
+              docker pull "$IMAGE:$COMMIT_SHA"
+              revision="$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "$IMAGE:$COMMIT_SHA")"
+              if [[ "$revision" != "$COMMIT_SHA" ]]; then
+                echo "$IMAGE:$COMMIT_SHA reports revision $revision; refusing release promotion" >&2
+                exit 1
+              fi
+              docker buildx imagetools create \
+                --tag "$IMAGE:$VERSION" \
+                "$IMAGE:$COMMIT_SHA"
+              echo "exists=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "exists=false" >> "$GITHUB_OUTPUT"
             fi
-            echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
       - name: Build and publish multi-architecture image
         if: steps.existing-image.outputs.exists != 'true'

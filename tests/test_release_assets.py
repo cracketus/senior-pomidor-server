@@ -19,6 +19,11 @@ def test_release_workflow_is_annotated_tag_only_multiarch_and_immutable() -> Non
     assert "org.opencontainers.image.revision" in workflow
     assert 'imagetools inspect "$IMAGE:$VERSION" --raw' in workflow
     assert "if: steps.existing-image.outputs.exists != 'true'" in workflow
+    assert 'docker pull "$IMAGE:$COMMIT_SHA"' in workflow
+    assert '--tag "$IMAGE:$VERSION"' in workflow
+    assert "refusing release promotion" in workflow
+    assert "already exists without" not in workflow
+    assert workflow.count('echo "exists=false" >> "$GITHUB_OUTPUT"') == 1
     assert "gh release upload" in workflow
     assert "--clobber" in workflow
     assert "nox -s tests lint format_check types security deps_audit" in workflow
