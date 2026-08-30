@@ -46,6 +46,36 @@ CONFIG_PATHS = (
     Path("tools/validate_change.py"),
 )
 HEAVY_CHECKS = {"full_pytest", "quality", "security", "dependency_audit", "compose_config"}
+HARNESS_PYTHON_FILES = {
+    "tools/agent_context.py",
+    "tools/agent_maturity.py",
+    "tools/agent_task.py",
+    "tools/agent_usage.py",
+    "tools/model_routing.py",
+    "tools/tool_routing.py",
+    "tools/validate_change.py",
+    "tests/test_agent_context.py",
+    "tests/test_agent_maturity.py",
+    "tests/test_agent_task.py",
+    "tests/test_agent_usage.py",
+    "tests/test_model_routing.py",
+    "tests/test_tool_routing.py",
+    "tests/test_validate_change.py",
+}
+HARNESS_DOCUMENTATION_FILES = {
+    ".ai/templates/agent-task.env.example",
+    "docs/AGENT_TASK_WORKFLOW.md",
+    "docs/AI_VALIDATION_WORKFLOW.md",
+}
+HARNESS_FOCUSED_TESTS = {
+    "tools/agent_context.py": "tests/test_agent_context.py",
+    "tools/agent_maturity.py": "tests/test_agent_maturity.py",
+    "tools/agent_task.py": "tests/test_agent_task.py",
+    "tools/agent_usage.py": "tests/test_agent_usage.py",
+    "tools/model_routing.py": "tests/test_model_routing.py",
+    "tools/tool_routing.py": "tests/test_tool_routing.py",
+    "tools/validate_change.py": "tests/test_validate_change.py",
+}
 TIMEOUTS = {
     "full_pytest": 1800,
     "quality": 1200,
@@ -159,6 +189,14 @@ def _actual_command(
             for path in changed_files
             if path.startswith("tests/") and path.endswith(".py") and file_hashes[path] != "deleted"
         ]
+        changed_tests.extend(
+            test_path
+            for source_path, test_path in HARNESS_FOCUSED_TESTS.items()
+            if source_path in changed_files
+            and file_hashes.get(source_path) != "deleted"
+            and test_path not in changed_tests
+            and file_hashes.get(test_path) != "deleted"
+        )
         return (
             [
                 sys.executable,
@@ -189,6 +227,18 @@ def _actual_command(
     if args[1:4] == ["-m", "pytest", "-q"]:
         args.extend(["-p", "no:cacheprovider", "--basetemp", pytest_basetemp])
     return args
+
+
+def _harness_validation_mode(changed_files: tuple[str, ...]) -> str | None:
+    normalized = tuple(path.casefold() for path in changed_files)
+    harness_python = {path.casefold() for path in HARNESS_PYTHON_FILES}
+    harness_docs = {path.casefold() for path in HARNESS_DOCUMENTATION_FILES}
+    harness_metadata = (".ai/agent-runs/", ".ai/implementation-briefs/")
+    if not normalized or not all(
+        path in harness_python or path in harness_docs or path.startswith(harness_metadata) for path in normalized
+    ):
+        return None
+    return "harness_focused" if any(path in harness_python for path in normalized) else "harness_no_tests"
 
 
 def _nox_reuse_ready(args: list[str], nox_envdir: str, changed_files: tuple[str, ...]) -> bool:
@@ -390,6 +440,12 @@ def validate_change(
     matrix = _matrix(root)
     definitions: dict[str, dict[str, Any]] = matrix["checks"]
     selected_definitions = {item["id"]: item for item in selection.checks}
+    validation_mode = _harness_validation_mode(changed_files)
+    if validation_mode == "harness_focused":
+        selected_definitions = {"focused_tests": definitions["focused_tests"]}
+    elif validation_mode == "harness_no_tests":
+        selected_definitions = {}
+    run_full = force_full and validation_mode is None
     route = route_model("pure_software_implementation", risk_flags=selection.risk_flags)
     cache_path = task_dir / "validation-cache.json"
     cache = _load_cache(cache_path)
@@ -437,7 +493,7 @@ def validate_change(
             check_results.append(result)
             continue
         result["command"] = command
-        if not force_full and check_id in HEAVY_CHECKS:
+        if not run_full and check_id in HEAVY_CHECKS:
             result["reason"] = "deferred_until_force_full"
             check_results.append(result)
             continue
@@ -519,7 +575,8 @@ def validate_change(
         "base": base,
         "base_sha": base_sha,
         "diff_sha256": diff_hash,
-        "mode": "full" if force_full else "focused",
+        "mode": "full" if run_full else "focused",
+        "validation_mode": validation_mode or "matrix",
         "changed_files": list(changed_files),
         "task_classes": list(selection.task_classes),
         "risk_flags": list(selection.risk_flags),
