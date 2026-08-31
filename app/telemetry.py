@@ -100,6 +100,7 @@ APPLICATION_STRING_FIELDS = (
     "systemd_active_state",
     "systemd_sub_state",
 )
+APPLICATION_SERVICE_MANAGERS = {"none", "systemd"}
 APPLICATION_BOOLEAN_FIELDS = ("process_running", "systemd_available", "systemd_service_active")
 APPLICATION_INTEGER_FIELDS = (
     "process_id",
@@ -302,6 +303,13 @@ def _normalize_spool(source: dict[str, Any]) -> dict[str, Any]:
 
 def _normalize_application(source: dict[str, Any]) -> dict[str, Any]:
     result: dict[str, Any] = {}
+    if "service_manager" in source:
+        service_manager = source["service_manager"]
+        result["service_manager"] = (
+            service_manager
+            if isinstance(service_manager, str) and service_manager in APPLICATION_SERVICE_MANAGERS
+            else None
+        )
     _copy_fields(source, result, APPLICATION_STRING_FIELDS, _bounded_string)
     _copy_fields(source, result, APPLICATION_BOOLEAN_FIELDS, _boolean)
     _copy_fields(source, result, APPLICATION_INTEGER_FIELDS, _nonnegative_int)
@@ -309,6 +317,26 @@ def _normalize_application(source: dict[str, Any]) -> dict[str, Any]:
         value = _nonnegative_number(source["process_cpu_percent"])
         if not isinstance(value, _InvalidValue):
             result["process_cpu_percent"] = value
+    return result
+
+
+def _normalize_health_aggregate(source: Any) -> dict[str, Any]:
+    if not isinstance(source, dict):
+        return {}
+    result: dict[str, Any] = {}
+    schema_version = source.get("schema_version")
+    if isinstance(schema_version, str) and len(schema_version) <= HEALTH_STRING_MAX_LENGTH:
+        result["schema_version"] = schema_version
+    state = source.get("state")
+    if isinstance(state, str) and len(state) <= HEALTH_STRING_MAX_LENGTH:
+        result["state"] = state
+    reasons = source.get("reasons")
+    if isinstance(reasons, list):
+        bounded: list[str] = []
+        for reason in reasons[:32]:
+            if isinstance(reason, str) and 0 < len(reason) <= HEALTH_STRING_MAX_LENGTH and reason not in bounded:
+                bounded.append(reason)
+        result["reasons"] = bounded
     return result
 
 
@@ -378,6 +406,9 @@ def normalize_system_health(payload: dict[str, Any]) -> dict[str, Any] | None:
         block = source.get(block_name)
         if isinstance(block, dict):
             normalized[block_name] = normalizer(block)
+
+    if "aggregate" in source:
+        normalized["aggregate"] = _normalize_health_aggregate(source["aggregate"])
 
     return normalized
 

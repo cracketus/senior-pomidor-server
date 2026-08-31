@@ -42,10 +42,19 @@ production change window и оператор должны быть отдель�
 
 Откройте:
 
-- `L` — локальный терминал на рабочем ноутбуке;
+- `L` — PowerShell 7 на рабочем ноутбуке Windows, из корня Git checkout;
 - `S1` — основной SSH-терминал на production server;
 - `S2` — резервный SSH-терминал, который остаётся открытым для диагностики/rollback;
 - приватную change record, не находящуюся в Git.
+
+Проверьте локальные инструменты в `L`. `tar.exe` входит в актуальные Windows, а `ssh.exe` и `scp.exe`
+предоставляет компонент OpenSSH Client; все дальнейшие блоки для `L` рассчитаны на PowerShell, а блоки для
+`S1`/`S2` — на Bash в Ubuntu:
+
+```powershell
+$PSVersionTable.PSVersion
+Get-Command git, gh, python, tar.exe, ssh.exe, scp.exe
+```
 
 В change record запишите:
 
@@ -57,7 +66,7 @@ production change window и оператор должны быть отдель�
 [ ] new Core Git SHA
 [ ] new immutable image ref and digest
 [ ] new runtime bundle SHA-256
-[ ] previous version and immutable image ref
+[ ] previous version, accepted Core Git SHA and immutable image ref
 [ ] release evidence report ID
 [ ] rollback decision owner
 ```
@@ -89,29 +98,29 @@ production change window и оператор должны быть отдель�
 [ ] #186 actual SSH/LAN exposure audit
 ```
 
-Проверьте pre-production reports для точных identities:
+Проверьте pre-production reports для точных identities в PowerShell:
 
-```bash
-export REPORT_ID='<accepted-report-id>'
-export CORE_SHA='<40-lowercase-hex>'
-export CORE_IMAGE='ghcr.io/cracketus/senior-pomidor-server@sha256:<64-lowercase-hex>'
-export CORE_DIGEST='sha256:<64-lowercase-hex>'
-export EDGE_SHA='<40-lowercase-hex>'
-export EDGE_IMAGE='<exact-immutable-edge-image-ref>'
-export EDGE_DIGEST='sha256:<64-lowercase-hex>'
+```powershell
+$ReportId = '<accepted-report-id>'
+$CoreSha = '<40-lowercase-hex>'
+$CoreImage = 'ghcr.io/cracketus/senior-pomidor-server@sha256:<64-lowercase-hex>'
+$CoreDigest = 'sha256:<64-lowercase-hex>'
+$EdgeSha = '<40-lowercase-hex>'
+$EdgeImage = '<exact-immutable-edge-image-ref>'
+$EdgeDigest = 'sha256:<64-lowercase-hex>'
 
-python -m tools.release_qualification validate \
-  --kind edge-core-compatibility \
-  --report "docs/release-evidence/${REPORT_ID}/edge-core-compatibility.json" \
-  --require-pass \
-  --core-sha "${CORE_SHA}" --core-image "${CORE_IMAGE}" --core-digest "${CORE_DIGEST}" \
-  --edge-sha "${EDGE_SHA}" --edge-image "${EDGE_IMAGE}" --edge-digest "${EDGE_DIGEST}"
+python -m tools.release_qualification validate `
+  --kind edge-core-compatibility `
+  --report "docs/release-evidence/$ReportId/edge-core-compatibility.json" `
+  --require-pass `
+  --core-sha $CoreSha --core-image $CoreImage --core-digest $CoreDigest `
+  --edge-sha $EdgeSha --edge-image $EdgeImage --edge-digest $EdgeDigest
 
-python -m tools.release_qualification validate \
-  --kind release-validation --mode preproduction --require-pass \
-  --report "docs/release-evidence/${REPORT_ID}/release-validation.json" \
-  --core-sha "${CORE_SHA}" --core-image "${CORE_IMAGE}" --core-digest "${CORE_DIGEST}" \
-  --edge-sha "${EDGE_SHA}" --edge-image "${EDGE_IMAGE}" --edge-digest "${EDGE_DIGEST}"
+python -m tools.release_qualification validate `
+  --kind release-validation --mode preproduction --require-pass `
+  --report "docs/release-evidence/$ReportId/release-validation.json" `
+  --core-sha $CoreSha --core-image $CoreImage --core-digest $CoreDigest `
+  --edge-sha $EdgeSha --edge-image $EdgeImage --edge-digest $EdgeDigest
 ```
 
 **Ожидается:** обе команды завершаются с кодом `0`; все identities совпадают.  
@@ -119,31 +128,38 @@ python -m tools.release_qualification validate \
 gate. Не переходите к backup/install.  
 **GO:** reviewer/owner подтвердил все gate и отдельное production approval.
 
-## 3. Скачать и проверить новый и предыдущий release
+## 3. Скачать и проверить release assets
 
 ### 3.1 Скачать assets
 
 **Где:** `L`.  
 **Риск:** `2 — умеренный`.
 
-Замените версии на фактические. Предыдущий release нужен для rollback.
+Замените версии на фактические. Проверенный bundle предыдущего release обязателен для rollback.
+Если его нельзя скачать и проверить, установка является `STOP`; human waiver не заменяет
+работоспособный и проверенный путь отката.
 
-```bash
-export NEW_VERSION='vX.Y.Z'
-export OLD_VERSION='vA.B.C'
-export ASSET_ROOT="$PWD/senior-pomidor-release-assets"
+```powershell
+$NewVersion = 'vX.Y.Z'
+$OldVersion = 'vA.B.C'
+$ExpectedOldRevision = '<accepted-40-lowercase-previous-core-sha>'
+$AssetRoot = Join-Path (Get-Location) 'senior-pomidor-release-assets'
+$NewAssetDir = Join-Path $AssetRoot $NewVersion
+$OldAssetDir = Join-Path $AssetRoot $OldVersion
 
-mkdir -p "${ASSET_ROOT}/${NEW_VERSION}" "${ASSET_ROOT}/${OLD_VERSION}"
+git fetch origin --tags
+New-Item -ItemType Directory -Force -Path $NewAssetDir
 
-gh release download "${NEW_VERSION}" \
-  --repo cracketus/senior-pomidor-server \
-  --pattern "senior-pomidor-runtime-${NEW_VERSION}.tar.gz*" \
-  --dir "${ASSET_ROOT}/${NEW_VERSION}"
+gh release download $NewVersion `
+  --repo cracketus/senior-pomidor-server `
+  --pattern "senior-pomidor-runtime-$NewVersion.tar.gz*" `
+  --dir $NewAssetDir
 
-gh release download "${OLD_VERSION}" \
-  --repo cracketus/senior-pomidor-server \
-  --pattern "senior-pomidor-runtime-${OLD_VERSION}.tar.gz*" \
-  --dir "${ASSET_ROOT}/${OLD_VERSION}"
+New-Item -ItemType Directory -Force -Path $OldAssetDir
+gh release download $OldVersion `
+  --repo cracketus/senior-pomidor-server `
+  --pattern "senior-pomidor-runtime-$OldVersion.tar.gz*" `
+  --dir $OldAssetDir
 ```
 
 ### 3.2 Проверить checksums и metadata
@@ -151,29 +167,53 @@ gh release download "${OLD_VERSION}" \
 **Где:** `L`.  
 **Риск:** `1 — низкий`.
 
-```bash
-(
-  cd "${ASSET_ROOT}/${NEW_VERSION}"
-  sha256sum --check "senior-pomidor-runtime-${NEW_VERSION}.tar.gz.sha256"
-  tar -xOf "senior-pomidor-runtime-${NEW_VERSION}.tar.gz" ./VERSION
-  tar -xOf "senior-pomidor-runtime-${NEW_VERSION}.tar.gz" ./REVISION
-  ! tar -tzf "senior-pomidor-runtime-${NEW_VERSION}.tar.gz" \
-    | grep -E '(^|/)(app|migrations)/|\.py$'
-)
+```powershell
+function Test-ReleaseChecksum {
+  param([string]$AssetDir, [string]$Version)
 
-(
-  cd "${ASSET_ROOT}/${OLD_VERSION}"
-  sha256sum --check "senior-pomidor-runtime-${OLD_VERSION}.tar.gz.sha256"
-  tar -xOf "senior-pomidor-runtime-${OLD_VERSION}.tar.gz" ./VERSION
-  tar -xOf "senior-pomidor-runtime-${OLD_VERSION}.tar.gz" ./REVISION
-)
+  $ArchiveName = "senior-pomidor-runtime-$Version.tar.gz"
+  $Archive = Join-Path $AssetDir $ArchiveName
+  $ChecksumFile = "$Archive.sha256"
+  $Expected = ((Get-Content -LiteralPath $ChecksumFile -Raw).Trim() -split '\s+')[0].ToLowerInvariant()
+  $Actual = (Get-FileHash -LiteralPath $Archive -Algorithm SHA256).Hash.ToLowerInvariant()
+  if ($Expected -notmatch '^[0-9a-f]{64}$' -or $Actual -ne $Expected) {
+    throw "SHA-256 mismatch: $Archive"
+  }
+  Write-Host "${ArchiveName}: OK"
+}
+
+Test-ReleaseChecksum -AssetDir $NewAssetDir -Version $NewVersion
+$NewArchive = Join-Path $NewAssetDir "senior-pomidor-runtime-$NewVersion.tar.gz"
+$BundleVersion = (tar.exe -xOf $NewArchive ./VERSION).Trim()
+$BundleRevision = (tar.exe -xOf $NewArchive ./REVISION).Trim()
+$TagRevision = (git rev-parse "${NewVersion}^{commit}").Trim()
+$BundleEntries = @(tar.exe -tzf $NewArchive)
+if ($LASTEXITCODE -ne 0) { throw 'Cannot read new runtime bundle' }
+if ($BundleVersion -ne $NewVersion) { throw 'New bundle VERSION mismatch' }
+if ($BundleRevision -ne $CoreSha) { throw 'New bundle REVISION mismatch' }
+if ($TagRevision -ne $CoreSha) { throw 'Git tag does not point to the accepted Core revision' }
+if ($BundleEntries | Select-String -Pattern '(^|/)(app|migrations)/|\.py$') {
+  throw 'New runtime bundle contains Python source'
+}
+$BundleVersion
+$BundleRevision
+
+Test-ReleaseChecksum -AssetDir $OldAssetDir -Version $OldVersion
+$OldArchive = Join-Path $OldAssetDir "senior-pomidor-runtime-$OldVersion.tar.gz"
+$OldBundleVersion = (tar.exe -xOf $OldArchive ./VERSION).Trim()
+$OldBundleRevision = (tar.exe -xOf $OldArchive ./REVISION).Trim()
+if ($LASTEXITCODE -ne 0) { throw 'Cannot read previous runtime bundle' }
+if ($OldBundleVersion -ne $OldVersion) { throw 'Previous bundle VERSION mismatch' }
+if ($ExpectedOldRevision -notmatch '^[0-9a-f]{40}$') { throw 'Accepted previous revision is invalid' }
+if ($OldBundleRevision -ne $ExpectedOldRevision) { throw 'Previous bundle REVISION mismatch' }
+$OldBundleVersion
+$OldBundleRevision
 ```
 
-**Ожидается:** обе checksum-команды выводят `OK`; `VERSION` совпадают с именами releases; `REVISION`
-нового bundle равен принятому `CORE_SHA`; проверка Python source ничего не выводит и возвращает `0`.  
-**STOP:** checksum/версия/revision не совпадает, bundle содержит `.py`, старый rollback bundle
-недоступен. Ничего не передавайте на server.  
-**GO:** новый и старый assets проверены.
+**Ожидается:** checksum выводит `OK`; `VERSION` совпадает с release; Git tag, accepted
+`CORE_SHA` и `REVISION` в bundle указывают на один commit; bundle не содержит Python source.
+**STOP:** любое identity/checksum не совпало или old bundle отсутствует.
+**GO:** оба assets проверены и rollback bundle готов к передаче.
 
 ## 4. Передать assets на server без установки
 
@@ -182,14 +222,17 @@ gh release download "${OLD_VERSION}" \
 **Где:** `L`.  
 **Риск:** `2 — умеренный`.
 
-```bash
-export ADMIN_TARGET='<admin-user>@<approved-server>'
+```powershell
+$AdminTarget = '<admin-user>@<approved-server>'
+$TransferFiles = @(
+  (Join-Path $NewAssetDir "senior-pomidor-runtime-$NewVersion.tar.gz"),
+  (Join-Path $NewAssetDir "senior-pomidor-runtime-$NewVersion.tar.gz.sha256"),
+  (Join-Path $OldAssetDir "senior-pomidor-runtime-$OldVersion.tar.gz"),
+  (Join-Path $OldAssetDir "senior-pomidor-runtime-$OldVersion.tar.gz.sha256")
+)
 
-scp "${ASSET_ROOT}/${NEW_VERSION}/senior-pomidor-runtime-${NEW_VERSION}.tar.gz" \
-  "${ASSET_ROOT}/${NEW_VERSION}/senior-pomidor-runtime-${NEW_VERSION}.tar.gz.sha256" \
-  "${ASSET_ROOT}/${OLD_VERSION}/senior-pomidor-runtime-${OLD_VERSION}.tar.gz" \
-  "${ASSET_ROOT}/${OLD_VERSION}/senior-pomidor-runtime-${OLD_VERSION}.tar.gz.sha256" \
-  "${ADMIN_TARGET}:/tmp/"
+& scp.exe @TransferFiles "${AdminTarget}:/tmp/"
+if ($LASTEXITCODE -ne 0) { throw 'SCP transfer failed' }
 ```
 
 ### 4.2 Установить ownership/mode для incoming assets
@@ -229,9 +272,9 @@ sudo install -o root -g root -m 0644 \
 )
 ```
 
-**Ожидается:** два `OK`; файлы принадлежат `root:root`, mode `0644`.  
+**Ожидается:** `OK` для каждого переданного release; файлы принадлежат `root:root`, mode `0644`.
 **STOP:** checksum не совпадает или destination неожиданно является symlink/другим layout.  
-**GO:** оба releases доступны на server; пока ничего не перезапущено.
+**GO:** new и old releases доступны на server; пока ничего не перезапущено.
 
 ## 5. Создать карточку текущего состояния
 
@@ -243,9 +286,10 @@ sudo install -o root -g root -m 0644 \
 
 ```bash
 export NEW_REVISION='<accepted-40-lowercase-core-sha>'
+export EXPECTED_OLD_REVISION='<accepted-40-lowercase-previous-core-sha>'
 export NEW_APP_IMAGE='ghcr.io/cracketus/senior-pomidor-server@sha256:<accepted-64-hex-digest>'
 export API_URL='http://<approved-server-address>:8000'
-export CANARY_EDGE_ID='<approved-existing-edge-id>'
+export CANARY_EDGE_ID='' # оставьте пустым, если approved Edge ещё нет
 
 export APP_ROOT='/srv/apps/senior-pomidor'
 export ACTIVE_LINK="${APP_ROOT}/app"
@@ -271,11 +315,17 @@ printf 'active=%s\nold_version=%s\nold_revision=%s\nold_image=%s\n' \
 [[ "${NEW_VERSION}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
 [[ "${OLD_VERSION}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
 [[ "${NEW_REVISION}" =~ ^[0-9a-f]{40}$ ]]
+[[ "${EXPECTED_OLD_REVISION}" =~ ^[0-9a-f]{40}$ ]]
+[[ "${OLD_REVISION}" == "${EXPECTED_OLD_REVISION}" ]]
 [[ "${NEW_APP_IMAGE}" =~ ^ghcr\.io/cracketus/senior-pomidor-server@sha256:[0-9a-f]{64}$ ]]
 [[ "${OLD_APP_IMAGE}" =~ ^ghcr\.io/cracketus/senior-pomidor-server@sha256:[0-9a-f]{64}$ ]]
 [[ "$(sudo cat "${ACTIVE_LINK}/VERSION")" == "${OLD_VERSION}" ]]
 [[ "${OLD_RELEASE_PATH}" == "${APP_ROOT}/releases/${OLD_VERSION}" ]]
 ```
+
+`API_URL` должен содержать реальный published address из `LAN_BIND_ADDRESS`. Если API опубликован
+только на LAN interface, `http://127.0.0.1:8000` на server не сработает. Не выводите весь `runtime.env`;
+проверьте только фактическую публикацию в Compose `ps` на шаге 6.
 
 Если current `runtime.env` содержит version tag вместо digest, не продолжайте с tag. Возьмите точный
 предыдущий digest из принятого release/change evidence, вручную присвойте его `OLD_APP_IMAGE` и повторите
@@ -310,14 +360,19 @@ sudo test -x "${INSTALLER}"
 
 ```bash
 cd "${ACTIVE_LINK}"
-sudo docker compose --env-file "${ENV_FILE}" \
+sudo docker compose --project-name senior-pomidor --env-file "${ENV_FILE}" \
   -f docker-compose.yml -f docker-compose.prod.yml config --quiet
-sudo docker compose --env-file "${ENV_FILE}" \
+sudo docker compose --project-name senior-pomidor --env-file "${ENV_FILE}" \
   -f docker-compose.yml -f docker-compose.prod.yml ps
 curl --fail --silent --show-error "${API_URL}/health"
 curl --fail --silent --show-error "${API_URL}/ready"
-curl --fail --silent --show-error \
-  "${API_URL}/health/summary?node_id=${CANARY_EDGE_ID}"
+curl --fail --silent --show-error "${API_URL}/health/summary"
+if [[ -n "${CANARY_EDGE_ID}" ]]; then
+  curl --fail --silent --show-error \
+    "${API_URL}/health/summary?node_id=${CANARY_EDGE_ID}"
+else
+  echo 'Canary Edge absent: scoped preflight is NOT_RUN'
+fi
 ```
 
 Проверьте shared platform без изменения его lifecycle:
@@ -328,8 +383,9 @@ sudo docker network inspect srv-platform \
 ```
 
 **Ожидается:** services active, `NTPSynchronized=yes`, достаточно места по утверждённому threshold,
-нет pending reboot, Compose render проходит, `/health` и `/ready` успешны, scoped health не содержит
-необъяснённого `ALERT/UNKNOWN`, platform network содержит ожидаемые services.  
+нет pending reboot, Compose render проходит, `ps` показывает project `senior-pomidor`, `/health` и `/ready` успешны,
+scoped health для заданного canary не содержит необъяснённого `ALERT/UNKNOWN`, platform network содержит
+ожидаемые services. Без canary только scoped check записан как `NOT_RUN`.
 **STOP:** Docker/clock/storage/service/ready problem, pending reboot, unexpected listener/service,
 stale or unknown canary evidence. Сначала восстановите baseline; deployment не является лечением.  
 **GO:** baseline записан.
@@ -429,7 +485,7 @@ sudo sh -c 'cd "$1" && sha256sum --check SHA256SUMS' \
 ```bash
 systemctl is-active senior-pomidor.service
 cd "${ACTIVE_LINK}"
-sudo docker compose --env-file "${ENV_FILE}" \
+sudo docker compose --project-name senior-pomidor --env-file "${ENV_FILE}" \
   -f docker-compose.yml -f docker-compose.prod.yml ps
 curl --fail --silent --show-error "${API_URL}/ready"
 ```
@@ -452,6 +508,7 @@ running/healthy; `/ready` успешен.
   cd "${INCOMING}"
   sudo sha256sum --check "$(basename "${OLD_CHECKSUM}")"
 )
+test "$(sudo tar -xOf "${OLD_ARCHIVE}" ./REVISION)" = "${OLD_REVISION}"
 
 sudo docker pull "${OLD_APP_IMAGE}"
 sudo docker pull "${NEW_APP_IMAGE}"
@@ -463,15 +520,14 @@ sudo docker pull "${NEW_APP_IMAGE}"
 OLD_VERSION
 OLD_REVISION
 OLD_APP_IMAGE
-OLD_ARCHIVE
-OLD_CHECKSUM
+OLD_ARCHIVE/OLD_CHECKSUM
 OLD_RELEASE_PATH
 LATEST_LOCAL_BACKUP
 ```
 
-**Ожидается:** оба images доступны; старый bundle checksum `OK`; старые значения записаны.  
-**STOP:** old image/bundle недоступен или rollback rehearsal не использовал этот путь.  
-**GO:** rollback можно выполнить без rebuild и без database restore.
+**Ожидается:** оба images доступны; old bundle checksum `OK`; старые значения записаны.
+**STOP:** old image или проверенный old bundle недоступны либо rollback rehearsal не использовал этот путь.
+**GO:** rollback готов до изменения configuration.
 
 ## 9. Переключить только APP_IMAGE
 
@@ -566,11 +622,15 @@ sudo systemctl status senior-pomidor.service --no-pager
 
 ```bash
 cd "${ACTIVE_LINK}"
-sudo docker compose --env-file "${ENV_FILE}" \
+sudo docker compose --project-name senior-pomidor --env-file "${ENV_FILE}" \
   -f docker-compose.yml -f docker-compose.prod.yml ps
-sudo docker compose --env-file "${ENV_FILE}" \
+sudo docker compose --project-name senior-pomidor --env-file "${ENV_FILE}" \
   -f docker-compose.yml -f docker-compose.prod.yml ps -a migrate
 ```
+
+`--project-name senior-pomidor` обязателен в interactive shell: `COMPOSE_PROJECT_NAME` задан в systemd unit и не
+наследуется SSH-сессией. Без него `docker compose ps` может показать пустой, неправильно
+именованный project, хотя production containers работают.
 
 **Ожидается:** systemd command возвращает `0`; service active; `migrate` завершился без ошибки;
 `api`, `worker`, `state-estimator-worker` и применимые profiles running/healthy. Shared PostgreSQL,
@@ -589,12 +649,24 @@ Grafana и Ollama не перезапускались этим действие�
 ```bash
 curl --fail --silent --show-error "${API_URL}/health"
 curl --fail --silent --show-error "${API_URL}/ready"
-curl --fail --silent --show-error \
-  "${API_URL}/health/summary?node_id=${CANARY_EDGE_ID}"
-curl --fail --silent --show-error \
-  "${API_URL}/api/v1/devices/${CANARY_EDGE_ID}/latest"
-curl --fail --silent --show-error \
-  "${API_URL}/api/v1/operator/edges/${CANARY_EDGE_ID}/reliability"
+curl --fail --silent --show-error "${API_URL}/health/summary"
+test "$(sudo cat "${ACTIVE_LINK}/VERSION")" = "${NEW_VERSION}"
+test "$(sudo cat "${ACTIVE_LINK}/REVISION")" = "${NEW_REVISION}"
+test "$(sudo sed -n 's/^APP_IMAGE=//p' "${ENV_FILE}")" = "${NEW_APP_IMAGE}"
+API_CONTAINER_ID="$(sudo docker compose --project-name senior-pomidor --env-file "${ENV_FILE}" \
+  -f docker-compose.yml -f docker-compose.prod.yml ps -q api)"
+sudo test -n "${API_CONTAINER_ID}"
+test "$(sudo docker inspect --format '{{.Config.Image}}' "${API_CONTAINER_ID}")" = "${NEW_APP_IMAGE}"
+if [[ -n "${CANARY_EDGE_ID}" ]]; then
+  curl --fail --silent --show-error \
+    "${API_URL}/health/summary?node_id=${CANARY_EDGE_ID}"
+  curl --fail --silent --show-error \
+    "${API_URL}/api/v1/devices/${CANARY_EDGE_ID}/latest"
+  curl --fail --silent --show-error \
+    "${API_URL}/api/v1/operator/edges/${CANARY_EDGE_ID}/reliability"
+else
+  echo 'Canary Edge absent: Edge-specific fast checks are NOT_RUN'
+fi
 ```
 
 Проверьте bounded logs только приватно:
@@ -636,6 +708,14 @@ Core устанавливается первым. Не обновляйте ос
 от одного approved canary Edge или выполните заранее одобренную Edge canary procedure. Не изобретайте
 новый payload и не воспроизводите production `record_id` вручную.
 
+Если canary не был выбран до rollout, не подставляйте вымышленный ID. После запуска реального Edge
+получите его ID из read-only API и задайте его только после human confirmation:
+
+```bash
+curl --fail --silent --show-error "${API_URL}/api/v1/devices"
+export CANARY_EDGE_ID='<confirmed-device-id-from-response>'
+```
+
 После новой observation повторите:
 
 ```bash
@@ -654,6 +734,56 @@ reliability не маскирует missing/stale evidence как healthy.
 **STOP и rollback:** ingestion rejected, count/identity mismatch, duplicate scientific row,
 stale-to-healthy promotion, `ALERT/UNKNOWN` без объяснения или Edge/Core incompatibility.  
 **GO:** canary data path `PASS`.
+
+### 12.3 Edge reliability и Grafana
+
+**Где:** `S1` для read-only API; `L` и UI общей Grafana для dashboard.
+**Риск:** `1 — низкий` для проверок; импорт в shared Grafana требует platform-admin approval.
+
+Проверьте bounded reliability view нового Edge:
+
+```bash
+if [[ -n "${CANARY_EDGE_ID}" ]]; then
+  curl --fail --silent --show-error \
+    "${API_URL}/api/v1/operator/edges/${CANARY_EDGE_ID}/reliability"
+  curl --fail --silent --show-error \
+    "${API_URL}/health/summary?node_id=${CANARY_EDGE_ID}"
+else
+  echo 'Canary Edge absent: reliability API checks are NOT_RUN'
+fi
+```
+
+Ожидаемый healthy baseline: overall status равен `OK`, freshness равен `FRESH`, subsystem statuses равны `OK`, watchdog
+имеет state `healthy`, application process running, spool backlog bounded. `UNKNOWN` при fresh telemetry означает,
+что Edge не присылает все `system_health.watchdog`, `system_health.spool` и `system_health.application` blocks.
+Если `CANARY_EDGE_ID` пуст, этот API baseline и device-specific проверка dashboard имеют status `NOT_RUN`, а не
+`PASS`; отсутствие заранее одобренного canary само по себе не является stop-condition.
+
+Production Compose не управляет shared Grafana, а source-free runtime bundle не содержит
+`docker/grafana/provisioning`. Поэтому application rollout сам не добавляет new dashboard. После platform-admin
+approval в `L` из exact tag извлеките dashboard JSON в Windows temp, не засоряя checkout:
+
+```powershell
+$DashboardFile = Join-Path ([System.IO.Path]::GetTempPath()) `
+  "senior-pomidor-edge-reliability-$NewVersion.json"
+git show "${NewVersion}:docker/grafana/provisioning/dashboards/json/senior-pomidor-edge-reliability.json" |
+  Set-Content -LiteralPath $DashboardFile -Encoding utf8
+Get-Content -LiteralPath $DashboardFile -Raw | ConvertFrom-Json | Out-Null
+$DashboardFile
+```
+
+Затем в Grafana откройте `Dashboards` → `New` → `Import` и загрузите выведенный `$DashboardFile`.
+
+Проверьте dashboard `Senior Pomidor Edge Reliability`, UID `senior-pomidor-edge-reliability`, datasource UID
+`senior-pomidor-postgres` и выберите `CANARY_EDGE_ID` в фильтре. Dashboard JSON не содержит alert rules. Пять
+rules из `docker/grafana/provisioning/alerting/edge-reliability-alerts.yml` требуют отдельного одобренного
+shared-platform provisioning; не отмечайте alerts `PASS` только после dashboard import.
+
+**STOP:** reliability stale/unavailable, необъяснённый `ALERT/UNKNOWN`, datasource error или shared Grafana change без
+platform approval.
+**GO:** при заданном canary API показывает fresh Edge reliability и dashboard показывает тот же device; при пустом
+`CANARY_EDGE_ID` обе device-specific проверки честно записаны как `NOT_RUN`. Отдельный Grafana import также может
+быть записан как `NOT_RUN`, если для него нет platform approval.
 
 ## 13. Rollback
 
@@ -714,8 +844,12 @@ test "$(sudo cat "${ACTIVE_LINK}/REVISION")" = "${OLD_REVISION}"
 systemctl is-active senior-pomidor.service
 curl --fail --silent --show-error "${API_URL}/health"
 curl --fail --silent --show-error "${API_URL}/ready"
-curl --fail --silent --show-error \
-  "${API_URL}/api/v1/devices/${CANARY_EDGE_ID}/latest"
+if [[ -n "${CANARY_EDGE_ID}" ]]; then
+  curl --fail --silent --show-error \
+    "${API_URL}/api/v1/devices/${CANARY_EDGE_ID}/latest"
+else
+  echo 'Canary Edge absent: rollback Edge read is NOT_RUN'
+fi
 ```
 
 **Ожидается:** previous version/revision активны; application healthy/ready; historical и новая
@@ -725,6 +859,16 @@ telemetry читаются; shared services/data сохранены.
 Эскалируйте recovery owner с `LATEST_LOCAL_BACKUP` и #78 procedure.  
 **GO:** rollback записан как `PASS`; deployment остаётся `FAIL`, новую попытку не начинайте в том же
 окне без нового решения.
+
+### 13.3 Если verified previous bundle неожиданно стал недоступен после preflight
+
+Не применяйте шаг 13.2 с пустыми переменными и не переключайте symlink вручную. Installer мог
+уже переместить previous release из `releases/` в `/srv/apps/archive/senior-pomidor/`; такой recovery path не является
+проверенным bundle rollback.
+
+Оставьте `senior-pomidor.service` в текущем состоянии, соберите bounded diagnostics и эскалируйте recovery owner.
+Если application недоступно, recovery owner выбирает между повторным получением verified old bundle и
+отдельно одобренным emergency recovery. Не делайте database restore и не удаляйте release/archive paths.
 
 ## 14. Наблюдение 60 минут
 
@@ -740,10 +884,14 @@ telemetry читаются; shared services/data сохранены.
 date -u +'%Y-%m-%dT%H:%M:%SZ'
 systemctl is-active senior-pomidor.service
 curl --fail --silent --show-error "${API_URL}/ready"
-curl --fail --silent --show-error \
-  "${API_URL}/health/summary?node_id=${CANARY_EDGE_ID}"
-curl --fail --silent --show-error \
-  "${API_URL}/api/v1/operator/edges/${CANARY_EDGE_ID}/reliability"
+if [[ -n "${CANARY_EDGE_ID}" ]]; then
+  curl --fail --silent --show-error \
+    "${API_URL}/health/summary?node_id=${CANARY_EDGE_ID}"
+  curl --fail --silent --show-error \
+    "${API_URL}/api/v1/operator/edges/${CANARY_EDGE_ID}/reliability"
+else
+  echo 'Canary Edge absent: Edge observation is NOT_RUN'
+fi
 ```
 
 Проверяйте:
@@ -802,12 +950,12 @@ count/duplicate/freshness/privacy/resource mismatches. Итог остаётся
 
 После добавления bounded canary/production evidence:
 
-```bash
-python -m tools.release_qualification validate \
-  --kind release-validation --mode full --require-pass \
-  --report "docs/release-evidence/${REPORT_ID}/release-validation.json" \
-  --core-sha "${CORE_SHA}" --core-image "${CORE_IMAGE}" --core-digest "${CORE_DIGEST}" \
-  --edge-sha "${EDGE_SHA}" --edge-image "${EDGE_IMAGE}" --edge-digest "${EDGE_DIGEST}"
+```powershell
+python -m tools.release_qualification validate `
+  --kind release-validation --mode full --require-pass `
+  --report "docs/release-evidence/$ReportId/release-validation.json" `
+  --core-sha $CoreSha --core-image $CoreImage --core-digest $CoreDigest `
+  --edge-sha $EdgeSha --edge-image $EdgeImage --edge-digest $EdgeDigest
 ```
 
 В sanitized evidence не включайте raw logs, payloads, hostnames, addresses, network identifiers,
@@ -848,6 +996,7 @@ paths, service/process/boot IDs, credentials или dumps.
 | 11. Application restarted | NOT_RUN | — | — |
 | 12. Fast checks | NOT_RUN | — | — |
 | 12.2 Core canary path | NOT_RUN | — | — |
+| 12.3 Edge reliability/Grafana | NOT_RUN | — | — |
 | 14. 60-minute observation | NOT_RUN | — | — |
 | 15. Backup + 24-hour observation | NOT_RUN | — | — |
 | 16. Full validation/review | NOT_RUN | — | — |

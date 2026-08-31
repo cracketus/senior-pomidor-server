@@ -61,6 +61,16 @@ Human operator must prepare the fixed staging host and Edge container, verify th
 files without exposing credentials, run all ten scenarios, continue the exact immutable bundle for 24h,
 perform exact-bundle rollback rehearsal, and attach sanitized reports. Status: `NOT_RUN`.
 
+## Post-report Edge compatibility blocker
+
+Evidence update run: `20260831-edge-142-core-blocker-coder` /
+`.ai/agent-runs/20260831-edge-142-core-blocker-coder.json`.
+
+The canonical Docker Edge discriminator fix is tracked by
+[senior-pomidor-plant-v2#142](https://github.com/cracketus/senior-pomidor-plant-v2/issues/142).
+Core production promotion remains blocked until that issue's acceptance criteria pass and a real Edge/Core
+staging canary is recorded. Current status: `NOT_RUN`.
+
 ## Final diff review
 
 No production secrets, private paths, raw payloads, GPIO/actuator operations, arbitrary shell execution,

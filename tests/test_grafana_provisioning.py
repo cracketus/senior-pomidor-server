@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 
+import yaml
+
 ROOT = Path(__file__).resolve().parents[1]
 DASHBOARD_PATH = ROOT / "docker/grafana/provisioning/dashboards/json/senior-pomidor-telemetry.json"
 EDGE_DASHBOARD_PATH = ROOT / "docker/grafana/provisioning/dashboards/json/senior-pomidor-edge-reliability.json"
@@ -239,17 +241,55 @@ def test_edge_reliability_dashboard_has_safe_current_and_history_views():
     }.issubset(panel_titles)
 
     current = find_panel(dashboard, "Current Reliability States")["targets"][0]["rawSql"]
+    application_case = current.split("END AS spool_status,", 1)[1].split("END AS application_status", 1)[0]
+    aggregate_case = current.split("END AS application_status,", 1)[1].split("END AS aggregate_status", 1)[0]
+    overall_case = current.split("SELECT device_id,CASE", 1)[1].split("END AS overall_status", 1)[0]
     assert "FROM devices d" in current
     assert "LEFT JOIN LATERAL" in current
     assert "ORDER BY te.timestamp_utc DESC, te.id DESC" in current
     assert "THEN 'UNKNOWN'" in current
     assert "interval '20 minutes'" in current
+    assert aggregate_case.startswith(
+        "CASE WHEN timestamp_utc IS NULL OR timestamp_utc>now() "
+        "OR timestamp_utc<now()-interval '20 minutes' THEN 'UNKNOWN'"
+    )
+    component_unknown = "WHEN 'UNKNOWN' IN (watchdog_status,spool_status,application_status) THEN 'UNKNOWN'"
+    aggregate_warning = "WHEN 'WARN' IN (watchdog_status,spool_status,application_status,aggregate_status) THEN 'WARN'"
+    assert component_unknown in overall_case
+    assert aggregate_warning in overall_case
+    assert overall_case.index(component_unknown) < overall_case.index(aggregate_warning)
+    invalid_service_manager = (
+        "WHEN system_health_jsonb->'application' ? 'service_manager' AND "
+        "coalesce(system_health_jsonb #>> '{application,service_manager}','') "
+        "NOT IN ('none','systemd') THEN 'UNKNOWN'"
+    )
+    healthy_systemd = (
+        "WHEN system_health_jsonb #>> '{application,process_running}'='true' AND "
+        "system_health_jsonb #>> '{application,systemd_available}'='true'"
+    )
+    assert invalid_service_manager in application_case
+    assert healthy_systemd in application_case
+    assert application_case.index(invalid_service_manager) < application_case.index(healthy_systemd)
     for allowlist in (
         "('suppressed','budget_exhausted','recovery_suppressed')",
         "('starting','cooldown','maintenance','recovering','recovered','suppression_cleared')",
         "('DEGRADED','CRITICAL')",
     ):
         assert allowlist in current
+    for fail_safe_predicate in (
+        "jsonb_typeof(system_health_jsonb->'aggregate')<>'object'",
+        "system_health_jsonb #>> '{aggregate,schema_version}' IS NULL",
+        "system_health_jsonb #>> '{aggregate,state}' IS NULL",
+        "system_health_jsonb #>> '{application,service_manager}'='none'",
+        "system_health_jsonb #>> '{application,service_manager}' IS NULL",
+        "system_health_jsonb #> '{application,systemd_active_state}' IS NULL",
+        "system_health_jsonb #> '{application,systemd_sub_state}' IS NULL",
+    ):
+        assert fail_safe_predicate in current
+    assert (
+        "system_health_jsonb #>> '{application,systemd_service_name}' IS NULL "
+        "AND system_health_jsonb #>> '{application,process_running}'='true'"
+    ) not in current
 
     assert "$__timeFilter(timestamp_utc)" in queries
     assert "database_size_bytes" in queries
@@ -259,7 +299,6 @@ def test_edge_reliability_dashboard_has_safe_current_and_history_views():
         "reason",
         "last_error_code",
         "boot_id",
-        "systemd_service_name",
         "process_id",
         "ip_address",
         "ssid",
@@ -268,16 +307,19 @@ def test_edge_reliability_dashboard_has_safe_current_and_history_views():
         assert sensitive not in queries
 
 
-def test_edge_reliability_alerts_cover_four_failure_classes_without_hiding_missing_devices():
+def test_edge_reliability_alerts_cover_five_failure_classes_without_hiding_missing_devices():
     alerts = EDGE_ALERTS_PATH.read_text(encoding="utf-8")
+    rules = yaml.safe_load(alerts)["groups"][0]["rules"]
 
-    assert alerts.count("      - uid: sp_edge_") == 4
+    assert len(rules) == 5
+    assert alerts.count("      - uid: sp_edge_") == 5
     assert "dashboardUid: senior-pomidor-edge-reliability" in alerts
-    assert alerts.count("noDataState: OK") == 4
-    assert alerts.count("execErrState: Alerting") == 4
+    assert alerts.count("noDataState: OK") == 5
+    assert alerts.count("execErrState: Alerting") == 5
     assert "title: Edge reliability unavailable or stale" in alerts
     assert "title: Edge watchdog critical" in alerts
     assert "title: Edge spool or disk critical" in alerts
+    assert "title: Edge aggregate critical" in alerts
     assert "title: Edge application inactive" in alerts
     assert "for: 5m" in alerts
     assert "for: 1m" in alerts
@@ -294,8 +336,13 @@ def test_edge_reliability_alerts_cover_four_failure_classes_without_hiding_missi
     assert "#>> '{spool,status}' IN ('DEGRADED','CRITICAL')" in alerts
     assert "#>> '{spool,disk_status}' IN ('DEGRADED','CRITICAL')" in alerts
     assert "#>> '{spool,worker_state}' = 'error'" in alerts
-    assert "#>> '{application,process_running}' = 'false'" in alerts
-    assert "#>> '{application,systemd_service_active}' = 'false'" in alerts
+    assert "#>> '{aggregate,schema_version}' = 'senior-pomidor.edge.health.v1'" in alerts
+    assert "#>> '{aggregate,state}' = 'CRITICAL'" in alerts
+    application_query = alerts.split("title: Edge application inactive", 1)[1]
+    assert "#>> '{application,process_running}' = 'false'" in application_query
+    assert "#>> '{application,systemd_service_active}' = 'false'" in application_query
+    assert "#>> '{application,service_manager}' = 'systemd'" in application_query
+    assert "coalesce(e.system_health_jsonb->'application', '{}'::jsonb) ? 'service_manager'" in application_query
 
 
 def test_edge_reliability_documentation_example_is_synthetic_and_sanitized():

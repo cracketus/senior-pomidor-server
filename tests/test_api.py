@@ -11,6 +11,7 @@ import app.api as api_module
 import app.main as main_module
 from app.config import Settings, get_settings
 from app.db import get_db
+from app.edge_reliability import evaluate_edge_reliability
 from app.main import app
 from app.models import Base, Photo
 from app.readiness import get_alembic_head
@@ -268,6 +269,25 @@ def test_reliability_normalization_preserves_partial_and_nullable_fields():
     }
 
 
+def test_reliability_normalization_preserves_bounded_health_aggregate():
+    normalized = normalize_system_health(
+        {
+            "system_health": {
+                "aggregate": {
+                    "schema_version": "senior-pomidor.edge.health.v1",
+                    "state": "OK",
+                    "reasons": ["queue-clear", "queue-clear", "x" * 257, 42],
+                    "private_detail": "drop",
+                }
+            }
+        }
+    )
+
+    assert normalized == {
+        "aggregate": {"schema_version": "senior-pomidor.edge.health.v1", "state": "OK", "reasons": ["queue-clear"]}
+    }
+
+
 def test_reliability_normalization_drops_malformed_unknown_and_private_fields():
     normalized = normalize_system_health(
         {
@@ -292,6 +312,7 @@ def test_reliability_normalization_drops_malformed_unknown_and_private_fields():
                     "unknown": 1,
                 },
                 "application": {
+                    "service_manager": ["none"],
                     "process_running": True,
                     "process_id": True,
                     "process_uptime_seconds": -1,
@@ -306,7 +327,39 @@ def test_reliability_normalization_drops_malformed_unknown_and_private_fields():
     assert normalized == {
         "watchdog": {},
         "spool": {"status": "BACKLOG"},
-        "application": {"process_running": True},
+        "application": {"service_manager": None, "process_running": True},
+    }
+
+
+def test_reliability_normalization_preserves_known_service_manager():
+    normalized = normalize_system_health(
+        {"system_health": {"application": {"service_manager": "none", "process_running": True}}}
+    )
+
+    assert normalized == {"application": {"service_manager": "none", "process_running": True}}
+
+
+def test_reliability_normalization_preserves_invalid_service_manager_presence():
+    normalized = normalize_system_health(
+        {
+            "system_health": {
+                "application": {
+                    "service_manager": "launchd",
+                    "process_running": True,
+                    "systemd_available": True,
+                    "systemd_service_active": True,
+                }
+            }
+        }
+    )
+
+    assert normalized == {
+        "application": {
+            "service_manager": None,
+            "process_running": True,
+            "systemd_available": True,
+            "systemd_service_active": True,
+        }
     }
 
 
@@ -321,6 +374,7 @@ def test_http_reliability_malformed_optional_fields_are_accepted_but_not_persist
                 "last_error_detail": "private detail",
             },
             "application": {
+                "service_manager": "none",
                 "process_running": True,
                 "process_id": "4321",
                 "errors": [{"message": "private nested error"}],
@@ -334,7 +388,45 @@ def test_http_reliability_malformed_optional_fields_are_accepted_but_not_persist
     latest = client.get("/api/v1/devices/pi-001/latest").json()["system_health"]
     assert latest["watchdog"] == {"state": "healthy"}
     assert latest["spool"] == {"pending_count": 3}
-    assert latest["application"] == {"process_running": True}
+    assert latest["application"] == {"service_manager": "none", "process_running": True}
+
+
+def test_http_malformed_aggregate_field_is_accepted_and_normalized(client):
+    payload = telemetry_v2_payload("2026-06-07T12:04:00Z")
+    payload["system_health"]["aggregate"] = {
+        "schema_version": "senior-pomidor.edge.health.v1",
+        "state": "OK",
+        "reasons": ["queue", 42],
+    }
+
+    response = client.post("/api/v1/edge/telemetry", json=payload)
+
+    assert response.status_code == 202
+    latest = client.get("/api/v1/devices/pi-001/latest").json()
+    assert latest["system_health"]["aggregate"] == {
+        "schema_version": "senior-pomidor.edge.health.v1",
+        "state": "OK",
+        "reasons": ["queue"],
+    }
+
+
+def test_http_invalid_service_manager_cannot_be_promoted_to_healthy_legacy_systemd(client):
+    payload = telemetry_v2_payload("2026-06-07T12:05:00Z")
+    payload["system_health"]["application"] = {
+        "service_manager": "launchd",
+        "process_running": True,
+        "systemd_available": True,
+        "systemd_service_active": True,
+        "systemd_active_state": "active",
+    }
+
+    response = client.post("/api/v1/edge/telemetry", json=payload)
+
+    assert response.status_code == 202
+    latest = client.get("/api/v1/devices/pi-001/latest").json()
+    application = latest["system_health"]["application"]
+    assert application["service_manager"] is None
+    assert evaluate_edge_reliability(latest["system_health"]).application_status == "UNKNOWN"
 
 
 def test_http_telemetry_v2_persists_network_health(client):

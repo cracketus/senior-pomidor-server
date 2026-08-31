@@ -165,6 +165,50 @@ groups:
           summary: Edge spool, disk, or delivery worker is degraded or critical.
         labels: {severity: critical, category: edge-reliability}
 
+      - uid: sp_edge_aggregate_critical
+        title: Edge aggregate critical
+        condition: B
+        data:
+          - refId: A
+            datasourceUid: senior-pomidor-postgres
+            relativeTimeRange: {from: 1800, to: 0}
+            model:
+              datasource: {type: postgres, uid: senior-pomidor-postgres}
+              editorMode: code
+              format: table
+              intervalMs: 1000
+              maxDataPoints: 43200
+              rawQuery: true
+              refId: A
+              rawSql: |
+                SELECT
+                  d.device_id,
+                  'CRITICAL' AS observed,
+                  1::double precision AS value
+                FROM devices d
+                LEFT JOIN LATERAL (
+                  SELECT te.timestamp_utc, te.system_health_jsonb
+                  FROM telemetry_events te
+                  WHERE te.device_id = d.device_id
+                  ORDER BY te.timestamp_utc DESC, te.id DESC
+                  LIMIT 1
+                ) e ON true
+                WHERE e.timestamp_utc >= now() - interval '20 minutes'
+                  AND e.timestamp_utc <= now()
+                  AND e.system_health_jsonb #>> '{aggregate,schema_version}' = 'senior-pomidor.edge.health.v1'
+                  AND e.system_health_jsonb #>> '{aggregate,state}' = 'CRITICAL'
+          - refId: B
+            datasourceUid: __expr__
+            relativeTimeRange: {from: 0, to: 0}
+            model: *threshold_model
+        dashboardUid: senior-pomidor-edge-reliability
+        noDataState: OK
+        execErrState: Alerting
+        for: 1m
+        annotations:
+          summary: Edge canonical health aggregate is critical.
+        labels: {severity: critical, category: edge-reliability}
+
       - uid: sp_edge_application_inactive
         title: Edge application inactive
         condition: B
@@ -197,7 +241,15 @@ groups:
                   AND e.timestamp_utc <= now()
                   AND (
                     e.system_health_jsonb #>> '{application,process_running}' = 'false'
-                    OR e.system_health_jsonb #>> '{application,systemd_service_active}' = 'false'
+                    OR (
+                      e.system_health_jsonb #>> '{application,systemd_service_active}' = 'false'
+                      AND (
+                        e.system_health_jsonb #>> '{application,service_manager}' = 'systemd'
+                        OR NOT (
+                          coalesce(e.system_health_jsonb->'application', '{}'::jsonb) ? 'service_manager'
+                        )
+                      )
+                    )
                   )
           - refId: B
             datasourceUid: __expr__

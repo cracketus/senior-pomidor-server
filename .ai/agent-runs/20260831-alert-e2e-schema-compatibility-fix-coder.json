@@ -1,0 +1,56 @@
+{
+  "schema": "agent_run_v1",
+  "run_id": "20260831-alert-e2e-schema-compatibility-fix-coder",
+  "issue_ref": null,
+  "pr_ref": null,
+  "role": "coder",
+  "agent_id": "codex-local",
+  "prompt_version": "human-approved-review-fix-v1",
+  "started_at_utc": "2026-08-31T10:03:33Z",
+  "finished_at_utc": "2026-08-31T10:11:50Z",
+  "input_refs": [
+    "AGENTS.md",
+    ".ai/CORE_INVARIANTS.md",
+    ".ai/context-manifest.yaml",
+    ".ai/test-matrix.yaml",
+    "docs/schemas/telemetry-v2.schema.json",
+    "docs/CONTRACTS.md",
+    "docker/grafana/provisioning/alerting/edge-reliability-alerts.yml",
+    "tests/test_docker_e2e.py"
+  ],
+  "output_refs": [
+    "docs/schemas/telemetry-v2.schema.json",
+    "docs/CONTRACTS.md",
+    "docker/grafana/provisioning/alerting/edge-reliability-alerts.yml",
+    "tests/test_contract_fixtures.py",
+    "tests/test_grafana_provisioning.py",
+    "tests/test_docker_e2e.py",
+    ".ai/agent-runs/20260831-alert-e2e-schema-compatibility-fix-coder.json"
+  ],
+  "status": "completed",
+  "commands": [
+    {"name": "focused-tests", "status": "PASS", "evidence": "27 focused schema, fixture, YAML/Grafana and evaluator tests passed"},
+    {"name": "schema-json-parse", "status": "PASS"},
+    {"name": "diff-check", "status": "PASS"}
+  ],
+  "validation_results": [
+    {"name": "schema-validation", "status": "PASS"},
+    {"name": "serialization-round-trip", "status": "PASS"},
+    {"name": "fixture-replay", "status": "NOT_RUN", "reason": "Full HTTP/MQTT boundary replay excluded by the human's focused-test constraint"},
+    {"name": "named-consumers", "status": "NOT_RUN", "reason": "Unit-level evaluator and Grafana structure passed; Docker E2E consumer was not executed"},
+    {"name": "full-pytest", "status": "NOT_RUN", "reason": "Explicitly excluded by the human"},
+    {"name": "quality", "status": "NOT_RUN", "reason": "Human requested only focused unit tests"},
+    {"name": "compose-config", "status": "NOT_RUN", "reason": "Human requested only focused unit tests"},
+    {"name": "docker-e2e", "status": "NOT_RUN", "reason": "Human requested only focused unit tests; no Compose mutation authorized"},
+    {"name": "edge-canary", "status": "NOT_RUN"},
+    {"name": "isolated-rehearsal-rollback-post-deploy-health", "status": "NOT_RUN"}
+  ],
+  "human_edits": [],
+  "findings": [
+    {"category": "docker-e2e-alert-inventory", "outcome": "confirmed", "role": "reviewer"},
+    {"category": "telemetry-v2-schema-compatibility", "outcome": "confirmed", "role": "reviewer"},
+    {"category": "application-alert-discriminator", "outcome": "confirmed", "role": "reviewer"}
+  ],
+  "errors": [],
+  "usage": {"file_count": 7, "input_characters": 150078, "tool_output_bytes": 0, "elapsed_seconds": 497}
+}

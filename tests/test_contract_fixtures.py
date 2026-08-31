@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 
+import pytest
 from jsonschema import Draft202012Validator
 
 from app.operator_edge_reliability import OperatorEdgeReliabilityV1
@@ -80,6 +81,8 @@ def test_server_and_copied_edge_reliability_fixtures_validate_and_round_trip() -
         ],
         "note": "Synthetic private-safe copy; tests do not access the edge checkout.",
     }
+    assert server_fixture["system_health"]["application"]["service_manager"] == "systemd"
+    assert "service_manager" not in copied_edge_fixture["payload"]["system_health"]["application"]
     for payload in (server_fixture, copied_edge_fixture["payload"]):
         validator.validate(payload)
         assert json.loads(json.dumps(payload, sort_keys=True)) == payload
@@ -94,6 +97,56 @@ def test_producer_schema_rejects_malformed_reliability_fields() -> None:
 
     assert len(errors) == 1
     assert list(errors[0].absolute_path)[-2:] == ["spool", "disk_usage_percent"]
+
+
+@pytest.mark.parametrize(
+    "application",
+    [
+        {"service_manager": "none", "process_running": True, "systemd_available": False},
+        {"service_manager": "systemd", "process_running": True},
+    ],
+)
+def test_producer_schema_rejects_ambiguous_or_incomplete_application_modes(application: dict) -> None:
+    schema = load_json(SCHEMA_DIR / "telemetry-v2.schema.json")
+    payload = load_json(FIXTURE_DIR / "telemetry_v2.json")
+    payload["system_health"]["application"] = application
+
+    assert list(Draft202012Validator(schema).iter_errors(payload))
+
+
+def test_producer_schema_accepts_explicit_process_only_and_legacy_systemd_modes() -> None:
+    schema = load_json(SCHEMA_DIR / "telemetry-v2.schema.json")
+    validator = Draft202012Validator(schema)
+    payload = load_json(FIXTURE_DIR / "telemetry_v2.json")
+
+    payload["system_health"]["application"] = {"service_manager": "none", "process_running": True}
+    validator.validate(payload)
+
+    payload["system_health"]["application"] = {"process_running": True}
+    validator.validate(payload)
+
+    payload["system_health"]["application"] = {
+        "process_running": True,
+        "systemd_available": True,
+        "systemd_service_active": True,
+    }
+    validator.validate(payload)
+
+
+@pytest.mark.parametrize("aggregate", [{}, {"reasons": []}])
+def test_producer_schema_requires_aggregate_identity_and_state(aggregate: dict) -> None:
+    schema = load_json(SCHEMA_DIR / "telemetry-v2.schema.json")
+    payload = load_json(FIXTURE_DIR / "telemetry_v2.json")
+    payload["system_health"]["aggregate"] = aggregate
+
+    required_errors = {
+        error.message for error in Draft202012Validator(schema).iter_errors(payload) if error.validator == "required"
+    }
+
+    assert required_errors == {
+        "'schema_version' is a required property",
+        "'state' is a required property",
+    }
 
 
 def test_photo_contract_fixture_matches_active_schema() -> None:

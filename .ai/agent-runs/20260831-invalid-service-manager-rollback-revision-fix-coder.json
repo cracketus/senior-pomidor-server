@@ -1,0 +1,63 @@
+{
+  "schema": "agent_run_v1",
+  "run_id": "20260831-invalid-service-manager-rollback-revision-fix-coder",
+  "issue_ref": null,
+  "pr_ref": null,
+  "role": "coder",
+  "agent_id": "codex-local",
+  "prompt_version": "human-approved-review-fix-v1",
+  "started_at_utc": "2026-08-31T06:22:46Z",
+  "finished_at_utc": "2026-08-31T06:47:21Z",
+  "input_refs": [
+    "AGENTS.md",
+    ".ai/CORE_INVARIANTS.md",
+    ".ai/context-manifest.yaml",
+    ".ai/known-failures.yaml",
+    ".ai/test-matrix.yaml",
+    "docs/CONTRACTS.md",
+    "docs/PRODUCTION_RELEASE_INSTALLATION_RUNBOOK.md",
+    "app/telemetry.py",
+    "app/edge_reliability.py"
+  ],
+  "output_refs": [
+    "app/telemetry.py",
+    "app/edge_reliability.py",
+    "docker/grafana/provisioning/dashboards/json/senior-pomidor-edge-reliability.json",
+    "docs/CONTRACTS.md",
+    "docs/PRODUCTION_RELEASE_INSTALLATION_RUNBOOK.md",
+    "tests/test_api.py",
+    "tests/test_edge_reliability.py",
+    "tests/test_grafana_provisioning.py",
+    "tests/test_mqtt_worker.py",
+    "tests/test_release_assets.py",
+    ".ai/agent-runs/20260831-invalid-service-manager-rollback-revision-fix-coder.json"
+  ],
+  "status": "completed",
+  "commands": [
+    {"name": "focused-tests", "status": "PASS", "evidence": "163 passed"},
+    {"name": "full-pytest", "status": "PASS", "evidence": "518 passed, 12 skipped"},
+    {"name": "quality", "status": "PASS", "evidence": "lint, format_check and types passed"},
+    {"name": "compose-config", "status": "PASS", "evidence": "production overlays rendered with .env.example"},
+    {"name": "diff-check", "status": "PASS"}
+  ],
+  "validation_results": [
+    {"name": "schema-validation", "status": "PASS"},
+    {"name": "serialization-round-trip", "status": "PASS"},
+    {"name": "fixture-replay", "status": "PASS"},
+    {"name": "named-consumers", "status": "PASS", "evidence": "115 HTTP, MQTT, fixture, operator and Grafana tests passed"},
+    {"name": "edge-canary", "status": "NOT_RUN"},
+    {"name": "isolated-rehearsal-rollback-post-deploy-health", "status": "NOT_RUN"}
+  ],
+  "human_edits": [],
+  "findings": [
+    {"category": "untrusted-service-manager", "outcome": "confirmed", "role": "reviewer"},
+    {"category": "rollback-revision-identity", "outcome": "confirmed", "role": "reviewer"}
+  ],
+  "errors": [],
+  "usage": {
+    "file_count": 11,
+    "input_characters": 177670,
+    "tool_output_bytes": 0,
+    "elapsed_seconds": 1475
+  }
+}

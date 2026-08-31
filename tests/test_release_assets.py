@@ -95,3 +95,33 @@ def test_operations_preserves_packaged_backup_retention_and_configured_restore_i
     assert "--username $env:POSTGRES_USER --dbname $env:POSTGRES_DB" in operations
     assert "pg_dump -U $env:POSTGRES_USER $env:POSTGRES_DB" in operations
     assert "psql -U $env:POSTGRES_USER -d $env:POSTGRES_DB" in operations
+
+
+def test_production_installation_requires_verified_rollback_bundle() -> None:
+    runbook = (ROOT / "docs/PRODUCTION_RELEASE_INSTALLATION_RUNBOOK.md").read_text(encoding="utf-8")
+
+    assert "Проверенный bundle предыдущего release обязателен для rollback" in runbook
+    assert "old image или проверенный old bundle недоступны" in runbook
+    assert "HAVE_OLD_BUNDLE" not in runbook
+    assert "HaveOldBundle" not in runbook
+    assert "$ExpectedOldRevision = '<accepted-40-lowercase-previous-core-sha>'" in runbook
+    assert "$OldBundleRevision -ne $ExpectedOldRevision" in runbook
+    assert '[[ "${OLD_REVISION}" == "${EXPECTED_OLD_REVISION}" ]]' in runbook
+    assert 'sudo tar -xOf "${OLD_ARCHIVE}" ./REVISION' in runbook
+
+
+def test_production_runbook_skips_reliability_checks_without_canary() -> None:
+    runbook = (ROOT / "docs/PRODUCTION_RELEASE_INSTALLATION_RUNBOOK.md").read_text(encoding="utf-8")
+    section = runbook.split("### 12.3 Edge reliability и Grafana", 1)[1].split("## 13. Rollback", 1)[0]
+
+    guard = 'if [[ -n "${CANARY_EDGE_ID}" ]]; then'
+    operator_endpoint = '"${API_URL}/api/v1/operator/edges/${CANARY_EDGE_ID}/reliability"'
+    summary_endpoint = '"${API_URL}/health/summary?node_id=${CANARY_EDGE_ID}"'
+    not_run = "Canary Edge absent: reliability API checks are NOT_RUN"
+
+    assert guard in section
+    assert operator_endpoint in section
+    assert summary_endpoint in section
+    assert not_run in section
+    assert section.index(guard) < section.index(operator_endpoint) < section.index(not_run)
+    assert section.index(guard) < section.index(summary_endpoint) < section.index(not_run)

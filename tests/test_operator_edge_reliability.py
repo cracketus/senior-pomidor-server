@@ -218,6 +218,27 @@ def test_copied_edge_fixture_replays_bounded_counters_timestamps_and_percent() -
     assert result["spool"]["worker_last_heartbeat_at_utc"].endswith("Z")
 
 
+def test_operator_projection_accepts_docker_process_only_payload() -> None:
+    health = {
+        "watchdog": {"state": "healthy", "configured": True},
+        "spool": {"status": "OK", "disk_status": "OK", "pending_count": 0, "backlog_count": 0, "in_flight_count": 0},
+        "application": {"service_manager": "none", "process_running": True},
+        "aggregate": {"schema_version": "senior-pomidor.edge.health.v1", "state": "OK", "reasons": []},
+    }
+    result = dumped(build_operator_edge_reliability(event(health=health), now=NOW))
+
+    assert result["status"] == "OK"
+    assert result["application"] == {
+        "status": "OK",
+        "process_running": True,
+        "process_uptime_seconds": None,
+        "systemd_available": None,
+        "systemd_active_state": None,
+        "systemd_sub_state": None,
+        "systemd_service_active": None,
+    }
+
+
 def _current_payload(*, record_id: str = "spool:pi-001:operator") -> dict:
     observed = datetime.now(UTC).replace(microsecond=0)
     return {
