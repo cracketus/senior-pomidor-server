@@ -1,0 +1,44 @@
+{
+  "schema": "agent_run_v1",
+  "run_id": "20260831-edge-142-core-blocker-coder",
+  "issue_ref": "#142",
+  "pr_ref": null,
+  "role": "coder",
+  "agent_id": "codex-local",
+  "prompt_version": "human-approved-plan-v1",
+  "started_at_utc": "2026-08-31T13:56:00Z",
+  "finished_at_utc": "2026-08-31T14:07:05Z",
+  "input_refs": [
+    "AGENTS.md",
+    ".ai/CORE_INVARIANTS.md",
+    ".ai/implementation-briefs/ISSUE-260-core-release-candidate-and-staging.md",
+    "docs/implementation-reports/ISSUE-260.md"
+  ],
+  "output_refs": [
+    "docs/implementation-reports/ISSUE-260.md",
+    ".ai/agent-runs/20260831-edge-142-core-blocker-coder.json"
+  ],
+  "status": "completed",
+  "commands": [
+    {"name": "diff-check", "status": "PASS"}
+  ],
+  "validation_results": [
+    {"name": "duplicate-issue-search", "status": "PASS"},
+    {"name": "authenticated-issue-creation", "status": "PASS"},
+    {"name": "changed-links-paths-commands", "status": "PASS"},
+    {"name": "edge-acceptance-criteria", "status": "NOT_RUN"},
+    {"name": "edge-core-staging-canary", "status": "NOT_RUN"},
+    {"name": "production-promotion", "status": "NOT_RUN"}
+  ],
+  "human_edits": [],
+  "findings": [
+    {"category": "edge-compatibility", "outcome": "release-blocker-recorded", "role": "coder"}
+  ],
+  "errors": [],
+  "usage": {
+    "file_count": 2,
+    "input_characters": 101458,
+    "tool_output_bytes": 120000,
+    "elapsed_seconds": 665
+  }
+}

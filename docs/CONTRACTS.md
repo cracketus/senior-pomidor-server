@@ -45,6 +45,8 @@ Telemetry v2 may include optional `system_health`:
 - `pod_1_hardware`: `bus_voltage_v`, `bus_current_ma`, optional `box_climate.air_temp_c`, `box_climate.air_humidity_percent`
 - `network`: booleans `wifi_connected`, `interface_up`, `default_gateway_reachable`, `dns_resolution_ok`, `internet_reachable`, `active_profile_present`, `preferred_profile_present`; strings `ssid`, `ip_address`, `last_recovery_action`, `last_recovery_result`, `last_recovery_at_utc`; integers `wifi_profile_count`, `last_recovery_exit_code`
 - `errors`: list of objects with optional `sensor` and required `message`
+- `aggregate`: optional `senior-pomidor.edge.health.v1` object with bounded `schema_version`,
+  `state` (`STARTUP|OK|BACKLOG|DEGRADED|MAINTENANCE|CRITICAL`), and unique bounded `reasons`
 
 Telemetry v2 producers may additionally send edge reliability diagnostics. The producer contract in
 `docs/schemas/telemetry-v2.schema.json` is strict for known fields: counters, byte sizes, process IDs,
@@ -56,8 +58,9 @@ identifier strings are non-empty and at most 256 characters. Known reliability b
   heartbeat timestamp, and boot ID
 - `spool`: queue/delivery/reconciliation counters, database/free-space bytes, disk state and usage,
   backlog/outage ages, delivery and worker status/timestamps, and drain/retention estimates
-- `application`: process liveness, PID, uptime, RSS and CPU, plus systemd availability, service identity,
-  state/substate, active flag, and main PID
+- `application`: explicit `service_manager` (`none|systemd`), process liveness, PID, uptime, RSS and CPU,
+  plus systemd availability, service identity, state/substate, active flag, and main PID. New process-only
+  producers must send `service_manager=none`; a bare `process_running` value is incomplete.
 
 The server reader is deliberately tolerant for these three additive blocks. A missing block remains
 missing; an object is preserved even when all its fields are dropped, yielding `{}`. Known nullable
@@ -66,10 +69,27 @@ field is ignored without rejecting the telemetry record, and booleans are never 
 This tolerant behavior does not weaken the producer schema and does not change existing strict validation
 for `rpi_core`, `pod_1_hardware`, `network`, or `errors`.
 
+`application.service_manager` is the one presence-sensitive exception: if the field is present but malformed
+or outside `none|systemd`, normalization stores JSON `null` as a bounded internal invalid marker. The producer
+schema still rejects `null`. Evaluators and dashboards distinguish that marker from an absent discriminator and
+report `UNKNOWN`; only an actually absent discriminator may enter the temporary legacy-systemd fallback.
+
+Roll out the application discriminator Core-first: deploy the tolerant server reader, then update Docker Edge
+producers to send `service_manager=none` and systemd producers to send `service_manager=systemd`. During the
+one-release compatibility window, complete legacy systemd payloads remain accepted; ambiguous bare process
+telemetry remains `UNKNOWN` rather than being inferred healthy. Remove the legacy systemd fallback only in a
+later coordinated contract revision after copied old-Edge fixtures and canary evidence show the window is closed.
+The telemetry-v2 producer schema therefore continues to accept discriminator-absent partial `application`
+objects during this window; schema acceptance preserves compatibility and does not promote incomplete evidence
+to a healthy runtime state.
+
 Only the documented allowlist is copied into `system_health_jsonb`. In particular, arbitrary
 `last_error_detail`, `worker_last_error`, nested application errors, and unknown fields are not persisted.
-The raw ingestion payload and `record_id` idempotency behavior are unchanged. `aggregate` and `indicator`
-remain outside this server normalization contract.
+The raw ingestion payload and `record_id` idempotency behavior are unchanged. The aggregate is normalized
+and persisted as the canonical Edge health signal. Unknown fields and invalid individual aggregate fields
+are dropped; a present malformed/unknown aggregate evaluates to `UNKNOWN` rather than being inferred healthy.
+The server maps `OK` to `OK`, backlog/degraded/maintenance/startup to `WARN`, and critical to `ALERT`;
+component `ALERT` or `UNKNOWN` findings always take precedence.
 
 Malformed JSON and invalid `record_id` values return HTTP `400` because the server cannot trust a correlation
 identifier. Invalid schema names, malformed timestamps, unsafe identifiers, and wrong typed `system_health`
@@ -260,7 +280,12 @@ all required scoped evidence is current and healthy.
 
 Only a node-scoped response adds `components.edge_reliability`. It contains the aggregate status,
 telemetry age, ordered/deduplicated `reason_codes`, and bounded watchdog/spool/application projections.
-The evaluator uses severity precedence `ALERT > WARN > UNKNOWN > OK`. Watchdog recovery and transitions
+The evaluator uses severity precedence `ALERT > WARN > UNKNOWN > OK`. Docker process-only application
+telemetry is identified only by explicit `service_manager=none`: boolean `process_running=true` is `OK`,
+false is `ALERT`, and missing/invalid process state or contradictory systemd fields are `UNKNOWN`. New systemd
+producers send `service_manager=systemd`. During the one-release compatibility window, a legacy payload without
+the discriminator is treated as systemd only when `process_running`, `systemd_available`, and
+`systemd_service_active` are all present; otherwise it is `UNKNOWN`. Watchdog recovery and transitions
 are warnings; suppression, exhausted budget, and failed recovery are alerts. Spool backlog and disk
 warnings are warnings; degraded/critical spool or disk state and worker errors are alerts. A stopped
 process or inactive systemd service is an alert; unavailable expected systemd or contradictory service
@@ -401,9 +426,10 @@ The provisioned `Senior Pomidor Edge Reliability` dashboard (`uid=senior-pomidor
 trusted-LAN, read-only PostgreSQL consumer. Current-state queries start from `devices` and use a lateral
 latest-event join ordered by `timestamp_utc DESC, id DESC`; a missing event, missing block, future timestamp,
 stale observation, or unrecognized state is shown as `UNKNOWN`. History panels use only fixed state
-allowlists and the normalized watchdog, spool, and application keys. The four provisioned rules cover
-unavailable/stale evidence, critical watchdog recovery, critical spool/disk/worker state, and inactive
-application process/service. Notification routing remains outside this contract.
+allowlists and the normalized watchdog, spool, application, and canonical aggregate keys. The five
+provisioned rules cover unavailable/stale evidence, critical watchdog recovery, critical
+spool/disk/worker state, critical aggregate state, and inactive application process/service.
+Notification routing remains outside this contract.
 
 On every enabled exporter cycle, the latest telemetry event for each registered device is projected at the
 export timestamp. This snapshot is repeated even when no new plant reading exists; the existing plant metric

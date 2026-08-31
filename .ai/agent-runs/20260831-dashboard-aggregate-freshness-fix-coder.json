@@ -1,0 +1,47 @@
+{
+  "schema": "agent_run_v1",
+  "run_id": "20260831-dashboard-aggregate-freshness-fix-coder",
+  "issue_ref": null,
+  "pr_ref": null,
+  "role": "coder",
+  "agent_id": "codex-local",
+  "prompt_version": "human-approved-review-fix-v1",
+  "started_at_utc": "2026-08-31T04:20:00Z",
+  "finished_at_utc": "2026-08-31T04:27:34Z",
+  "input_refs": [
+    "AGENTS.md",
+    ".ai/CORE_INVARIANTS.md",
+    ".ai/context-manifest.yaml",
+    "docs/CONTRACTS.md",
+    "docker/grafana/provisioning/dashboards/json/senior-pomidor-edge-reliability.json"
+  ],
+  "output_refs": [
+    "docker/grafana/provisioning/dashboards/json/senior-pomidor-edge-reliability.json",
+    "tests/test_grafana_provisioning.py",
+    ".ai/agent-runs/20260831-dashboard-aggregate-freshness-fix-coder.json"
+  ],
+  "status": "completed",
+  "commands": [
+    {"name": "focused-tests", "status": "PASS"},
+    {"name": "full-pytest", "status": "PASS"},
+    {"name": "quality", "status": "PASS"},
+    {"name": "compose-config", "status": "PASS"},
+    {"name": "diff-check", "status": "PASS"}
+  ],
+  "validation_results": [
+    {"name": "dashboard-json", "status": "PASS"},
+    {"name": "aggregate-freshness-guard", "status": "PASS"},
+    {"name": "isolated-rehearsal-rollback-post-deploy-health", "status": "NOT_RUN"}
+  ],
+  "human_edits": [],
+  "findings": [
+    {"category": "freshness", "outcome": "confirmed", "role": "reviewer"}
+  ],
+  "errors": [],
+  "usage": {
+    "file_count": 3,
+    "input_characters": 106848,
+    "tool_output_bytes": 120000,
+    "elapsed_seconds": 454
+  }
+}

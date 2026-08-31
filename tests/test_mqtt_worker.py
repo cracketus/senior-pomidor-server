@@ -92,6 +92,28 @@ def test_mqtt_worker_accepts_v2_system_health(monkeypatch):
         dispose_session_factory(TestingSessionLocal)
 
 
+def test_mqtt_worker_preserves_invalid_service_manager_as_unknown_evidence(monkeypatch):
+    TestingSessionLocal = session_factory()
+    try:
+        monkeypatch.setattr(mqtt_worker, "SessionLocal", TestingSessionLocal)
+        payload = telemetry_v2_payload()
+        payload["system_health"]["application"] = {
+            "service_manager": "launchd",
+            "process_running": True,
+            "systemd_available": True,
+            "systemd_service_active": True,
+        }
+
+        mqtt_worker.on_message(None, None, mqtt_message("senior-pomidor/pi-001/telemetry", payload))
+
+        with TestingSessionLocal() as db:
+            event = db.scalar(select(TelemetryEvent))
+            assert event is not None
+            assert event.system_health_jsonb["application"]["service_manager"] is None
+    finally:
+        dispose_session_factory(TestingSessionLocal)
+
+
 def test_mqtt_worker_rejects_topic_device_mismatch(monkeypatch):
     TestingSessionLocal = session_factory()
     try:

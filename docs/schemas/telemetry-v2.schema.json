@@ -19,6 +19,16 @@
     "system_health": {
       "type": "object",
       "properties": {
+        "aggregate": {
+          "type": "object",
+          "required": ["schema_version", "state"],
+          "properties": {
+            "schema_version": {"const": "senior-pomidor.edge.health.v1"},
+            "state": {"enum": ["STARTUP", "OK", "BACKLOG", "DEGRADED", "MAINTENANCE", "CRITICAL"]},
+            "reasons": {"type": "array", "items": {"type": "string", "minLength": 1, "maxLength": 256}, "maxItems": 32, "uniqueItems": true}
+          },
+          "additionalProperties": true
+        },
         "rpi_core": {"type": "object"},
         "pod_1_hardware": {"type": "object"},
         "errors": {"type": "array"},
@@ -104,7 +114,30 @@
         },
         "application": {
           "type": "object",
+          "allOf": [
+            {
+              "if": {"required": ["service_manager"], "properties": {"service_manager": {"const": "none"}}},
+              "then": {
+                "required": ["process_running"],
+                "not": {
+                  "anyOf": [
+                    {"required": ["systemd_available"]},
+                    {"required": ["systemd_service_name"]},
+                    {"required": ["systemd_active_state"]},
+                    {"required": ["systemd_sub_state"]},
+                    {"required": ["systemd_service_active"]},
+                    {"required": ["systemd_main_pid"]}
+                  ]
+                }
+              }
+            },
+            {
+              "if": {"required": ["service_manager"], "properties": {"service_manager": {"const": "systemd"}}},
+              "then": {"required": ["process_running", "systemd_available", "systemd_service_active"]}
+            }
+          ],
           "properties": {
+            "service_manager": {"enum": ["none", "systemd"]},
             "process_id": {"$ref": "#/$defs/nonnegativeInteger"},
             "process_running": {"type": "boolean"},
             "process_uptime_seconds": {"$ref": "#/$defs/nonnegativeInteger"},

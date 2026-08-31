@@ -1,0 +1,30 @@
+{
+  "schema": "agent_run_v1",
+  "run_id": "20260831-runbook-optional-canary-fix-coder",
+  "issue_ref": null,
+  "pr_ref": null,
+  "role": "coder",
+  "agent_id": "codex-local",
+  "prompt_version": "human-approved-review-fix-v1",
+  "started_at_utc": "2026-08-31T10:40:20Z",
+  "finished_at_utc": "2026-08-31T10:42:20Z",
+  "input_refs": ["AGENTS.md", ".ai/CORE_INVARIANTS.md", "docs/PRODUCTION_RELEASE_INSTALLATION_RUNBOOK.md"],
+  "output_refs": [
+    "docs/PRODUCTION_RELEASE_INSTALLATION_RUNBOOK.md",
+    "tests/test_release_assets.py",
+    ".ai/agent-runs/20260831-runbook-optional-canary-fix-coder.json"
+  ],
+  "status": "completed",
+  "commands": [
+    {"name": "focused-test", "status": "PASS", "evidence": "1 targeted runbook regression test passed"},
+    {"name": "diff-check", "status": "PASS"}
+  ],
+  "validation_results": [
+    {"name": "full-pytest", "status": "NOT_RUN", "reason": "Explicitly excluded by the human"},
+    {"name": "quality", "status": "NOT_RUN", "reason": "Human requested only focused unit tests"}
+  ],
+  "human_edits": [],
+  "findings": [{"category": "optional-canary-runbook", "outcome": "confirmed", "role": "reviewer"}],
+  "errors": [],
+  "usage": {"file_count": 3, "input_characters": 53651, "tool_output_bytes": 0, "elapsed_seconds": 120}
+}

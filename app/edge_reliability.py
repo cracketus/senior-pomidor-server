@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from typing import Any
 
 RELIABILITY_STATUSES = ("ALERT", "WARN", "UNKNOWN", "OK")
+HEALTH_AGGREGATE_SCHEMA_VERSION = "senior-pomidor.edge.health.v1"
+HEALTH_AGGREGATE_STATES = {"STARTUP", "OK", "BACKLOG", "DEGRADED", "MAINTENANCE", "CRITICAL"}
 
 
 @dataclass(frozen=True)
@@ -169,10 +171,43 @@ def _application_findings(value: Any) -> list[ReliabilityFinding]:
     systemd_available = value.get("systemd_available")
     service_active = value.get("systemd_service_active")
     active_state = value.get("systemd_active_state")
+    service_manager = value.get("service_manager")
+    has_service_manager = "service_manager" in value
+    systemd_fields = (
+        "systemd_available",
+        "systemd_service_name",
+        "systemd_active_state",
+        "systemd_sub_state",
+        "systemd_service_active",
+        "systemd_main_pid",
+    )
+    has_systemd_evidence = any(field in value for field in systemd_fields)
 
     findings: list[ReliabilityFinding] = []
     if process_running is False:
         findings.append(_finding(metric, "ALERT", "process_stopped", "Edge application process is stopped"))
+    if service_manager == "none":
+        if has_systemd_evidence:
+            findings.append(
+                _finding(
+                    metric,
+                    "UNKNOWN",
+                    "service_manager_conflict",
+                    "Edge application service manager state is contradictory",
+                )
+            )
+        elif not isinstance(process_running, bool):
+            findings.append(_finding(metric, "UNKNOWN", "incomplete", "Edge application process state is incomplete"))
+        return _deduplicate(findings)
+    if has_service_manager and service_manager not in ("none", "systemd"):
+        findings.append(_finding(metric, "UNKNOWN", "unrecognized", "Edge application service manager is unrecognized"))
+        return _deduplicate(findings)
+    if not has_service_manager and not has_systemd_evidence:
+        if not isinstance(process_running, bool):
+            findings.append(_finding(metric, "UNKNOWN", "incomplete", "Edge application process state is incomplete"))
+        elif process_running is True:
+            findings.append(_finding(metric, "UNKNOWN", "incomplete", "Edge application state is incomplete"))
+        return _deduplicate(findings)
     if service_active is False:
         findings.append(_finding(metric, "ALERT", "service_inactive", "Edge application systemd service is inactive"))
     if systemd_available is False:
@@ -198,14 +233,49 @@ def _application_findings(value: Any) -> list[ReliabilityFinding]:
     return _deduplicate(findings)
 
 
+def _aggregate_findings(value: Any) -> list[ReliabilityFinding]:
+    metric = "edge_health_aggregate"
+    if not isinstance(value, dict):
+        return []
+    if value.get("schema_version") != HEALTH_AGGREGATE_SCHEMA_VERSION:
+        return [_finding(metric, "UNKNOWN", "invalid", "Edge health aggregate is invalid")]
+    state = value.get("state")
+    if state not in HEALTH_AGGREGATE_STATES:
+        return [_finding(metric, "UNKNOWN", "invalid", "Edge health aggregate is invalid")]
+    if state == "OK":
+        return []
+    status = "ALERT" if state == "CRITICAL" else "WARN"
+    messages = {
+        "STARTUP": "Edge health aggregate reports startup",
+        "BACKLOG": "Edge health aggregate reports backlog",
+        "DEGRADED": "Edge health aggregate reports degradation",
+        "MAINTENANCE": "Edge health aggregate reports maintenance",
+        "CRITICAL": "Edge health aggregate reports a critical state",
+    }
+    return [_finding(metric, status, state.lower(), messages[state])]
+
+
+def _overall_status(
+    component_findings: list[ReliabilityFinding],
+    aggregate_findings: list[ReliabilityFinding],
+) -> str:
+    if any(finding.status == "ALERT" for finding in component_findings):
+        return "ALERT"
+    if any(finding.status == "UNKNOWN" for finding in component_findings):
+        return "UNKNOWN"
+    return _status(component_findings + aggregate_findings)
+
+
 def evaluate_edge_reliability(system_health: dict[str, Any] | None) -> EdgeReliabilityEvaluation:
     health = system_health if isinstance(system_health, dict) else {}
     watchdog_findings = _watchdog_findings(health.get("watchdog"))
     spool_findings = _spool_findings(health.get("spool"))
     application_findings = _application_findings(health.get("application"))
-    findings = _deduplicate(watchdog_findings + spool_findings + application_findings)
+    aggregate_findings = _aggregate_findings(health.get("aggregate"))
+    component_findings = _deduplicate(watchdog_findings + spool_findings + application_findings)
+    findings = _deduplicate(component_findings + aggregate_findings)
     return EdgeReliabilityEvaluation(
-        status=_status(findings),
+        status=_overall_status(component_findings, aggregate_findings),
         watchdog_status=_status(watchdog_findings),
         spool_status=_status(spool_findings),
         application_status=_status(application_findings),

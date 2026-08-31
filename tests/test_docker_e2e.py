@@ -29,6 +29,7 @@ EDGE_ALERT_TITLES = (
     "Edge reliability unavailable or stale",
     "Edge watchdog critical",
     "Edge spool or disk critical",
+    "Edge aggregate critical",
     "Edge application inactive",
 )
 READONLY_TABLES = (
@@ -441,6 +442,7 @@ def assert_grafana_provisioning() -> dict[str, str]:
             "Edge reliability unavailable or stale",
             "Edge watchdog critical",
             "Edge spool or disk critical",
+            "Edge aggregate critical",
             "Edge application inactive",
         }.issubset(alert_titles)
 
@@ -589,12 +591,18 @@ def healthy_reliability() -> dict:
             "worker_state": "running",
         },
         "application": {
+            "service_manager": "systemd",
             "process_running": True,
             "process_uptime_seconds": 3600,
             "systemd_available": True,
             "systemd_active_state": "active",
             "systemd_sub_state": "running",
             "systemd_service_active": True,
+        },
+        "aggregate": {
+            "schema_version": "senior-pomidor.edge.health.v1",
+            "state": "OK",
+            "reasons": [],
         },
     }
 
@@ -649,6 +657,7 @@ def assert_grafana_alert_transitions(
     unavailable = "Edge reliability unavailable or stale"
     watchdog = "Edge watchdog critical"
     spool = "Edge spool or disk critical"
+    aggregate = "Edge aggregate critical"
     application = "Edge application inactive"
 
     for query in queries.values():
@@ -667,22 +676,35 @@ def assert_grafana_alert_transitions(
     assert alert_query_count(queries[unavailable]) == 0
     recovered_snapshot = wait_for_edge_alert_states(set(), after=stale_snapshot)
 
+    contradictory_process_only = healthy_reliability()
+    contradictory_process_only["application"] = {
+        "service_manager": "none",
+        "process_running": True,
+        "systemd_service_active": False,
+    }
+    post_telemetry(client, telemetry_payload(2, health=contradictory_process_only))
+    assert alert_query_count(queries[application]) == 0
+    contradictory_snapshot = wait_for_edge_alert_states(set(), after=recovered_snapshot)
+
     critical = healthy_reliability()
     critical["watchdog"].update({"state": "suppressed", "suppression": True})
     critical["spool"].update({"status": "DEGRADED", "disk_status": "CRITICAL"})
+    critical["aggregate"]["state"] = "CRITICAL"
     critical["application"].update({"process_running": False, "systemd_service_active": False})
-    post_telemetry(client, telemetry_payload(2, health=critical))
+    post_telemetry(client, telemetry_payload(3, health=critical))
     assert alert_query_count(queries[watchdog]) == 1
     assert alert_query_count(queries[spool]) == 1
+    assert alert_query_count(queries[aggregate]) == 1
     assert alert_query_count(queries[application]) == 1
     critical_snapshot = wait_for_edge_alert_states(
-        {watchdog, spool, application},
-        after=recovered_snapshot,
+        {watchdog, spool, aggregate, application},
+        after=contradictory_snapshot,
     )
 
-    post_telemetry(client, telemetry_payload(3))
+    post_telemetry(client, telemetry_payload(4))
     assert alert_query_count(queries[watchdog]) == 0
     assert alert_query_count(queries[spool]) == 0
+    assert alert_query_count(queries[aggregate]) == 0
     assert alert_query_count(queries[application]) == 0
     wait_for_edge_alert_states(set(), after=critical_snapshot)
 
@@ -724,7 +746,7 @@ def test_docker_compose_stack_ingests_and_serves_data():
     source_alerts = edge_alerts_file.read_text(encoding="utf-8")
     assert source_alerts.count("    interval: 60s") == 1
     assert source_alerts.count("        for: 5m") == 2
-    assert source_alerts.count("        for: 1m") == 2
+    assert source_alerts.count("        for: 1m") == 3
     fast_alerts = source_alerts.replace("    interval: 60s", "    interval: 10s", 1)
     fast_alerts = fast_alerts.replace("        for: 5m", "        for: 0s")
     fast_alerts = fast_alerts.replace("        for: 1m", "        for: 0s")

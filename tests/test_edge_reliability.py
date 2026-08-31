@@ -20,6 +20,7 @@ def healthy_health() -> dict:
             "worker_state": "running",
         },
         "application": {
+            "service_manager": "systemd",
             "process_running": True,
             "systemd_available": True,
             "systemd_service_active": True,
@@ -156,7 +157,111 @@ def test_independent_alerts_survive_incomplete_blocks() -> None:
     assert "edge_spool_worker_error" in codes
     assert "edge_spool_missing" in codes
     assert "edge_application_process_stopped" in codes
-    assert "edge_application_incomplete" in codes
+    assert "edge_application_incomplete" not in codes
+
+
+@pytest.mark.parametrize(
+    ("state", "expected_status", "reason_code"),
+    [
+        ("OK", "OK", None),
+        ("STARTUP", "WARN", "edge_health_aggregate_startup"),
+        ("BACKLOG", "WARN", "edge_health_aggregate_backlog"),
+        ("DEGRADED", "WARN", "edge_health_aggregate_degraded"),
+        ("MAINTENANCE", "WARN", "edge_health_aggregate_maintenance"),
+        ("CRITICAL", "ALERT", "edge_health_aggregate_critical"),
+    ],
+)
+def test_process_only_application_and_canonical_aggregate(state, expected_status, reason_code) -> None:
+    health = healthy_health()
+    health["application"] = {"service_manager": "none", "process_running": True}
+    health["aggregate"] = {"schema_version": "senior-pomidor.edge.health.v1", "state": state, "reasons": ["bounded"]}
+    result = evaluate_edge_reliability(health)
+
+    assert result.application_status == "OK"
+    assert result.status == expected_status
+    if reason_code:
+        assert reason_code in [finding.reason_code for finding in result.findings]
+
+
+@pytest.mark.parametrize(
+    ("application", "expected_status", "reason_code"),
+    [
+        ({"process_running": True}, "UNKNOWN", "edge_application_incomplete"),
+        ({"service_manager": "none", "process_running": True}, "OK", None),
+        (
+            {"service_manager": "none", "process_running": True, "systemd_available": False},
+            "UNKNOWN",
+            "edge_application_service_manager_conflict",
+        ),
+        ({"service_manager": "systemd", "process_running": True}, "UNKNOWN", "edge_application_incomplete"),
+        (
+            {"service_manager": ["none"], "process_running": True},
+            "UNKNOWN",
+            "edge_application_unrecognized",
+        ),
+        (
+            {
+                "service_manager": None,
+                "process_running": True,
+                "systemd_available": True,
+                "systemd_service_active": True,
+                "systemd_active_state": "active",
+            },
+            "UNKNOWN",
+            "edge_application_unrecognized",
+        ),
+    ],
+)
+def test_application_service_manager_discriminator(application, expected_status, reason_code) -> None:
+    result = evaluate_edge_reliability({"application": application})
+
+    assert result.application_status == expected_status
+    if reason_code:
+        assert reason_code in [finding.reason_code for finding in result.findings]
+
+
+@pytest.mark.parametrize("aggregate_state", ["STARTUP", "BACKLOG", "DEGRADED", "MAINTENANCE"])
+def test_component_unknown_takes_precedence_over_aggregate_warning(aggregate_state: str) -> None:
+    health = healthy_health()
+    health["spool"] = {}
+    health["aggregate"] = {
+        "schema_version": "senior-pomidor.edge.health.v1",
+        "state": aggregate_state,
+        "reasons": [],
+    }
+
+    result = evaluate_edge_reliability(health)
+
+    assert result.spool_status == "UNKNOWN"
+    assert result.status == "UNKNOWN"
+    assert "edge_spool_missing" in [finding.reason_code for finding in result.findings]
+    assert f"edge_health_aggregate_{aggregate_state.lower()}" in [finding.reason_code for finding in result.findings]
+
+
+def test_process_only_stopped_or_malformed_state_fails_safe() -> None:
+    stopped = evaluate_edge_reliability({"application": {"process_running": False}})
+    missing = evaluate_edge_reliability({"application": {}})
+    malformed = evaluate_edge_reliability({"application": {"process_running": True}, "aggregate": {}})
+
+    assert stopped.application_status == "ALERT"
+    assert missing.application_status == "UNKNOWN"
+    assert malformed.status == "UNKNOWN"
+    assert "edge_health_aggregate_invalid" in [finding.reason_code for finding in malformed.findings]
+
+
+def test_legacy_systemd_mode_requires_existing_boolean_contract() -> None:
+    health = {
+        "application": {
+            "process_running": True,
+            "systemd_service_name": "senior-pomidor.service",
+            "systemd_available": True,
+            "systemd_service_active": True,
+            "systemd_active_state": "active",
+        }
+    }
+    assert evaluate_edge_reliability(health).application_status == "OK"
+    del health["application"]["systemd_service_active"]
+    assert evaluate_edge_reliability(health).application_status == "UNKNOWN"
 
 
 def test_findings_are_deterministic_deduplicated_and_use_severity_precedence() -> None:
