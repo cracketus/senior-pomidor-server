@@ -10,7 +10,10 @@ CONTACTS_HTML = """\
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Timur Shevlyakov — Senior Pomidor / Tomato Brain. Open-source embodied AI for agriculture.">
+  <meta
+    name="description"
+    content="Timur Shevlyakov — Senior Pomidor / Tomato Brain. Open-source embodied AI for agriculture."
+  >
   <meta name="theme-color" content="#173c2b">
   <meta property="og:title" content="Timur Shevlyakov · Senior Pomidor">
   <meta property="og:description" content="Open-source embodied AI for agriculture.">
@@ -20,7 +23,8 @@ CONTACTS_HTML = """\
   <style>
     :root {
       color-scheme: light;
-      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-family:
+        Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       background: #f3f6f1;
       color: #172019;
     }
@@ -141,13 +145,28 @@ CONTACTS_HTML = """\
     <p class="loop">observe → understand → predict → decide → act → measure the outcome</p>
 
     <nav aria-label="Contact links">
-      <a class="button primary" href="https://www.linkedin.com/in/timur-shevlyakov/" target="_blank" rel="noreferrer">
+      <a
+        class="button primary"
+        href="https://www.linkedin.com/in/timur-shevlyakov/"
+        target="_blank"
+        rel="noreferrer"
+      >
         <span>Connect on LinkedIn</span><span class="arrow" aria-hidden="true">↗</span>
       </a>
-      <a class="button" href="https://github.com/cracketus/senior-pomidor" target="_blank" rel="noreferrer">
+      <a
+        class="button"
+        href="https://github.com/cracketus/senior-pomidor"
+        target="_blank"
+        rel="noreferrer"
+      >
         <span>Senior Pomidor on GitHub</span><span class="arrow" aria-hidden="true">↗</span>
       </a>
-      <a class="button" href="https://github.com/cracketus" target="_blank" rel="noreferrer">
+      <a
+        class="button"
+        href="https://github.com/cracketus"
+        target="_blank"
+        rel="noreferrer"
+      >
         <span>GitHub profile</span><span class="arrow" aria-hidden="true">↗</span>
       </a>
       <a class="button" href="/contacts.vcf">
