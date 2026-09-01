@@ -2,7 +2,7 @@ import logging
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, Query, Request
-from fastapi.responses import HTMLResponse, JSONResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 from starlette import status
@@ -12,7 +12,6 @@ from app.config import Settings, get_settings, settings
 from app.db import engine, get_db
 from app.health_summary import build_health_summary
 from app.logging_config import configure_logging
-from app.public_pages import CONTACTS_HTML, CONTACTS_VCARD
 from app.readiness import check_readiness
 
 configure_logging()
@@ -74,20 +73,6 @@ def ready() -> JSONResponse:
     state = check_readiness(engine)
     status_code = status.HTTP_200_OK if state.ready else status.HTTP_503_SERVICE_UNAVAILABLE
     return JSONResponse(status_code=status_code, content=state.__dict__)
-
-
-@app.get("/contacts", response_class=HTMLResponse, include_in_schema=False)
-def contacts() -> str:
-    return CONTACTS_HTML
-
-
-@app.get("/contacts.vcf", include_in_schema=False)
-def contacts_vcard() -> Response:
-    return Response(
-        content=CONTACTS_VCARD,
-        media_type="text/vcard",
-        headers={"Content-Disposition": 'attachment; filename="timur-shevlyakov.vcf"'},
-    )
 
 
 @app.get("/dashboard", response_class=HTMLResponse)
