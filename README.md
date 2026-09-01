@@ -2,6 +2,8 @@
 
 Server implementation for the Senior Pomidor project.
 
+**Roadmap:** [Server/Core roadmap through the 2027 growing season](docs/ROADMAP_2027.md)
+
 ## Development Agent Context
 
 Development agents and reviewers start with [AGENTS.md](AGENTS.md) and
