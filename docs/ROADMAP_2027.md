@@ -1,7 +1,7 @@
 # Senior Pomidor Server/Core — Roadmap Through the 2027 Growing Season
 
 **Status:** working roadmap  
-**Updated:** 2026-09-01  
+**Updated:** 2026-09-02
 **Horizon:** current Server/Core baseline → end of the 2027 growing season  
 **Project roadmap:** https://github.com/cracketus/senior-pomidor/blob/main/docs/ROADMAP_2027.md
 
@@ -42,13 +42,19 @@ Server/Core already provides the production-oriented observation foundation:
 - deterministic replay/simulation foundations and versioned contracts;
 - local AI/LLM workflows separated from physical actuator authority.
 
+Core and Edge main branches also contain the coordinated Docker application-health compatibility fixes.
+The latest published release tags predate the final fix pair, however, and the Server release-qualification
+workflow has not yet recorded the required real Edge/Core compatibility, staging, soak, rollback, or canary
+evidence. The current baseline is therefore deployable code plus repository-local CI, not a qualified
+production promotion candidate.
+
 The main architectural gap is not observation. It is closing the scientifically reconstructable physical loop and proving that the same Core semantics can operate with heterogeneous observation/execution environments.
 
 ## Roadmap
 
 | Period | Server/Core stage | Existing backlog epics / major programme items | Architectural focus | Main outcome / evidence |
 |---|---|---|---|---|
-| **Sep–Oct 2026** | **Consolidate the production observation baseline** | [#247 System verification and cross-repository compatibility](https://github.com/cracketus/senior-pomidor-server/issues/247); completed [#225 Edge reliability observability](https://github.com/cracketus/senior-pomidor-server/issues/225); production-promotion umbrella [#189](https://github.com/cracketus/senior-pomidor-server/issues/189) | Convert current component maturity into system-level evidence: Edge→Core E2E, invariants, compatibility, time semantics, release qualification, backup/recovery/host readiness. Preserve Season 1 data and failures as replay/evaluation material rather than treating them as anecdotal history. | Reproducible current-system baseline; cross-repo compatibility evidence; explicit system invariants; production/recovery evidence suitable as the reference point for Season 2. |
+| **Sep–Oct 2026** | **Consolidate the production observation baseline** | [#247 System verification and cross-repository compatibility](https://github.com/cracketus/senior-pomidor-server/issues/247); [#302 Season 1 research baseline and replay corpus](https://github.com/cracketus/senior-pomidor-server/issues/302); completed [#225 Edge reliability observability](https://github.com/cracketus/senior-pomidor-server/issues/225); production-promotion umbrella [#189](https://github.com/cracketus/senior-pomidor-server/issues/189); Edge deterministic test foundation [plant-v2 #101](https://github.com/cracketus/senior-pomidor-plant-v2/issues/101) / [#128](https://github.com/cracketus/senior-pomidor-plant-v2/issues/128) | First pin and qualify one compatible immutable Core/Edge candidate pair. Then convert component maturity into repeatable system evidence: Edge→Core E2E, invariants, compatibility, time semantics, backup/recovery/host readiness, and a provenance-preserving Season 1 corpus. | Reproducible current-system baseline; real cross-repo qualification evidence; explicit system invariants; bounded Season 1 replay corpus; production/recovery evidence suitable as the reference point for Season 2. |
 | **Nov 2026–Feb 2027** | **Hardware-independent and pilot-ready Core boundary** | [#261 External telemetry integration framework](https://github.com/cracketus/senior-pomidor-server/issues/261); [#262 Industrial/agricultural protocol gateway](https://github.com/cracketus/senior-pomidor-server/issues/262); Season 2 capability/provenance [#199](https://github.com/cracketus/senior-pomidor-server/issues/199); operator surface [#204](https://github.com/cracketus/senior-pomidor-server/issues/204) | Make native `plant-v2` telemetry one supported source rather than the architectural definition of the system. Introduce canonical external observations, source/logical identity separation, capability and calibration provenance, connector health, and read-only pilot adapters. Stabilize operator/read models for heterogeneous nodes. | A partner sensor system or historical external dataset can enter Tomato Brain without vendor logic leaking into State Estimator/Control. Core can explain source, quality, calibration, capability, freshness, and mapping provenance. |
 | **Mar–Apr 2027** | **Pre-season closed-loop foundation** | [#190 Predictive Control programme](https://github.com/cracketus/senior-pomidor-server/issues/190), especially [#192 action/executor contract](https://github.com/cracketus/senior-pomidor-server/issues/192), [#193 Targets Engine](https://github.com/cracketus/senior-pomidor-server/issues/193), [#196 deterministic L2 control](https://github.com/cracketus/senior-pomidor-server/issues/196), [#197 P0 action-response contract](https://github.com/cracketus/senior-pomidor-server/issues/197), plus #247 verification gates | Build and validate the first complete deterministic closed loop before predictive authority. Every physical-action path must be transport-neutral, idempotent, guardrail-gated, provenance-aware, replayable, and able to represent rejected/failed/ambiguous outcomes. | Simulation/HIL/pre-season evidence for `state -> target -> proposal -> guardrail -> execution -> outcome`; deterministic controller available as permanent fallback; first sanitized reconstructed action-response episode. |
 | **May–Jun 2027** | **Season 2 deployment and heterogeneous environment support** | #190 deterministic baseline in physical operation; [#261](https://github.com/cracketus/senior-pomidor-server/issues/261) / [#262](https://github.com/cracketus/senior-pomidor-server/issues/262) for pilot integrations; open-field server extensions [#239](https://github.com/cracketus/senior-pomidor-server/issues/239), [#240](https://github.com/cracketus/senior-pomidor-server/issues/240), [#241](https://github.com/cracketus/senior-pomidor-server/issues/241), [#242](https://github.com/cracketus/senior-pomidor-server/issues/242); plant vision [#201](https://github.com/cracketus/senior-pomidor-server/issues/201) as bounded evidence | Operate the reference balcony deployment through the new action-response contracts and bring at least one additional data/deployment profile into the same Core semantics. For field-oriented pilots, extend identity/state/world-model/control spatially rather than forking a separate product. Vision remains evidence with uncertainty, not direct control authority. | Comparable canonical data from heterogeneous sources; one operational deterministic closed-loop deployment; pilot integration path demonstrably reuses the same Core contracts and evaluation pipeline. |
@@ -60,8 +66,19 @@ The main architectural gap is not observation. It is closing the scientifically 
 The existing #190 backlog already defines the core dependency chain. At roadmap level it should be treated as:
 
 ```text
-#247 / #248 / #249
-system verification + invariants
+post-fix immutable Core + Edge candidate pair
+        ↓
+#189 / #260 qualification evidence
+compatibility + staging + soak + rollback + canary
+        ↓
+Edge #101 / #128 + Server #247 / #248 / #249
+deterministic simulation + cross-repo verification + invariants
+        ↓
+#250 / #251 / #252 + Edge #130 / #131
+cross-version, property and temporal integrity
+        ↓
+#302
+Season 1 evidence manifest + replay baseline
         ↓
 #192 + #193
 Action contract + Targets Engine
@@ -89,12 +106,27 @@ learning / controlled experiments
 
 This path is more important than introducing additional AI components. A sophisticated model without reconstructable action/outcome evidence is not sufficient evidence of embodied intelligence.
 
+## Immediate Execution Order
+
+1. Build and pin exact post-fix Core and Edge release-candidate image digests.
+2. Run the existing fail-closed qualification workflow and collect real compatibility, isolated staging,
+   24-hour soak, application-only rollback, and canary evidence. Any required `FAIL` or `NOT_RUN` blocks
+   production promotion.
+3. Complete the deterministic Edge scenario foundation and make the cross-repository harness replay normal,
+   duplicate, outage, lost-acknowledgement, restart, backlog-drain, and time-order cases through real transport,
+   persistence, State Estimator, health, anomaly, and read paths.
+4. Bind the resulting evidence to system invariants, supported-version compatibility, property tests, and
+   observation/receive/replay time semantics.
+5. Freeze the Season 1 evidence manifest and representative replay corpus before starting the action, target,
+   provenance, and deterministic-control contracts.
+
 ## Parallel Enabling Tracks
 
 These epics are strategically useful but should not block the first deterministic closed loop unless a concrete dependency emerges.
 
 | Epic | Role in the 2027 roadmap | Boundary |
 |---|---|---|
+| [#302 Season 1 baseline and replay corpus](https://github.com/cracketus/senior-pomidor-server/issues/302) | Preserves the observational baseline, incidents, ambiguity and representative replay windows required for later controller/model comparison. | Does not retrofit unrecorded action-response evidence or claim causal outcomes. |
 | [#201 Plant vision / VLM phenotyping](https://github.com/cracketus/senior-pomidor-server/issues/201) | Adds visual plant evidence, uncertainty, phenotyping and experiment inputs. | Evidence only; no direct target/actuator authority. |
 | [#204 Operator interfaces](https://github.com/cracketus/senior-pomidor-server/issues/204) | Makes state, forecasts, decisions, guardrail results and failures inspectable to operators and pilot partners. | Read-only first; does not replace Grafana or Guardrails. |
 | [#290 Local-first autonomous workflow runtime](https://github.com/cracketus/senior-pomidor-server/issues/290) | Automates research/publication/incident workflows around project evidence. | Separate automation plane; explicitly no physical-control authority. |

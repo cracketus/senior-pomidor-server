@@ -4,6 +4,26 @@ Server implementation for the Senior Pomidor project.
 
 **Roadmap:** [Server/Core roadmap through the 2027 growing season](docs/ROADMAP_2027.md)
 
+## Current Status
+
+Server/Core provides the production-oriented observation foundation: versioned HTTP/MQTT telemetry
+ingestion, durable PostgreSQL storage, canonical state and health derivation, photo ingestion,
+operator reads, Grafana observability, and immutable release/staging tooling. The current Core contract
+supports canonical Docker Edge application health through `service_manager=none` while retaining the
+documented one-release compatibility path for legacy systemd telemetry.
+
+The latest published Server and Edge releases predate the final coordinated application-health
+compatibility fixes on both repositories. Before the next production promotion, operators must pin exact
+post-fix Core and Edge image digests and complete the real Edge/Core compatibility report, isolated staging
+scenarios, 24-hour soak, rollback rehearsal, and canary required by the release runbooks. Green repository
+CI or synthetic fixtures do not replace that evidence.
+
+The immediate engineering priorities are the cross-repository Edge-to-Core harness and system invariants
+under [#247](https://github.com/cracketus/senior-pomidor-server/issues/247), followed by temporal and
+cross-version compatibility coverage and the Season 1 replay baseline. World Model, autonomous Control,
+Executor-backed physical actions, and predictive authority remain roadmap work rather than active runtime
+capabilities.
+
 ## Development Agent Context
 
 Development agents and reviewers start with [AGENTS.md](AGENTS.md) and
@@ -38,7 +58,8 @@ new oracle-blind run.
 - `mosquitto`: local MQTT broker exposed on port `1883`.
 - `grafana`: optional local observability UI exposed on port `3000`.
 
-The server accepts the current edge-node telemetry contract without requiring edge code changes.
+The server accepts the current Edge telemetry contract. Coordinated contract changes still require a
+Core-first compatible reader, an identified Edge producer, pinned revisions, and real compatibility evidence.
 
 ## Local Python Setup
 
