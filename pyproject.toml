@@ -22,6 +22,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
+    "anyio<4.15", # Temporary Starlette TestClient compatibility; keep warnings-as-errors enabled.
     "bandit[toml]>=1.7.10",
     "coverage[toml]>=7.6",
     "httpx>=0.27",
