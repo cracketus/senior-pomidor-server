@@ -1,3 +1,4 @@
+import tomllib
 from pathlib import Path
 
 import yaml
@@ -57,6 +58,26 @@ def test_runtime_bundle_builder_includes_operations_assets_without_source() -> N
     assert '"$stage/REVISION"' in builder
     assert "SOURCE_REVISION" in builder
     assert "sha256sum" in builder
+
+
+def test_runtime_image_includes_complete_topology_history() -> None:
+    dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+    topology_files = sorted((ROOT / "config/topology").glob("*.yaml"))
+
+    assert "COPY config/topology ./config/topology" in dockerfile
+    assert [path.name for path in topology_files] == [
+        "001-initial.yaml",
+        "002-replacement.yaml",
+        "003-relocation.yaml",
+        "004-correction.yaml",
+    ]
+
+
+def test_safe_yaml_parser_is_a_runtime_dependency() -> None:
+    project = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))["project"]
+
+    assert "PyYAML>=6.0.2" in project["dependencies"]
+    assert "PyYAML>=6.0.2" not in project["optional-dependencies"]["dev"]
 
 
 def test_production_environment_template_disables_docs_and_shared_service_profiles() -> None:
