@@ -1,0 +1,54 @@
+{
+  "schema": "agent_run_v1",
+  "run_id": "20260909-release-to-e2e-review-fix-coder",
+  "issue_ref": null,
+  "pr_ref": null,
+  "role": "coder",
+  "agent_id": "codex-local",
+  "prompt_version": "review-fix-v1",
+  "started_at_utc": "2026-09-09T04:05:00Z",
+  "finished_at_utc": "2026-09-09T04:20:00Z",
+  "input_refs": [
+    ".ai/CORE_INVARIANTS.md",
+    ".ai/DEVELOPMENT_RULES.md",
+    ".ai/agents/coding-agent.md",
+    "docs/RELEASE_TO_E2E_RUNBOOK.md",
+    "tests/test_docker_e2e.py"
+  ],
+  "output_refs": [
+    "docs/RELEASE_TO_E2E_RUNBOOK.md",
+    ".ai/agent-runs/20260909-release-to-e2e-review-fix-coder.json"
+  ],
+  "status": "completed",
+  "commands": [
+    {"name": "context-routing", "status": "PASS"},
+    {"name": "focused-tests", "status": "PASS"},
+    {"name": "full-pytest", "status": "PASS"},
+    {"name": "quality", "status": "PASS"},
+    {"name": "documentation-check", "status": "PASS"},
+    {"name": "diff-check", "status": "PASS"},
+    {"name": "audit-validation", "status": "PASS"}
+  ],
+  "validation_results": [
+    {"name": "focused-tests", "status": "PASS"},
+    {"name": "full-pytest", "status": "PASS"},
+    {"name": "quality", "status": "PASS"},
+    {"name": "changed-links-paths-commands", "status": "PASS"},
+    {"name": "diff-check", "status": "PASS"},
+    {"name": "docker-e2e", "status": "NOT_RUN"},
+    {"name": "production-checks", "status": "NOT_RUN"},
+    {"name": "physical-checks", "status": "NOT_RUN"}
+  ],
+  "human_edits": [],
+  "findings": [
+    {"category": "docker-endpoint", "outcome": "confirmed", "role": "reviewer"},
+    {"category": "record-preservation", "outcome": "confirmed", "role": "reviewer"}
+  ],
+  "errors": [],
+  "usage": {
+    "file_count": 6,
+    "input_characters": 42578,
+    "tool_output_bytes": 0,
+    "elapsed_seconds": 900
+  }
+}
