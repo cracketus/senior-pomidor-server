@@ -1,6 +1,6 @@
 # Tomato Brain Map R1 implementation specification
 
-Status: topology-provider and raw-evidence-reader slices implemented; evaluator, API, and UI runtime NOT_IMPLEMENTED.
+Status: topology-provider, raw-evidence-reader, and pure evaluator slices implemented; API and UI runtime NOT_IMPLEMENTED.
 Owner: Server. Baseline: 2026-09-09. Authorization: owner accepted the ADR baseline and delegated preimplementation refinement.
 Authority: [accepted cross-system decisions](https://github.com/cracketus/senior-pomidor/blob/main/docs/architecture/tomato-brain-map/implementation-decisions.md).
 Existing [contracts](CONTRACTS.md) remain authoritative for current endpoints. This document specifies additive future Map behavior.
