@@ -27,8 +27,8 @@
 | #225 foundation | telemetry, persistence, reads, reliability contracts | server CI + local tests | реализовано |
 | #247 / PR #268 | Docker E2E, evidence schemas, invariant checks, fail-closed workflow | laptop + GitHub CI | реализовано |
 | #260 / PR #270 | Core SHA-only RC, staging boundary, preproduction/full validator | laptop + GitHub CI | реализовано |
-| Edge RC | immutable Edge image, spool/retry/watchdog paths, Edge/Core compatibility | Edge repo + Edge node | требует проверки |
-| Pre-production qualification | 10 cross-repository scenarios, 24h soak, exact bundle, rollback | isolated laptop rehearsal или отдельный staging host | следующий этап |
+| Immutable Core/Edge RC pair | exact Git SHAs, image digests and green publishing CI | Core and Edge repositories | PASS: pair pinned 2026-09-05 |
+| Pre-production qualification | real compatibility, isolated staging, 24h soak, exact bundle, rollback | isolated laptop rehearsal или отдельный staging host | NOT_RUN; следующий этап |
 | Canary | один production Edge после Core rollout | production server + production Edge | NOT_RUN, human approval |
 | Production observation | стабильность после canary и rollback | production | NOT_RUN, human approval |
 
@@ -68,27 +68,38 @@ observation остаются отдельными этапами.
 | Предусловие | Статус |
 | --- | --- |
 | PR #270 влит в main | PASS |
-| Merge SHA | `2ba13b784e96a200a9f06462e728e28371d41aa9` |
+| Selected Core SHA | `3bcbc15bc94b2eca1d45be8e3713c26d5b0b5c73` |
+| Immutable Core image | `ghcr.io/cracketus/senior-pomidor-server@sha256:7b14b208bab3181fd5234581c5e851d44d4e78fa024f334b90d3611ff04864c0` |
 | Approved brief #260 | PASS |
 | Core RC workflow и staging controller | PASS |
 | Server tests | PASS: `483 passed, 3 skipped` |
 | Bandit и pip-audit | PASS |
 | Staging Compose rendering | PASS |
-| GitHub CI и GHCR artifact | NOT VERIFIED: GitHub API ранее вернул 401 |
+| GitHub CI и GHCR artifact | PASS: [CI run 33738751416](https://github.com/cracketus/senior-pomidor-server/actions/runs/33738751416) |
 | Docker на локальной Windows машине | NOT AVAILABLE: нет доступа к Docker daemon |
 
 ### Edge repository
 
-Edge checkout в текущей рабочей среде отсутствует. Не подтверждены:
+Для первой qualification явно выбрана и зафиксирована следующая Edge RC identity:
 
-- Edge SHA `76c36179edceaedde454d8229b7ec814adebf628`;
-- Edge RC digest и multi-platform manifest;
-- Edge OCI revision и CI;
+- Edge SHA `553eb44ca7add9a99031f9a096683c1502c5a5a8`;
+- immutable image `ghcr.io/cracketus/senior-pomidor-edge@sha256:acaef9ffbfe32d9f4bd88dfce714026ea191d8271a5172b531861c6094bf4c43`;
+- [green Edge RC workflow run 33548751432](https://github.com/cracketus/senior-pomidor-plant-v2/actions/runs/33548751432).
+
+Эта выбранная RC не должна автоматически заменяться более новым кандидатом. Ещё не подтверждены реальные
+qualification prerequisites:
+
 - staging identity `edge-staging-*`;
 - container `senior-pomidor-edge-staging`;
 - безопасный fault injection для watchdog/spool/replay.
 
 Не считать эти пункты PASS без реального Edge artifact или CI evidence.
+
+Для этой пары текущий общий статус — `BLOCKED`: real Edge/Core compatibility, isolated staging,
+24-hour soak, application-only rollback rehearsal и canary имеют статус `NOT_RUN`. Pin/build и
+required CI завершены, но это не означает, что qualification началась. Synthetic или server-only
+evidence не переводит ни один из этих gate в `PASS`; canary требует отдельного production approval.
+Любой identity drift открывает новую qualification campaign и требует повторить все gate.
 
 ## 1. Проверить server merge и CI
 
@@ -96,7 +107,8 @@ Edge checkout в текущей рабочей среде отсутствует
 
     https://github.com/cracketus/senior-pomidor-server/actions
 
-Для merge SHA `2ba13b784e96a200a9f06462e728e28371d41aa9` jobs должны быть PASS:
+Для Core SHA `3bcbc15bc94b2eca1d45be8e3713c26d5b0b5c73` jobs должны быть PASS в
+[CI run 33738751416](https://github.com/cracketus/senior-pomidor-server/actions/runs/33738751416):
 
 - `test`
 - `quality`
@@ -122,9 +134,11 @@ Edge checkout в текущей рабочей среде отсутствует
     export CORE_SHA="$(jq -r '.git_sha' senior-pomidor.core.release-candidate.v1.json)"
     export CORE_IMAGE="$(jq -r '.image_ref' senior-pomidor.core.release-candidate.v1.json)"
     export CORE_DIGEST="$(jq -r '.image_digest' senior-pomidor.core.release-candidate.v1.json)"
-    test "$CORE_SHA" = "2ba13b784e96a200a9f06462e728e28371d41aa9"
-    test "$CORE_IMAGE" = *"@$CORE_DIGEST"
-    test "$CORE_DIGEST" =~ ^sha256:[0-9a-f]{64}$
+    test "$CORE_SHA" = "3bcbc15bc94b2eca1d45be8e3713c26d5b0b5c73"
+    test "$CORE_IMAGE" = "ghcr.io/cracketus/senior-pomidor-server@sha256:7b14b208bab3181fd5234581c5e851d44d4e78fa024f334b90d3611ff04864c0"
+    test "$CORE_DIGEST" = "sha256:7b14b208bab3181fd5234581c5e851d44d4e78fa024f334b90d3611ff04864c0"
+    [[ "$CORE_IMAGE" == *"@$CORE_DIGEST" ]]
+    [[ "$CORE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
     jq -e '.platforms == ["linux/amd64", "linux/arm64"]' \
       senior-pomidor.core.release-candidate.v1.json
 
@@ -142,28 +156,29 @@ Edge checkout в текущей рабочей среде отсутствует
 
 В Edge checkout:
 
-    cd /path/to/senior-pomidor-edge
+    cd /path/to/senior-pomidor-plant-v2
     git fetch --all --tags
-    git checkout 76c36179edceaedde454d8229b7ec814adebf628
+    git checkout 553eb44ca7add9a99031f9a096683c1502c5a5a8
     git rev-parse HEAD
     git status --short
 
 Должен быть SHA:
 
-    76c36179edceaedde454d8229b7ec814adebf628
+    553eb44ca7add9a99031f9a096683c1502c5a5a8
 
 Проверьте Edge CI для этого SHA и получите Edge RC artifact. Digest нельзя вычислять из Git SHA.
 
-    export EDGE_SHA=76c36179edceaedde454d8229b7ec814adebf628
-    export EDGE_IMAGE='immutable Edge image ref из artifact'
-    export EDGE_DIGEST='sha256:... из artifact'
-    test "$EDGE_IMAGE" = *"@$EDGE_DIGEST"
-    test "$EDGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$
+    export EDGE_SHA=553eb44ca7add9a99031f9a096683c1502c5a5a8
+    export EDGE_IMAGE='ghcr.io/cracketus/senior-pomidor-edge@sha256:acaef9ffbfe32d9f4bd88dfce714026ea191d8271a5172b531861c6094bf4c43'
+    export EDGE_DIGEST='sha256:acaef9ffbfe32d9f4bd88dfce714026ea191d8271a5172b531861c6094bf4c43'
+    [[ "$EDGE_IMAGE" == *"@$EDGE_DIGEST" ]]
+    [[ "$EDGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
     docker pull "$EDGE_IMAGE"
     docker image inspect "$EDGE_IMAGE" \
       --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}'
 
-Ожидается OCI revision `76c36179edceaedde454d8229b7ec814adebf628`.
+Ожидается OCI revision `553eb44ca7add9a99031f9a096683c1502c5a5a8`. Required Edge RC CI для этой
+identity подтверждён [workflow run 33548751432](https://github.com/cracketus/senior-pomidor-plant-v2/actions/runs/33548751432).
 
 Edge maintainer дополнительно подтверждает staging identity, MQTT topic prefix, container name,
 interop network и безопасные software-only fault paths. Недоступный Edge path остаётся NOT_RUN.
@@ -196,9 +211,9 @@ interop network и безопасные software-only fault paths. Недост�
     mkdir -p "$STAGING_ROOT"
     test -d "$SERVER_ROOT" -a -d "$EDGE_ROOT"
     cd "$SERVER_ROOT"
-    git checkout main
-    git pull --ff-only origin main
-    test "$(git rev-parse HEAD)" = "2ba13b784e96a200a9f06462e728e28371d41aa9"
+    git fetch origin
+    git checkout --detach 3bcbc15bc94b2eca1d45be8e3713c26d5b0b5c73
+    test "$(git rev-parse HEAD)" = "3bcbc15bc94b2eca1d45be8e3713c26d5b0b5c73"
 
 Создать staging data directories:
 
@@ -222,7 +237,7 @@ interop network и безопасные software-only fault paths. Недост�
 
 Обязательные значения:
 
-    APP_IMAGE=<точный immutable CORE_IMAGE>
+    APP_IMAGE=ghcr.io/cracketus/senior-pomidor-server@sha256:7b14b208bab3181fd5234581c5e851d44d4e78fa024f334b90d3611ff04864c0
     COMPOSE_PROFILES=observability
     DEPLOYMENT_MODE=staging
     STAGING_DEVICE_PREFIX=edge-staging-
@@ -301,8 +316,8 @@ interop network и безопасные software-only fault paths. Недост�
 непроверенные образы запрещены:
 
     ./manage.sh deploy \
-      ghcr.io/cracketus/senior-pomidor-edge@sha256:<64-hex-digest> \
-      <40-hex-edge-commit-sha>
+      ghcr.io/cracketus/senior-pomidor-edge@sha256:acaef9ffbfe32d9f4bd88dfce714026ea191d8271a5172b531861c6094bf4c43 \
+      553eb44ca7add9a99031f9a096683c1502c5a5a8
 
 ## 6. Проверить Compose до запуска
 
@@ -596,25 +611,63 @@ Grafana authentication, а `400` обычно означает malformed JSON; �
 
 ## 11. Exact-bundle rehearsal и rollback
 
-    cd "$SERVER_ROOT"
-    git checkout 2ba13b784e96a200a9f06462e728e28371d41aa9
-    export SOURCE_REVISION=2ba13b784e96a200a9f06462e728e28371d41aa9
-    mkdir -p "$STAGING_ROOT/dist"
-    bash deploy/scripts/build-runtime-bundle.sh v0.2.5 "$STAGING_ROOT/dist"
-    sha256sum "$STAGING_ROOT/dist/senior-pomidor-runtime-v0.2.5.tar.gz"
-    tar -tzf "$STAGING_ROOT/dist/senior-pomidor-runtime-v0.2.5.tar.gz" \
-      | grep -E '(^|/)(app|migrations)/|\.py$'
+    (
+      set -euo pipefail
+      cd "$SERVER_ROOT"
+      CORE_SHA=3bcbc15bc94b2eca1d45be8e3713c26d5b0b5c73
+      read -r -p 'Published release version for this Core SHA (vX.Y.Z): ' RELEASE_VERSION
+      [[ "$RELEASE_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
 
-Последняя команда не должна вывести source files.
+      git fetch origin --tags
+      test "$(git cat-file -t "refs/tags/$RELEASE_VERSION")" = tag
+      test "$(git rev-list -n 1 "refs/tags/$RELEASE_VERSION")" = "$CORE_SHA"
+      RELEASE_JSON="$(gh release view "$RELEASE_VERSION" \
+        --repo cracketus/senior-pomidor-server \
+        --json tagName,isDraft,isPrerelease)"
+      jq -e --arg version "$RELEASE_VERSION" \
+        '.tagName == $version and (.isDraft | not) and (.isPrerelease | not)' \
+        <<<"$RELEASE_JSON" >/dev/null
 
-Rollback — только application-only: вернуть immutable application image v0.2.4, не удалять
-PostgreSQL/Grafana/Ollama volumes, не использовать `down -v`, проверить readiness, health, ingestion,
-latest/history reads, старые durable rows и новый Edge payload.
+      mkdir -p "$STAGING_ROOT/dist"
+      BUNDLE_DIR="$(mktemp -d "$STAGING_ROOT/dist/release-$RELEASE_VERSION.XXXXXX")"
+      BUNDLE="$BUNDLE_DIR/senior-pomidor-runtime-$RELEASE_VERSION.tar.gz"
+      gh release download "$RELEASE_VERSION" \
+        --repo cracketus/senior-pomidor-server \
+        --pattern "senior-pomidor-runtime-$RELEASE_VERSION.tar.gz*" \
+        --dir "$BUNDLE_DIR"
+      test -f "$BUNDLE" -a -f "$BUNDLE.sha256"
+
+      EXPECTED_BUNDLE_SHA="$(awk '{print $1}' "$BUNDLE.sha256")"
+      ACTUAL_BUNDLE_SHA="$(sha256sum "$BUNDLE" | awk '{print $1}')"
+      [[ "$EXPECTED_BUNDLE_SHA" =~ ^[0-9a-f]{64}$ ]]
+      test "$ACTUAL_BUNDLE_SHA" = "$EXPECTED_BUNDLE_SHA"
+      test "$(tar -xOf "$BUNDLE" './VERSION')" = "$RELEASE_VERSION"
+      test "$(tar -xOf "$BUNDLE" './REVISION')" = "$CORE_SHA"
+      tar -tzf "$BUNDLE" >"$BUNDLE_DIR/contents.txt"
+      if grep -Eq '(^|/)(app|migrations)/|\.py$' "$BUNDLE_DIR/contents.txt"; then
+        echo 'Runtime bundle unexpectedly contains Python source' >&2
+        exit 1
+      fi
+      printf 'PASS release_version=%s core_sha=%s runtime_bundle_sha256=%s bundle=%s\n' \
+        "$RELEASE_VERSION" "$CORE_SHA" "$ACTUAL_BUNDLE_SHA" "$BUNDLE"
+    )
+
+Используйте в rehearsal только bundle из пути `bundle=...`, напечатанного строкой `PASS`, без
+локального rebuild.
+Если release tag ещё не назначен этому SHA, GitHub Release или любой asset отсутствует, либо tag,
+checksum, `VERSION` и `REVISION` не согласованы, оставьте exact-bundle rehearsal `NOT_RUN` и остановитесь.
+
+Rollback — только application-only: вернуть предыдущий approved immutable Core application image. Он
+не меняет и не останавливает PostgreSQL, Grafana или Ollama, не удаляет volumes или evidence и не
+использует `down -v`. После rollback проверить readiness, health, ingestion, latest/history reads,
+старые durable rows и новый Edge payload.
 
 ## 12. Создать и проверить sanitized evidence
 
     cd "$SERVER_ROOT"
-    export REPORT_ID=20260828-core-edge-staging-01
+    read -r -p 'Qualification report ID (bounded lowercase): ' REPORT_ID
+    [[ "$REPORT_ID" =~ ^[a-z0-9][a-z0-9._-]{0,63}$ ]] || exit 1
+    export REPORT_ID
     mkdir -p "docs/release-evidence/$REPORT_ID"
 
 Разрешены только:
@@ -661,14 +714,14 @@ private paths, process IDs, database dumps или production secrets.
 
 Нажмите `Run workflow` и заполните:
 
-    core_sha:    2ba13b784e96a200a9f06462e728e28371d41aa9
-    core_image:  точный immutable Core image ref
-    core_digest: точный Core digest
-    edge_sha:    76c36179edceaedde454d8229b7ec814adebf628
-    edge_image:  точный immutable Edge image ref
-    edge_digest: точный Edge digest
+    core_sha:    3bcbc15bc94b2eca1d45be8e3713c26d5b0b5c73
+    core_image:  ghcr.io/cracketus/senior-pomidor-server@sha256:7b14b208bab3181fd5234581c5e851d44d4e78fa024f334b90d3611ff04864c0
+    core_digest: sha256:7b14b208bab3181fd5234581c5e851d44d4e78fa024f334b90d3611ff04864c0
+    edge_sha:    553eb44ca7add9a99031f9a096683c1502c5a5a8
+    edge_image:  ghcr.io/cracketus/senior-pomidor-edge@sha256:acaef9ffbfe32d9f4bd88dfce714026ea191d8271a5172b531861c6094bf4c43
+    edge_digest: sha256:acaef9ffbfe32d9f4bd88dfce714026ea191d8271a5172b531861c6094bf4c43
     evidence_ref: ветка или tag с docs/release-evidence/<REPORT_ID>/
-    report_id:    20260828-core-edge-staging-01
+    report_id:    <назначить при фактическом запуске; bounded lowercase id>
     mode:         preproduction
 
 Ожидается:

@@ -12,11 +12,16 @@ operator reads, Grafana observability, and immutable release/staging tooling. Th
 supports canonical Docker Edge application health through `service_manager=none` while retaining the
 documented one-release compatibility path for legacy systemd telemetry.
 
-The latest published Server and Edge releases predate the final coordinated application-health
-compatibility fixes on both repositories. Before the next production promotion, operators must pin exact
-post-fix Core and Edge image digests and complete the real Edge/Core compatibility report, isolated staging
-scenarios, 24-hour soak, rollback rehearsal, and canary required by the release runbooks. Green repository
-CI or synthetic fixtures do not replace that evidence.
+The first post-fix immutable candidate pair is now pinned: Core
+`3bcbc15bc94b2eca1d45be8e3713c26d5b0b5c73` at
+`ghcr.io/cracketus/senior-pomidor-server@sha256:7b14b208bab3181fd5234581c5e851d44d4e78fa024f334b90d3611ff04864c0`
+and Edge `553eb44ca7add9a99031f9a096683c1502c5a5a8` at
+`ghcr.io/cracketus/senior-pomidor-edge@sha256:acaef9ffbfe32d9f4bd88dfce714026ea191d8271a5172b531861c6094bf4c43`.
+The build/pin stage is complete; real Edge/Core compatibility, isolated staging scenarios, the 24-hour
+soak, application-only rollback rehearsal, and the separately approved production canary are still
+`NOT_RUN`, so promotion [#189](https://github.com/cracketus/senior-pomidor-server/issues/189) remains
+blocked. Green CI and synthetic or server-only evidence do not replace those gates, and identity drift
+starts a new qualification campaign.
 
 The immediate engineering priorities are the cross-repository Edge-to-Core harness and system invariants
 under [#247](https://github.com/cracketus/senior-pomidor-server/issues/247), followed by temporal and
