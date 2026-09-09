@@ -1,17 +1,35 @@
 import json
 import os
+import platform
 import re
 import shutil
+import statistics
 import subprocess
 import sys
 import tempfile
 import time
+import tracemalloc
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import httpx
 import pytest
+from sqlalchemy import create_engine, text
+from sqlalchemy.exc import DBAPIError
 
+from app.map import (
+    ChannelMetric,
+    ChannelSelector,
+    EffectiveInterval,
+    EvidenceKind,
+    EvidenceMode,
+    RawEvidenceErrorCode,
+    RawEvidenceReader,
+    RawEvidenceReadError,
+    RawEvidenceRequest,
+    Unit,
+)
+from app.map import raw_reader as raw_reader_module
 from app.validation import PHOTO_SCHEMA, TELEMETRY_SCHEMA_V2
 
 pytestmark = pytest.mark.skipif(
@@ -349,6 +367,207 @@ def scalar_int(result: subprocess.CompletedProcess[str]) -> int:
     values = [line.strip() for line in result.stdout.splitlines() if line.strip().isdigit()]
     assert len(values) == 1, result.stdout
     return int(values[0])
+
+
+def canonical_table_snapshots() -> dict[str, str]:
+    tables = (
+        "telemetry_events",
+        "state_snapshots",
+        "sensor_health_snapshots",
+        "anomaly_records",
+        "action_simulations",
+    )
+    snapshots: dict[str, str] = {}
+    for table in tables:
+        result = application_psql(
+            "SELECT count(*)::text || ':' || "
+            "md5(coalesce(string_agg(row_to_json(t)::text, '' ORDER BY row_to_json(t)::text), '')) "
+            f"AS snapshot FROM public.{table} AS t;"
+        )
+        matches = [
+            line.strip() for line in result.stdout.splitlines() if re.fullmatch(r"\d+:[0-9a-f]{32}", line.strip())
+        ]
+        assert len(matches) == 1, result.stdout
+        snapshots[table] = matches[0]
+    return snapshots
+
+
+def raw_reader_request(payload: dict, *, source_id: str = "synthetic-source-1") -> RawEvidenceRequest:
+    observed = datetime.fromisoformat(payload["timestamp_utc"].replace("Z", "+00:00"))
+    return RawEvidenceRequest(
+        selectors=(
+            ChannelSelector(
+                source_id=source_id,
+                storage_device_id=payload["device_id"],
+                channel_id="synthetic-channel-a-v1",
+                pod_key="pod-1",
+                metric_name=ChannelMetric.SOIL_MOISTURE_PERCENT,
+                error_sensors=("soil",),
+                unit=Unit.PERCENT,
+                minimum=0.0,
+                maximum=100.0,
+                max_age_seconds=1200,
+                effective_interval=EffectiveInterval(
+                    effective_from=observed - timedelta(days=1),
+                    effective_to=observed + timedelta(days=1),
+                ),
+                profile_id="synthetic-soil-profile",
+                profile_version="v1",
+            ),
+        ),
+        window_start=observed - timedelta(minutes=1),
+        window_end=observed + timedelta(minutes=1),
+        mode=EvidenceMode.RECONSTRUCTED,
+        topology_revision_id="synthetic-r001",
+        topology_digest="a" * 64,
+    )
+
+
+def assert_postgresql_raw_reader(payload: dict) -> None:
+    database_url = (
+        f"postgresql+psycopg://{COMPOSE_ENV['POSTGRES_USER']}:{COMPOSE_ENV['POSTGRES_PASSWORD']}"
+        f"@127.0.0.1:{COMPOSE_ENV['POSTGRES_PUBLISHED_PORT']}/{COMPOSE_ENV['POSTGRES_DB']}"
+    )
+    engine = create_engine(database_url)
+    request = raw_reader_request(payload)
+    now = datetime.now(UTC)
+    before = canonical_table_snapshots()
+    try:
+        reader = RawEvidenceReader(engine, clock=lambda: now)
+        first = reader.read(request)
+        second = reader.read(request)
+        assert first.digest == second.digest
+        assert first.row_count == 2
+        assert any(item.evidence_kind == EvidenceKind.CHANNEL_VALUE and item.value == 42.5 for item in first.items)
+        as_known = reader.read(request.model_copy(update={"mode": EvidenceMode.AS_KNOWN_CORE}))
+        assert as_known.row_count == 0
+        assert canonical_table_snapshots() == before
+
+        with engine.connect() as connection:
+            transaction = connection.begin()
+            try:
+                connection.execute(text("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY"))
+                with pytest.raises(DBAPIError):
+                    connection.execute(
+                        text(
+                            "INSERT INTO devices (device_id, first_seen_at, last_seen_at, last_payload_at) "
+                            "VALUES ('synthetic-read-only-trap', now(), now(), now())"
+                        )
+                    )
+            finally:
+                transaction.rollback()
+
+        original_sql = raw_reader_module.RAW_EVIDENCE_SQL
+        raw_reader_module.RAW_EVIDENCE_SQL = "SELECT pg_sleep(6)"
+        try:
+            with pytest.raises(RawEvidenceReadError) as exc_info:
+                reader.read(request)
+            assert exc_info.value.code == RawEvidenceErrorCode.QUERY_TIMEOUT
+        finally:
+            raw_reader_module.RAW_EVIDENCE_SQL = original_sql
+    finally:
+        engine.dispose()
+
+
+def assert_postgresql_raw_reader_row_cap() -> None:
+    application_psql(
+        "INSERT INTO public.devices (device_id, first_seen_at, last_seen_at, last_payload_at) "
+        "SELECT 'synthetic-cap-device-' || source_no::text, '2026-01-01T00:00:00Z', "
+        "'2026-01-08T00:00:00Z', '2026-01-08T00:00:00Z' "
+        "FROM generate_series(1, 50) AS source_no; "
+        "INSERT INTO public.telemetry_events "
+        "(record_id, device_id, timestamp_utc, schema_version, source, raw_payload_jsonb, "
+        "system_health_jsonb, received_at) "
+        "SELECT 'synthetic-cap:' || source_no::text || ':' || value::text, "
+        "'synthetic-cap-device-' || source_no::text, "
+        "'2026-01-01T00:00:00Z'::timestamptz + "
+        "(((source_no - 1) * 2000) + value) * interval '5 seconds', "
+        "'senior-pomidor.edge.telemetry.v2', 'synthetic', '{}'::jsonb, NULL, "
+        "'2026-01-01T00:00:00Z'::timestamptz + "
+        "(((source_no - 1) * 2000) + value) * interval '5 seconds' "
+        "FROM generate_series(1, 50) AS source_no "
+        "CROSS JOIN generate_series(1, 2000) AS value;"
+    )
+    payload = {
+        "device_id": "synthetic-cap-device-1",
+        "timestamp_utc": "2026-01-02T00:00:00Z",
+    }
+    base_request = raw_reader_request(payload, source_id="synthetic-cap-source-1")
+    selectors = tuple(
+        base_request.selectors[0].model_copy(
+            update={
+                "source_id": f"synthetic-cap-source-{source_no}",
+                "storage_device_id": f"synthetic-cap-device-{source_no}",
+                "channel_id": f"synthetic-cap-channel-{source_no}",
+                "effective_interval": EffectiveInterval(
+                    effective_from=datetime(2026, 1, 1, tzinfo=UTC),
+                    effective_to=datetime(2026, 1, 8, tzinfo=UTC),
+                ),
+            }
+        )
+        for source_no in range(1, 51)
+    )
+    request = base_request.model_copy(
+        update={
+            "selectors": selectors,
+            "window_start": datetime(2026, 1, 1, tzinfo=UTC),
+            "window_end": datetime(2026, 1, 8, tzinfo=UTC),
+        }
+    )
+    database_url = (
+        f"postgresql+psycopg://{COMPOSE_ENV['POSTGRES_USER']}:{COMPOSE_ENV['POSTGRES_PASSWORD']}"
+        f"@127.0.0.1:{COMPOSE_ENV['POSTGRES_PUBLISHED_PORT']}/{COMPOSE_ENV['POSTGRES_DB']}"
+    )
+    engine = create_engine(database_url)
+    try:
+        reader = RawEvidenceReader(engine, clock=lambda: datetime(2026, 1, 8, tzinfo=UTC))
+        durations: list[float] = []
+        tracemalloc.start()
+        batch = None
+        for _ in range(5):
+            started = time.perf_counter()
+            batch = reader.read(request)
+            durations.append(time.perf_counter() - started)
+        _, peak_bytes = tracemalloc.get_traced_memory()
+        tracemalloc.stop()
+        assert batch is not None
+        assert batch.row_count == 100_000
+        serialized_size = len(batch.model_dump_json().encode("utf-8"))
+        ordered = sorted(durations)
+        print(
+            "map-reader-benchmark="
+            + json.dumps(
+                {
+                    "dataset": "synthetic 7-day window, 50 sources, 100000 event rows",
+                    "machine": (
+                        f"{platform.system()} {platform.release()} {platform.machine()}; "
+                        f"Python {platform.python_version()}"
+                    ),
+                    "runs": 5,
+                    "p50_seconds": round(statistics.median(durations), 3),
+                    "p95_seconds": round(ordered[-1], 3),
+                    "peak_memory_bytes": peak_bytes,
+                    "serialized_size_bytes": serialized_size,
+                },
+                sort_keys=True,
+            )
+        )
+        application_psql(
+            "INSERT INTO public.telemetry_events "
+            "(record_id, device_id, timestamp_utc, schema_version, source, raw_payload_jsonb, "
+            "system_health_jsonb, received_at) VALUES "
+            "('synthetic-cap:100001', 'synthetic-cap-device-1', '2026-01-07T23:59:59Z', "
+            "'senior-pomidor.edge.telemetry.v2', 'synthetic', '{}'::jsonb, NULL, '2026-01-07T23:59:59Z');"
+        )
+        with pytest.raises(RawEvidenceReadError) as exc_info:
+            reader.read(request)
+        assert exc_info.value.code == RawEvidenceErrorCode.QUERY_LIMIT_EXCEEDED
+    finally:
+        engine.dispose()
+        application_psql(
+            "DELETE FROM public.telemetry_events WHERE device_id LIKE 'synthetic-cap-device-%'; "
+            "DELETE FROM public.devices WHERE device_id LIKE 'synthetic-cap-device-%';"
+        )
 
 
 def wait_for_record_count(record_id: str, expected: int) -> None:
@@ -789,6 +1008,8 @@ def test_docker_compose_stack_ingests_and_serves_data():
             assert duplicate.json() == {"record_id": first_payload["record_id"], "status": "duplicate"}
 
             wait_for_record_count(first_payload["record_id"], 1)
+            assert_postgresql_raw_reader(first_payload)
+            assert_postgresql_raw_reader_row_cap()
 
             latest = client.get("/api/v1/devices/pi-001/latest")
             assert latest.status_code == 200
