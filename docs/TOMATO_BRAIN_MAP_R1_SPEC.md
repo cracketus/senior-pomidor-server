@@ -1,14 +1,15 @@
 # Tomato Brain Map R1 implementation specification
 
-Status: topology-provider slice implemented; reader, evaluator, API, and UI runtime NOT_IMPLEMENTED.
+Status: topology-provider and raw-evidence-reader slices implemented; evaluator, API, and UI runtime NOT_IMPLEMENTED.
 Owner: Server. Baseline: 2026-09-09. Authorization: owner accepted the ADR baseline and delegated preimplementation refinement.
 Authority: [accepted cross-system decisions](https://github.com/cracketus/senior-pomidor/blob/main/docs/architecture/tomato-brain-map/implementation-decisions.md).
 Existing [contracts](CONTRACTS.md) remain authoritative for current endpoints. This document specifies additive future Map behavior.
 
-Issue #332 implements only the isolated, read-only `app/map` topology boundary and sanitized
-`config/topology/` history described below. It is packaged in the runtime image but is not imported by
-FastAPI or application startup. It performs no database, network, estimator, control, export, or hardware
-operation. Issues #333-#336 remain required before the rest of this specification exists at runtime.
+Issues #332 and #333 implement the isolated, read-only `app/map` topology and raw-evidence boundaries plus
+the sanitized `config/topology/` history described below. They are packaged in the runtime image but are not
+imported by FastAPI or application startup. The reader is an explicit PostgreSQL adapter that opens one
+verified read-only repeatable-read transaction; it performs no estimator, control, export, or hardware
+operation. Issues #334-#336 remain required before evaluation, API, or UI behavior exists at runtime.
 
 ## Outcome and boundaries
 
@@ -98,13 +99,13 @@ Benchmark synthetic 7-day / 50-entity input near the row cap before expansion; r
 
 ## Acceptance and test ownership
 
-The Topology row is implemented as synthetic software evidence by issue #332. All later rows remain future
-implementation obligations and `NOT_RUN`.
+The Topology and Reader rows are implemented as synthetic software evidence by issues #332 and #333. Later
+rows remain future implementation obligations and `NOT_RUN`.
 
 | Slice | Required evidence | Scope scenario IDs |
 | --- | --- | --- |
 | Topology (implemented) | identity collision, replacement/relocation, late correction, bad reload/first startup, cycle classes | S06-S08, S11 |
-| Reader | delayed receipt, two modes, dedup, late/out-of-order error, absent field, mixed channel freshness | S02-S05, S09, S14-S16 |
+| Reader (implemented, runtime inactive) | delayed receipt, two modes, dedup, late/out-of-order error, absent field, mixed channel freshness | S02-S05, S09, S14-S16 |
 | Evaluator | two targets, disabled/missing mapping/calibration, numeric invalidity, contradiction, threshold ±1 microsecond | S01, S04-S05, S10-S12 |
 | API | authorization, same scoped evidence drilldown, read-only DB and no estimator calls, all limit/error paths, changed cursor input | S13 plus TBM-R07-R10 |
 | UI/demo | mode/fidelity prominent, backend vs unknown, missing/disabled state, bounded evidence card, sanitized reproducible walkthrough | S01-S16, TBM-R11-R12 |

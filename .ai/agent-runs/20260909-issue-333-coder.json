@@ -1,0 +1,78 @@
+{
+  "schema": "agent_run_v1",
+  "run_id": "20260909-issue-333-coder",
+  "issue_ref": "#333",
+  "pr_ref": null,
+  "role": "coder",
+  "agent_id": "codex-local",
+  "prompt_version": "implementation-brief-v1",
+  "started_at_utc": "2026-09-09T13:46:26Z",
+  "finished_at_utc": "2026-09-09T15:00:01Z",
+  "input_refs": [
+    ".ai/CORE_INVARIANTS.md",
+    ".ai/ARCHITECTURE_RULES.md",
+    ".ai/CURRENT_STATE.md",
+    ".ai/DEVELOPMENT_RULES.md",
+    ".ai/PROJECT.md",
+    ".ai/SAFETY_RULES.md",
+    ".ai/known-failures.yaml",
+    ".ai/test-matrix.yaml",
+    ".ai/agents/coding-agent.md",
+    "docs/AGENT_TASK_WORKFLOW.md",
+    "docs/TOMATO_BRAIN_MAP_R1_SPEC.md",
+    ".ai/templates/implementation-brief.md"
+  ],
+  "output_refs": [
+    "app/map/raw_evidence.py",
+    "app/map/raw_reader.py",
+    "app/map/__init__.py",
+    "tests/test_map_reader.py",
+    "tests/test_docker_e2e.py",
+    "tests/fixtures/map_raw_evidence/golden_v1.json",
+    "docs/TOMATO_BRAIN_MAP_R1_SPEC.md",
+    ".ai/CURRENT_STATE.md",
+    "docs/implementation-reports/ISSUE-333.md",
+    ".ai/agent-runs/20260909-issue-333-coder.json"
+  ],
+  "status": "completed",
+  "commands": [
+    {"name": "context-routing", "status": "PASS"},
+    {"name": "isolated-task-create", "status": "PASS"},
+    {"name": "focused-tests", "status": "PASS"},
+    {"name": "docker-postgresql-e2e", "status": "PASS"},
+    {"name": "full-pytest", "status": "PASS"},
+    {"name": "quality", "status": "PASS"},
+    {"name": "diff-check", "status": "PASS"},
+    {"name": "canonical-full-validation", "status": "PASS"},
+    {"name": "audit-validation", "status": "PASS"}
+  ],
+  "validation_results": [
+    {"name": "focused-tests", "status": "PASS"},
+    {"name": "full-pytest", "status": "PASS"},
+    {"name": "quality", "status": "PASS"},
+    {"name": "diff-check", "status": "PASS"},
+    {"name": "schema-validation", "status": "PASS"},
+    {"name": "serialization-round-trip", "status": "PASS"},
+    {"name": "fixture-replay", "status": "PASS"},
+    {"name": "named-consumers", "status": "NOT_RUN"},
+    {"name": "isolated-postgresql", "status": "PASS"},
+    {"name": "production-staging-hardware-export", "status": "NOT_RUN"},
+    {"name": "independent-review", "status": "PASS"}
+  ],
+  "human_edits": [],
+  "findings": [
+    {"category": "scope", "outcome": "reader remains packaged but inactive with no API or startup import", "role": "coder"},
+    {"category": "benchmark", "outcome": "100000-row development p50 36.967s and peak traced memory 524428365 bytes; no production SLO claimed", "role": "coder"},
+    {"category": "consumer", "outcome": "future evaluator #334 is named but not implemented", "role": "coder"}
+    ,{"category": "review-followup", "outcome": "independent reviewer returned APPROVE with no findings after all correctness findings were resolved and covered by regressions", "role": "reviewer"}
+  ],
+  "errors": [
+    {"category": "transient_test_runtime", "outcome": "one Docker migration startup raced PostgreSQL initialization; cleanup and fresh-project retry passed"}
+  ],
+  "usage": {
+    "file_count": 10,
+    "input_characters": 108137,
+    "tool_output_bytes": 0,
+    "elapsed_seconds": 5350
+  }
+}
