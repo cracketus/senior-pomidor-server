@@ -256,3 +256,7 @@ HTTP telemetry ingestion and photo upload remain unauthenticated by default unle
 - `GET /dashboard`
 
 Telemetry may use schema `senior-pomidor.edge.telemetry.v1` or `senior-pomidor.edge.telemetry.v2`. Photos must use schema `senior-pomidor.edge.photo.v1` and upload a JPEG multipart field named `photo`.
+
+## Tomato Brain Map implementation preparation
+
+[R1 implementation specification](docs/TOMATO_BRAIN_MAP_R1_SPEC.md) and [preparation record](docs/TOMATO_BRAIN_MAP_PREPARATION_REPORT.md). Accepted design; runtime acceptance is tracked separately.
