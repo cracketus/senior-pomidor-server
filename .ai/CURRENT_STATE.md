@@ -1,6 +1,6 @@
 # Current state
 
-Owner: maintainer performing a release or operational change. Update after every deployed subsystem, contract, topology, season, or rehearsal change and review at least monthly during the active season. Snapshot date: 2026-09-02. Do not add addresses, credentials, hostnames, or other private infrastructure values.
+Owner: maintainer performing a release or operational change. Update after every deployed subsystem, contract, topology, season, or rehearsal change and review at least monthly during the active season. Snapshot date: 2026-09-05. Do not add addresses, credentials, hostnames, or other private infrastructure values.
 
 ## Running/deployable services
 
@@ -45,8 +45,13 @@ Implemented: telemetry/photo ingestion and reads, deterministic edge reliability
 The repository also implements fail-closed system-invariant, Edge/Core compatibility, and release-validation
 artifact contracts; immutable Core RC and bounded staging qualification tooling; and production-promotion
 gates. The coordinated Core and Edge Docker application-health fixes are present on each repository's main
-branch. The latest published Server and Edge release tags predate that final compatible pair, and no real
-post-fix Edge/Core qualification report has been recorded.
+branch. One post-fix immutable RC pair is now pinned: Core
+`3bcbc15bc94b2eca1d45be8e3713c26d5b0b5c73` at
+`ghcr.io/cracketus/senior-pomidor-server@sha256:7b14b208bab3181fd5234581c5e851d44d4e78fa024f334b90d3611ff04864c0`
+and Edge `553eb44ca7add9a99031f9a096683c1502c5a5a8` at
+`ghcr.io/cracketus/senior-pomidor-edge@sha256:acaef9ffbfe32d9f4bd88dfce714026ea191d8271a5172b531861c6094bf4c43`.
+Their required publishing CI passed, but real compatibility, isolated staging, 24-hour soak,
+application-only rollback, and canary remain `NOT_RUN`; promotion #189 is therefore blocked.
 
 Development workflow: Feature Planner 1.1 produces draft-only Implementation Briefs through six task workflows. Its historical evaluation suite contains ten frozen cases and is validated by `python -m tools.evaluate_feature_planner`. Coding Agent 1.1 implements only approved briefs and returns a versioned Implementation Report. Reviewer 1.0 runs independently in read-only mode and returns `senior-pomidor.review-report.v1`; its published oracle-blind baseline is bound to the exact Reviewer instruction hash. The read-only context router selects compact role/path-specific packets and fails safe to the full pack for risk flags or unknown paths; a separate local recorder accepts only bounded usage metadata. The local agent-task CLI creates or safely resumes isolated branches/worktrees and renders bounded loopback-only Compose tasks with fake hardware and external export disabled. The deterministic validation orchestrator routes and caches selected checks, and declarative model/tool routers return bounded plans without invoking providers. These tools do not authorize production deployment, production access, or hardware actions.
 
@@ -60,9 +65,10 @@ Not implemented as active physical-control contracts: World Model forecasts, Wea
 - PR CI includes a separately named Docker E2E job; RC qualification separately requires fail-closed system
   invariant, real Edge/Core compatibility, and release-validation reports. Repository branch protection must be
   configured by a maintainer to require the Docker job.
-- The Server release-qualification workflow has not yet produced a recorded run. Synthetic fixtures and
-  repository-local CI remain insufficient for the required real compatibility, staging, soak, rollback,
-  canary, or production evidence.
+- The immutable Core/Edge pair has been built and pinned, but the Server release-qualification workflow has
+  not yet produced a real qualification run. Synthetic fixtures and repository-local CI remain insufficient
+  for real compatibility, staging, soak, rollback, canary, or production evidence. Identity drift requires a
+  new qualification campaign.
 - Backups and restore tooling exist, but recovery confidence depends on a recent isolated restore rehearsal; a backup file alone is not proof.
 - Rehearsal uses a distinct Compose project, loopback-only ports, isolated paths/credentials, and must not enable the Grafana Cloud exporter.
 - Windows and Linux remain relevant to development and migration; filesystem, permissions, path, and temporary-directory behavior must be checked deliberately.
@@ -80,8 +86,10 @@ only the application and preserve shared services/data.
 ## Known gaps requiring follow-up
 
 - Keep this snapshot synchronized with releases and season status; updates are manual.
-- Build and pin one immutable post-fix Core/Edge candidate pair, then record real compatibility, isolated
-  staging, 24-hour soak, rollback, and canary evidence before production promotion.
+- Qualify the pinned immutable post-fix Core/Edge candidate pair by recording real compatibility, isolated
+  staging, 24-hour soak, application-only rollback, and separately approved canary evidence before production
+  promotion. Rollback changes only the application image and preserves PostgreSQL, Grafana, Ollama, volumes,
+  and release evidence.
 - Complete the cross-repository Edge-to-Core harness and currently applicable system-invariant coverage under
   server epic `#247`, coordinated with the Edge deterministic-simulation and test-hardening backlog.
 - Freeze the Season 1 evidence manifest and representative replay corpus before later control/model work

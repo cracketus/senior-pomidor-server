@@ -35,6 +35,36 @@ shared services и durable data.
 
 ## Текущий fail-closed статус
 
+### Первая зафиксированная Core/Edge RC-пара — 2026-09-05
+
+Для первой qualification выбрана одна immutable-пара; наличие более нового Edge RC не меняет её
+автоматически:
+
+- Core Git SHA: `3bcbc15bc94b2eca1d45be8e3713c26d5b0b5c73`;
+- Core image: `ghcr.io/cracketus/senior-pomidor-server@sha256:7b14b208bab3181fd5234581c5e851d44d4e78fa024f334b90d3611ff04864c0`;
+- Core required CI: `PASS`, [run 33738751416](https://github.com/cracketus/senior-pomidor-server/actions/runs/33738751416);
+- Edge Git SHA: `553eb44ca7add9a99031f9a096683c1502c5a5a8`;
+- Edge image: `ghcr.io/cracketus/senior-pomidor-edge@sha256:acaef9ffbfe32d9f4bd88dfce714026ea191d8271a5172b531861c6094bf4c43`;
+- Edge required RC workflow: `PASS`, [run 33548751432](https://github.com/cracketus/senior-pomidor-plant-v2/actions/runs/33548751432).
+
+| Qualification gate | Статус | Причина |
+| --- | --- | --- |
+| Immutable Core/Edge identity | `PASS` | SHA, immutable image refs и digests зафиксированы |
+| Required Core/Edge CI | `PASS` | Привязанные к выбранным SHA workflow runs зелёные |
+| Real Edge/Core compatibility | `NOT_RUN` | Реальный Edge software path ещё не выполнен; блокирует #189 |
+| Isolated staging scenarios | `NOT_RUN` | Изолированный qualification запуск ещё не выполнен; блокирует #189 |
+| 24-hour staging soak | `NOT_RUN` | Непрерывный 24-часовой интервал не запускался; блокирует #189 |
+| Application-only rollback rehearsal | `NOT_RUN` | Предыдущий immutable Core image не репетировался в staging; блокирует #189 |
+| One-Edge production canary | `NOT_RUN` | Требует отдельного production approval; блокирует #189 |
+| Overall production promotion #189 | `BLOCKED` | Каждый обязательный `NOT_RUN` блокирует promotion |
+
+Pin/build завершён, но реальная qualification ещё не началась. В частности, green CI и
+synthetic/server-only evidence не дают `PASS` ни одному реальному qualification gate. При любом
+identity drift эта кампания прекращается и для новой пары открывается новая запись с повторным
+выполнением всех gate. Файлы `docs/release-evidence/*` для этой пары пока не создаются.
+
+### Остальные promotion prerequisites
+
 Состояние ниже зафиксировано 2026-08-29 и должно быть перепроверено перед началом окна:
 
 | Gate | Тикет | Текущее состояние | Что требуется для `PASS` |
@@ -319,9 +349,10 @@ CI не заменяет этот шаг.
 - crash/restart loop или unbounded spool/resource growth.
 
 Rollback возвращает только предыдущий immutable application image через отдельно одобренную процедуру.
-Не откатывайте additive migration, не удаляйте telemetry и не останавливайте/пересоздавайте shared
-PostgreSQL, Grafana или Ollama. После rollback повторите шаг 7 и canary ingestion/read checks. Любые
-записи, принятые после cutover boundary, должны быть сохранены и согласованы до следующей попытки.
+Он не меняет PostgreSQL, Grafana, Ollama, volumes или release evidence. Не откатывайте additive
+migration, не удаляйте telemetry и не останавливайте/пересоздавайте shared services. После rollback
+повторите шаг 7 и canary ingestion/read checks. Любые записи, принятые после cutover boundary, должны
+быть сохранены и согласованы до следующей попытки.
 
 Если exact rollback command для текущего layout не утверждён и не прошёл rehearsal, promotion остаётся
 `NOT_RUN`: не изобретайте команду во время incident.
@@ -366,20 +397,22 @@ python -m tools.release_qualification validate \
 
 | Gate | Status | UTC interval | Evidence reference | Operator/reviewer note |
 | --- | --- | --- | --- | --- |
-| Immutable Core/Edge identity | NOT_RUN | — | — | — |
-| Required CI and branch protection | NOT_RUN | — | — | — |
+| Immutable Core/Edge identity | PASS | 2026-09-05 | Pinned pair above | Exact SHAs and digests recorded |
+| Required Core/Edge CI | PASS | 2026-09-05 | Linked Core/Edge runs above | Runs are bound to the selected candidates |
+| Branch protection | NOT_RUN | — | — | Recheck the required `docker-e2e` status before promotion |
 | #84 contract compatibility | NOT_RUN | — | — | — |
 | #85 ingestion failure paths | NOT_RUN | — | — | — |
 | #86 canonical Compose proof | NOT_RUN | — | — | — |
-| Real Edge/Core compatibility | NOT_RUN | — | — | — |
+| Real Edge/Core compatibility | NOT_RUN | — | — | Blocks #189 |
+| Isolated staging scenarios | NOT_RUN | — | — | Blocks #189 |
 | 24-hour staging soak | NOT_RUN | — | — | — |
-| Exact-bundle rollback rehearsal | NOT_RUN | — | — | — |
+| Exact-bundle rollback rehearsal | NOT_RUN | — | — | Application-only; blocks #189 |
 | #77 backup and freshness | NOT_RUN | — | — | — |
 | #78 clean-host restore | NOT_RUN | — | — | — |
 | #185 host baseline | NOT_RUN | — | — | — |
 | #186 SSH/LAN exposure | NOT_RUN | — | — | — |
 | Core-first rollout | NOT_RUN | — | — | — |
-| One-Edge canary | NOT_RUN | — | — | — |
+| One-Edge canary | NOT_RUN | — | — | Separate production approval required; blocks #189 |
 | Production rollback verification | NOT_RUN | — | — | — |
 | 24-hour production observation | NOT_RUN | — | — | — |
 | Next scheduled backup | NOT_RUN | — | — | — |

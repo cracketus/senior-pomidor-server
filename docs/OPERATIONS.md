@@ -20,6 +20,9 @@ The API, MQTT broker, PostgreSQL port, dashboard, and Grafana UI are intended fo
 
 Before tagging or publishing a server release:
 
+- Follow the step-by-step [Server/Core release-to-E2E runbook](RELEASE_TO_E2E_RUNBOOK.md) to bind the
+  tag, required CI, runtime bundle, and GHCR image to one exact candidate before qualification.
+
 - Run `python -m pytest -q`.
 - Run `nox -s lint format_check types security`.
 - Run `nox -s deps_audit`.
