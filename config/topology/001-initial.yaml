@@ -1,0 +1,90 @@
+schema_version: senior-pomidor.map.v1
+revision_id: synthetic-r001-initial
+recorded_at: 2026-01-01T00:00:00.000000Z
+interval:
+  effective_from: 2026-01-01T00:00:00.000000Z
+  effective_to: 2026-04-01T00:00:00.000000Z
+provenance:
+  provenance_id: synthetic-revision-r001
+  kind: SYNTHETIC
+  reference: Sanitized topology seed for automated development only
+  recorded_at: 2026-01-01T00:00:00.000000Z
+supersedes: null
+physical_assets:
+  - asset_id: synthetic-probe-a-v1
+    kind: SENSOR_PROBE
+    label: Synthetic probe A generation 1
+  - asset_id: synthetic-probe-b-v1
+    kind: SENSOR_PROBE
+    label: Synthetic probe B generation 1
+sources:
+  - source_id: synthetic-source-1
+    kind: SIMULATOR
+    label: Synthetic two-channel source
+source_channels:
+  - channel_id: synthetic-channel-a-v1
+    source_id: synthetic-source-1
+    source_local_key: pod-a
+    quantity: soil-moisture-pct
+    value_range: {unit: PERCENT, minimum: 0.0, maximum: 100.0}
+  - channel_id: synthetic-channel-b-v1
+    source_id: synthetic-source-1
+    source_local_key: pod-b
+    quantity: soil-moisture-pct
+    value_range: {unit: PERCENT, minimum: 0.0, maximum: 100.0}
+targets:
+  - {target_id: synthetic-target-a, kind: CONTAINER, label: Synthetic target A}
+  - {target_id: synthetic-target-b, kind: CONTAINER, label: Synthetic target B}
+deployments:
+  - deployment_id: synthetic-deployment-a-r001
+    asset_id: synthetic-probe-a-v1
+    target_id: synthetic-target-a
+    interval: {effective_from: 2026-01-01T00:00:00.000000Z, effective_to: 2026-04-01T00:00:00.000000Z}
+  - deployment_id: synthetic-deployment-b-r001
+    asset_id: synthetic-probe-b-v1
+    target_id: synthetic-target-b
+    interval: {effective_from: 2026-01-01T00:00:00.000000Z, effective_to: 2026-04-01T00:00:00.000000Z}
+relationships:
+  - relationship_id: synthetic-physical-a-b-r001
+    kind: PHYSICAL_LINK
+    from_ref: {namespace: PHYSICAL_ASSET, entity_id: synthetic-probe-a-v1}
+    to_ref: {namespace: PHYSICAL_ASSET, entity_id: synthetic-probe-b-v1}
+  - relationship_id: synthetic-physical-b-a-r001
+    kind: PHYSICAL_LINK
+    from_ref: {namespace: PHYSICAL_ASSET, entity_id: synthetic-probe-b-v1}
+    to_ref: {namespace: PHYSICAL_ASSET, entity_id: synthetic-probe-a-v1}
+bindings:
+  - binding_id: synthetic-binding-a-r001
+    channel_id: synthetic-channel-a-v1
+    target_id: synthetic-target-a
+    capability: soil-moisture-observation
+    profile_id: synthetic-soil-profile
+    interval: {effective_from: 2026-01-01T00:00:00.000000Z, effective_to: 2026-04-01T00:00:00.000000Z}
+    provenance:
+      provenance_id: synthetic-binding-a-prov-r001
+      kind: SYNTHETIC
+      reference: Synthetic binding A for automated development only
+      recorded_at: 2026-01-01T00:00:00.000000Z
+  - binding_id: synthetic-binding-b-r001
+    channel_id: synthetic-channel-b-v1
+    target_id: synthetic-target-b
+    capability: soil-moisture-observation
+    profile_id: synthetic-soil-profile
+    interval: {effective_from: 2026-01-01T00:00:00.000000Z, effective_to: 2026-04-01T00:00:00.000000Z}
+    provenance:
+      provenance_id: synthetic-binding-b-prov-r001
+      kind: SYNTHETIC
+      reference: Synthetic binding B for automated development only
+      recorded_at: 2026-01-01T00:00:00.000000Z
+capability_profiles:
+  - profile_id: synthetic-soil-profile
+    version: v1
+    capability: soil-moisture-observation
+    input_range: {unit: PERCENT, minimum: 0.0, maximum: 100.0}
+    max_age_seconds: 1200
+    calibration_provenance:
+      provenance_id: synthetic-calibration-v1
+      kind: SYNTHETIC
+      reference: Synthetic percent calibration; not valid for real sensors
+      recorded_at: 2026-01-01T00:00:00.000000Z
+digest: "0a647ddb2c38745bb4e41c9a84d9ada6a4e4ea5c3cf3d2a9fa385afd06e4eb37"

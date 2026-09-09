@@ -20,5 +20,6 @@ RUN pip install --no-cache-dir -e .
 COPY alembic.ini ./
 COPY migrations ./migrations
 COPY config/state_estimator_v1.yaml ./config/state_estimator_v1.yaml
+COPY config/topology ./config/topology
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

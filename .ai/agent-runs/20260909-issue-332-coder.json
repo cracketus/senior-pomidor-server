@@ -1,0 +1,82 @@
+{
+  "schema": "agent_run_v1",
+  "run_id": "20260909-issue-332-coder",
+  "issue_ref": "#332",
+  "pr_ref": null,
+  "role": "coder",
+  "agent_id": "codex-local",
+  "prompt_version": "implementation-brief-v1",
+  "started_at_utc": "2026-09-09T09:08:00Z",
+  "finished_at_utc": "2026-09-09T10:56:00Z",
+  "input_refs": [
+    ".ai/CORE_INVARIANTS.md",
+    ".ai/ARCHITECTURE_RULES.md",
+    ".ai/CURRENT_STATE.md",
+    ".ai/DEVELOPMENT_RULES.md",
+    ".ai/PROJECT.md",
+    ".ai/SAFETY_RULES.md",
+    ".ai/known-failures.yaml",
+    ".ai/test-matrix.yaml",
+    ".ai/agents/coding-agent.md",
+    "docs/AGENT_TASK_WORKFLOW.md",
+    "docs/TOMATO_BRAIN_MAP_R1_SPEC.md"
+  ],
+  "output_refs": [
+    "app/map/__init__.py",
+    "app/map/models.py",
+    "app/map/provider.py",
+    "config/topology/001-initial.yaml",
+    "config/topology/002-replacement.yaml",
+    "config/topology/003-relocation.yaml",
+    "config/topology/004-correction.yaml",
+    "tests/test_map_topology.py",
+    "tests/test_release_assets.py",
+    "Dockerfile",
+    "pyproject.toml",
+    "docs/TOMATO_BRAIN_MAP_R1_SPEC.md",
+    ".ai/CURRENT_STATE.md",
+    "docs/implementation-reports/ISSUE-332.md",
+    ".ai/agent-runs/20260909-issue-332-coder.json"
+  ],
+  "status": "completed",
+  "commands": [
+    {"name": "context-routing", "status": "PASS"},
+    {"name": "isolated-task-create", "status": "PASS"},
+    {"name": "focused-tests", "status": "PASS"},
+    {"name": "full-pytest", "status": "PASS"},
+    {"name": "quality", "status": "PASS"},
+    {"name": "security", "status": "PASS"},
+    {"name": "dependency-audit", "status": "PASS"},
+    {"name": "compose-config", "status": "PASS"},
+    {"name": "diff-check", "status": "PASS"},
+    {"name": "canonical-full-validation", "status": "PASS"},
+    {"name": "audit-validation", "status": "PASS"}
+  ],
+  "validation_results": [
+    {"name": "focused-tests", "status": "PASS"},
+    {"name": "full-pytest", "status": "PASS"},
+    {"name": "quality", "status": "PASS"},
+    {"name": "diff-check", "status": "PASS"},
+    {"name": "schema-validation", "status": "PASS"},
+    {"name": "serialization-round-trip", "status": "PASS"},
+    {"name": "fixture-replay", "status": "PASS"},
+    {"name": "named-consumers", "status": "NOT_RUN"},
+    {"name": "security", "status": "PASS"},
+    {"name": "dependency-audit", "status": "PASS"},
+    {"name": "compose-config", "status": "PASS"},
+    {"name": "isolated-rehearsal-rollback-post-deploy-health", "status": "NOT_RUN"},
+    {"name": "production-or-hardware", "status": "NOT_RUN"}
+  ],
+  "human_edits": [],
+  "findings": [
+    {"category": "scope", "outcome": "provider remains isolated from runtime startup and APIs", "role": "coder"},
+    {"category": "consumer", "outcome": "future issues #333-#336 remain unimplemented", "role": "coder"}
+  ],
+  "errors": [],
+  "usage": {
+    "file_count": 15,
+    "input_characters": 81341,
+    "tool_output_bytes": 0,
+    "elapsed_seconds": 6480
+  }
+}

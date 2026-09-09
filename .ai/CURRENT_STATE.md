@@ -1,6 +1,6 @@
 # Current state
 
-Owner: maintainer performing a release or operational change. Update after every deployed subsystem, contract, topology, season, or rehearsal change and review at least monthly during the active season. Snapshot date: 2026-09-05. Do not add addresses, credentials, hostnames, or other private infrastructure values.
+Owner: maintainer performing a release or operational change. Update after every deployed subsystem, contract, topology, season, or rehearsal change and review at least monthly during the active season. Snapshot date: 2026-09-09. Do not add addresses, credentials, hostnames, or other private infrastructure values.
 
 ## Running/deployable services
 
@@ -35,12 +35,20 @@ Owner: maintainer performing a release or operational change. Update after every
 - PostgreSQL is the durable source of truth for application records; uploaded photos and private estimator logs use application-owned persistent paths.
 - Release evidence contracts: `senior-pomidor.system-invariants.v1`,
   `senior-pomidor.edge-core-compatibility-report.v1`, and `senior-pomidor.release-validation.v1`.
+- The runtime image contains sanitized `senior-pomidor.map.v1` topology history. The isolated read-only
+  `app/map` provider validates and atomically resolves that synthetic history; it is not wired into startup,
+  an API route, the database, the State Estimator, control, or real hardware/data.
 
 See [`docs/CONTRACTS.md`](../docs/CONTRACTS.md), schemas in [`docs/schemas/`](../docs/schemas/), and fixtures in [`tests/fixtures/contracts/`](../tests/fixtures/contracts/).
 
 ## Implemented vs. not implemented
 
 Implemented: telemetry/photo ingestion and reads, deterministic edge reliability evaluation and its versioned current operator read model, MQTT reconnect behavior, readiness/migrations, State Estimator and deterministic replay, separate telemetry and edge-reliability Grafana dashboards/alerts, bounded plant and reliability public metrics export, backup/restore tooling, offline vision analysis, and local daily story. Provider-neutral assistant utilities remain under `app/assistant/`, but no assistant service is active in the current Compose topology.
+
+The first Tomato Brain Map R1 slice is implemented: immutable topology contracts, bounded strict YAML
+loading, digest verification, historical mode/cutoff selection, binding resolution, and atomic reload of the
+sanitized catalog. The Map raw-evidence reader, capability evaluator, private API, operator UI, and any
+real-data activation remain unimplemented.
 
 The repository also implements fail-closed system-invariant, Edge/Core compatibility, and release-validation
 artifact contracts; immutable Core RC and bounded staging qualification tooling; and production-promotion
@@ -96,4 +104,6 @@ only the application and preserve shared services/data.
   changes the comparison baseline.
 - Expand restore rehearsal evidence on a regular cadence.
 - Add separate approved designs before implementing World Model, Weather Adapter, Control, Guardrails, Executor, or real hardware paths.
+- Complete Tomato Brain Map R1 through the separately approved raw reader, evaluator, private API, and
+  operator UI slices; do not activate real topology or calibration without verified owner evidence.
 - Track unresolved incidents in [`KNOWN_FAILURES.md`](KNOWN_FAILURES.md) without embedding sensitive incident data.

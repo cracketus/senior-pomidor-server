@@ -1,9 +1,14 @@
 # Tomato Brain Map R1 implementation specification
 
-Status: implementation-ready design; runtime NOT_IMPLEMENTED.
+Status: topology-provider slice implemented; reader, evaluator, API, and UI runtime NOT_IMPLEMENTED.
 Owner: Server. Baseline: 2026-09-09. Authorization: owner accepted the ADR baseline and delegated preimplementation refinement.
 Authority: [accepted cross-system decisions](https://github.com/cracketus/senior-pomidor/blob/main/docs/architecture/tomato-brain-map/implementation-decisions.md).
 Existing [contracts](CONTRACTS.md) remain authoritative for current endpoints. This document specifies additive future Map behavior.
+
+Issue #332 implements only the isolated, read-only `app/map` topology boundary and sanitized
+`config/topology/` history described below. It is packaged in the runtime image but is not imported by
+FastAPI or application startup. It performs no database, network, estimator, control, export, or hardware
+operation. Issues #333-#336 remain required before the rest of this specification exists at runtime.
 
 ## Outcome and boundaries
 
@@ -61,7 +66,7 @@ Missing history yields successful UNKNOWN. Backend failure never yields a fabric
 
 ## Topology and binding selection
 
-Implement a TopologyProvider backed by future config/topology/ YAML. Package: schema_version, revision_id, recorded_at, effective interval, provenance, entities, bindings, capability profiles, digest and optional supersedes.
+`TopologyProvider` is implemented against strict `config/topology/` YAML. Each file contains one complete package revision with schema_version, revision_id, recorded_at, effective interval, provenance, entities, bindings, capability profiles, digest and optional supersedes.
 Separate asset, source channel, target plant/container and deployment identities. Binding lookup uses the observation time, never current placement.
 Validate safe YAML, duplicate keys/IDs, unknown fields/version, dangling references, invalid intervals, conflicting revisions and containment/capability cycles. Physical/data cycles are allowed.
 Corrections are append-only revisions. AS_KNOWN_CORE uses revisions recorded by selected time; RECONSTRUCTED uses revisions recorded by cutoff. Within that bound select the explicit superseding correction applicable at effective time; ambiguous overlaps fail validation.
@@ -93,11 +98,12 @@ Benchmark synthetic 7-day / 50-entity input near the row cap before expansion; r
 
 ## Acceptance and test ownership
 
-All tests below are future implementation obligations, currently NOT_RUN.
+The Topology row is implemented as synthetic software evidence by issue #332. All later rows remain future
+implementation obligations and `NOT_RUN`.
 
 | Slice | Required evidence | Scope scenario IDs |
 | --- | --- | --- |
-| Topology | identity collision, replacement/relocation, late correction, bad reload/first startup, cycle classes | S06-S08, S11 |
+| Topology (implemented) | identity collision, replacement/relocation, late correction, bad reload/first startup, cycle classes | S06-S08, S11 |
 | Reader | delayed receipt, two modes, dedup, late/out-of-order error, absent field, mixed channel freshness | S02-S05, S09, S14-S16 |
 | Evaluator | two targets, disabled/missing mapping/calibration, numeric invalidity, contradiction, threshold ±1 microsecond | S01, S04-S05, S10-S12 |
 | API | authorization, same scoped evidence drilldown, read-only DB and no estimator calls, all limit/error paths, changed cursor input | S13 plus TBM-R07-R10 |
