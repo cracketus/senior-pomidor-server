@@ -1,15 +1,26 @@
 from __future__ import annotations
 
-from datetime import datetime
+from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from app.models import PodReading
 from app.state_estimator.adapters import observations_from_reading
 from app.state_estimator.config import load_estimator_runtime
+from app.state_estimator.decisions import build_action_simulation, build_guardrails
 from app.state_estimator.estimator import estimate_state
-from app.state_estimator.models import EstimatorContext, EstimatorHistory, RawObservation
+from app.state_estimator.models import EstimatorContext, EstimatorHistory, EstimatorResult, RawObservation
 from app.telemetry import iter_pods, pod_enabled, pod_key, pod_metrics
 from app.validation import payload_device_id, payload_timestamp
+
+
+@dataclass(frozen=True)
+class ReplayEvaluation:
+    evaluation_ts: datetime
+    result: EstimatorResult
+    guardrails: dict[str, Any]
+    action_simulation: dict[str, Any]
 
 
 def replay_observations(
@@ -18,8 +29,28 @@ def replay_observations(
     timezone: str,
     config_path: str = "config/state_estimator_v1.yaml",
 ) -> list[dict[str, Any]]:
+    return [
+        evaluation.result.state for evaluation in evaluate_replay(payload, timezone=timezone, config_path=config_path)
+    ]
+
+
+def evaluate_replay(
+    payload: dict[str, Any],
+    *,
+    timezone: str,
+    config_path: str = "config/state_estimator_v1.yaml",
+    evaluation_at: datetime | None = None,
+) -> list[ReplayEvaluation]:
+    """Replay telemetry through production estimator and advisory decision logic.
+
+    Fixture timestamps are the evaluation clock by default. ``evaluation_at`` is
+    useful for deterministic freshness checks and never changes observation time.
+    The returned diagnostics retain runtime-only timing; evidence serializers must
+    omit ``processing_ms`` when byte stability is required.
+    """
+
     history = EstimatorHistory()
-    states: list[dict[str, Any]] = []
+    evaluations: list[ReplayEvaluation] = []
     config, calibration = load_estimator_runtime(config_path, timezone=timezone)
     for node_id, node_observations in _observation_batches(payload):
         if not node_observations:
@@ -31,9 +62,45 @@ def replay_observations(
             calibration=calibration,
             history=history,
         )
-        result.state["generated_ts"] = result.state["ts"]
-        states.append(result.state)
-    return states
+        frame_ts = max(_as_utc(observation.ts) for observation in node_observations)
+        decision_ts = _as_utc(evaluation_at) if evaluation_at is not None else frame_ts
+        result.state["generated_ts"] = decision_ts.astimezone(ZoneInfo(timezone)).isoformat()
+        result.state["refs"]["anomaly_ids"] = sorted(result.state["refs"]["anomaly_ids"])
+        anomalies = sorted(result.anomalies, key=lambda item: (str(item.get("type")), str(item.get("anomaly_id"))))
+        guardrails = build_guardrails(
+            node_id=node_id,
+            state=result.state,
+            sensor_health=result.sensor_health,
+            active_anomalies=anomalies,
+            now=decision_ts,
+        )
+        action_simulation = build_action_simulation(
+            node_id=node_id,
+            guardrails=guardrails,
+            state=result.state,
+            active_anomalies=anomalies,
+            now=decision_ts,
+        )
+        evaluations.append(
+            ReplayEvaluation(
+                evaluation_ts=decision_ts,
+                result=EstimatorResult(
+                    state=result.state,
+                    sensor_health=result.sensor_health,
+                    anomalies=anomalies,
+                    diagnostics=result.diagnostics,
+                ),
+                guardrails=guardrails,
+                action_simulation=action_simulation,
+            )
+        )
+    return evaluations
+
+
+def _as_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
 
 
 def _observation_batches(payload: dict[str, Any]) -> list[tuple[str, list[RawObservation]]]:
