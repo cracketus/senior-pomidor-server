@@ -1,3 +1,4 @@
+from app.map.adapter import AdapterConfig, AdapterConfigError, AdapterMapping, load_adapter_config
 from app.map.capability import (
     AssertionKind,
     CapabilityEvaluation,
@@ -79,6 +80,9 @@ __all__ = [
     "SCHEMA_VERSION",
     "TOPOLOGY_INVALID",
     "TOPOLOGY_UNAVAILABLE",
+    "AdapterConfig",
+    "AdapterConfigError",
+    "AdapterMapping",
     "AssertionKind",
     "AssetKind",
     "Binding",
@@ -147,6 +151,7 @@ __all__ = [
     "compute_revision_digest",
     "evaluate",
     "evaluate_capabilities",
+    "load_adapter_config",
     "load_topology_catalog",
     "reduce_capability",
 ]

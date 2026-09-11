@@ -5,6 +5,7 @@ import pytest
 
 from app.map import (
     AssertionKind,
+    CapabilityEvaluationError,
     CapabilityFidelity,
     CapabilityInterval,
     CapabilityOperator,
@@ -15,6 +16,7 @@ from app.map import (
     EvidenceFidelity,
     EvidenceKind,
     EvidenceMode,
+    EvidenceReason,
     EvidenceValidity,
     FreshnessStatus,
     RawEvidenceBatch,
@@ -25,6 +27,7 @@ from app.map import (
     TopologyProvider,
     Unit,
     compute_capability_digest,
+    compute_evidence_digest,
     evaluate_capabilities,
     reduce_capability,
 )
@@ -94,9 +97,33 @@ def _inputs(mode=EvidenceMode.RECONSTRUCTED, *, item=True):
         fidelity=EvidenceFidelity.INGEST_TIME_PROXY,
         row_count=len(items),
         items=items,
-        digest="a" * 64,
+        digest="0" * 64,
     )
+    batch = batch.model_copy(update={"digest": compute_evidence_digest(batch)})
     return topology, request, batch, binding
+
+
+def _with_batch_update(batch: RawEvidenceBatch, **update) -> RawEvidenceBatch:
+    updated = batch.model_copy(update=update)
+    return updated.model_copy(update={"digest": compute_evidence_digest(updated)})
+
+
+def test_evidence_digest_mismatch_fails_closed():
+    topology, request, batch, _ = _inputs()
+    tampered = batch.model_copy(update={"digest": "f" * 64})
+    with pytest.raises(CapabilityEvaluationError, match="evidence digest mismatch"):
+        evaluate_capabilities(
+            topology,
+            request,
+            tampered,
+            (
+                TargetCapabilityExpression(
+                    target_id="synthetic-target-a",
+                    capability="soil-moisture-observation",
+                    operator=CapabilityOperator.ALL_OF,
+                ),
+            ),
+        )
 
 
 def test_freshness_threshold_is_inclusive_and_next_microsecond_stale():
@@ -136,6 +163,41 @@ def test_missing_binding_is_fail_safe_and_unknown_history_is_not_fabricated_outa
     assert result.targets[1].intervals[0].reason is CapabilityReason.UNKNOWN_HISTORY
 
 
+def test_binding_gap_is_missing_binding_not_unknown_history():
+    topology, request, batch, binding = _inputs(item=False)
+    active_from = T0 + timedelta(minutes=10)
+    delayed_binding = binding.model_copy(
+        update={"interval": binding.interval.model_copy(update={"effective_from": active_from})}
+    )
+    topology = topology.model_copy(
+        update={
+            "bindings": tuple(
+                delayed_binding if item.binding_id == binding.binding_id else item for item in topology.bindings
+            )
+        }
+    )
+
+    result = evaluate_capabilities(
+        topology,
+        request,
+        batch,
+        (
+            TargetCapabilityExpression(
+                target_id="synthetic-target-a",
+                capability="soil-moisture-observation",
+                operator=CapabilityOperator.ALL_OF,
+            ),
+        ),
+    )
+
+    before_binding, active_without_evidence = result.targets[0].intervals
+    assert before_binding.start == request.window_start
+    assert before_binding.end == active_from
+    assert before_binding.capability is CapabilityStatus.UNAVAILABLE
+    assert before_binding.reason is CapabilityReason.MISSING_BINDING
+    assert active_without_evidence.reason is CapabilityReason.UNKNOWN_HISTORY
+
+
 def test_input_revision_mismatch_fails_closed():
     topology, request, batch, _ = _inputs()
     with pytest.raises(ValueError, match="topology revision"):
@@ -159,7 +221,7 @@ def test_late_receipt_is_mode_specific():
     as_known = evaluate_capabilities(
         topology,
         request,
-        batch.model_copy(update={"items": (late,)}),
+        _with_batch_update(batch, items=(late,)),
         (
             TargetCapabilityExpression(
                 target_id="synthetic-target-a",
@@ -172,7 +234,7 @@ def test_late_receipt_is_mode_specific():
     reconstructed = evaluate_capabilities(
         reconstructed_topology,
         reconstructed_request,
-        reconstructed_batch.model_copy(update={"items": (late,)}),
+        _with_batch_update(reconstructed_batch, items=(late,)),
         (
             TargetCapabilityExpression(
                 target_id="synthetic-target-a",
@@ -200,13 +262,13 @@ def test_latest_non_green_evidence_does_not_reuse_older_value(kind):
             "value": None if kind is not EvidenceKind.CHANNEL_INVALID_VALUE else 101.0,
             "reason": None
             if kind is EvidenceKind.CHANNEL_INVALID_VALUE
-            else ("EXPLICIT_ERROR" if kind is EvidenceKind.EXPLICIT_ERROR else "DISABLED"),
+            else (EvidenceReason.EXPLICIT_ERROR if kind is EvidenceKind.EXPLICIT_ERROR else EvidenceReason.DISABLED),
         }
     )
     result = evaluate_capabilities(
         topology,
         request,
-        batch.model_copy(update={"items": (batch.items[0], latest)}),
+        _with_batch_update(batch, items=(batch.items[0], latest)),
         (
             TargetCapabilityExpression(
                 target_id="synthetic-target-a",

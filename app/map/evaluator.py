@@ -29,6 +29,7 @@ from app.map.raw_evidence import (
     RawEvidenceBatch,
     RawEvidenceItem,
     RawEvidenceRequest,
+    compute_evidence_digest,
 )
 
 
@@ -54,6 +55,8 @@ def _ref(item: RawEvidenceItem, fidelity: CapabilityFidelity) -> EvidenceReferen
 def _validate_inputs(topology: ResolvedTopology, request: RawEvidenceRequest, batch: RawEvidenceBatch) -> None:
     if request.schema_version != "senior-pomidor.map.v1" or batch.schema_version != "senior-pomidor.map.v1":
         raise CapabilityEvaluationError("schema version mismatch")
+    if compute_evidence_digest(batch) != batch.digest:
+        raise CapabilityEvaluationError("evidence digest mismatch")
     if request.mode.value != batch.mode.value or request.mode.value != topology.mode.value:
         raise CapabilityEvaluationError("evaluation mode mismatch")
     if request.window_start != batch.window_start or request.window_end != batch.window_end:
@@ -368,7 +371,20 @@ def evaluate_capabilities(
                         leaf = _leaf(latest, now=start, selector=selector, fidelity=fidelity)
                     leaf = leaf.model_copy(update={"end": end})
                 leaves.append(leaf)
-            interval_result = reduce_capability(leaves, expression.operator, start=start, end=end, fidelity=fidelity)
+            if leaves:
+                interval_result = reduce_capability(
+                    leaves, expression.operator, start=start, end=end, fidelity=fidelity
+                )
+            else:
+                interval_result = CapabilityInterval(
+                    start=start,
+                    end=end,
+                    capability=CapabilityStatus.UNAVAILABLE,
+                    freshness=FreshnessStatus.UNKNOWN,
+                    reason=CapabilityReason.MISSING_BINDING,
+                    assertion=AssertionKind.FACT,
+                    fidelity=fidelity,
+                )
             if intervals and intervals[-1].model_dump(exclude={"start", "end"}) == interval_result.model_dump(
                 exclude={"start", "end"}
             ):

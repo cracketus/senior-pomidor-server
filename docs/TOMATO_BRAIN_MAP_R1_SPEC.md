@@ -1,15 +1,15 @@
 # Tomato Brain Map R1 implementation specification
 
-Status: topology-provider, raw-evidence-reader, and pure evaluator slices implemented; API and UI runtime NOT_IMPLEMENTED.
+Status: topology-provider, raw-evidence-reader, pure evaluator, and development-only API implemented; API is disabled by default and UI runtime remains NOT_IMPLEMENTED.
 Owner: Server. Baseline: 2026-09-09. Authorization: owner accepted the ADR baseline and delegated preimplementation refinement.
 Authority: [accepted cross-system decisions](https://github.com/cracketus/senior-pomidor/blob/main/docs/architecture/tomato-brain-map/implementation-decisions.md).
 Existing [contracts](CONTRACTS.md) remain authoritative for current endpoints. This document specifies additive future Map behavior.
 
 Issues #332 and #333 implement the isolated, read-only `app/map` topology and raw-evidence boundaries plus
-the sanitized `config/topology/` history described below. They are packaged in the runtime image but are not
-imported by FastAPI or application startup. The reader is an explicit PostgreSQL adapter that opens one
+the sanitized `config/topology/` history described below. The reader is an explicit PostgreSQL adapter that opens one
 verified read-only repeatable-read transaction; it performs no estimator, control, export, or hardware
-operation. Issues #334-#336 remain required before evaluation, API, or UI behavior exists at runtime.
+operation. Issue #334 supplies the pure evaluator; issue #335 supplies the bearer-protected, development-only
+API boundary, disabled outside development and by default. Issue #336 UI behavior remains future work.
 
 ## Outcome and boundaries
 

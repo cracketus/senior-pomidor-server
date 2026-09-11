@@ -1,0 +1,10 @@
+{
+  "schema_version": "senior-pomidor.map.v1",
+  "adapter_version": "v1",
+  "mappings": [
+    {"channel_id":"synthetic-channel-a-v1","source_id":"synthetic-source-1","storage_device_id":"synthetic-device-1","pod_key":"pod-a","metric_name":"soil_moisture_percent","error_sensors":["soil"],"unit":"PERCENT","minimum":0.0,"maximum":100.0,"max_age_seconds":1200},
+    {"channel_id":"synthetic-channel-a-v2","source_id":"synthetic-source-1","storage_device_id":"synthetic-device-1","pod_key":"pod-a","metric_name":"soil_moisture_percent","error_sensors":["soil"],"unit":"PERCENT","minimum":0.0,"maximum":100.0,"max_age_seconds":1200},
+    {"channel_id":"synthetic-channel-b-v1","source_id":"synthetic-source-1","storage_device_id":"synthetic-device-1","pod_key":"pod-b","metric_name":"soil_moisture_percent","error_sensors":["soil"],"unit":"PERCENT","minimum":0.0,"maximum":100.0,"max_age_seconds":1200}
+  ],
+  "digest": "c8d6ff16b0bd6bfbdf371869754d7842f045503da3c9cf9f51cb8bd3b9b0a4cf"
+}

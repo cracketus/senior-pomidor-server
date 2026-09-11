@@ -65,6 +65,7 @@ def test_runtime_image_includes_complete_topology_history() -> None:
     topology_files = sorted((ROOT / "config/topology").glob("*.yaml"))
 
     assert "COPY config/topology ./config/topology" in dockerfile
+    assert "COPY config/map ./config/map" in dockerfile
     assert [path.name for path in topology_files] == [
         "001-initial.yaml",
         "002-replacement.yaml",

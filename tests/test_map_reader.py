@@ -119,6 +119,21 @@ def test_request_rejects_unbounded_or_invalid_time_scope(updates, match):
         request(**updates)
 
 
+def test_point_query_allows_exact_snapshot_instant_without_extending_cutoff():
+    point = RawEvidenceRequest(
+        selectors=request().selectors,
+        window_start=END,
+        window_end=END + timedelta(microseconds=1),
+        mode=EvidenceMode.RECONSTRUCTED,
+        data_cutoff=END,
+        point_query_at=END,
+        topology_revision_id="synthetic-r001",
+        topology_digest=DIGEST,
+    )
+    assert point.point_query_at == END
+    assert point.data_cutoff == END
+
+
 def test_request_rejects_duplicates_ambiguous_sources_and_submicroseconds():
     with pytest.raises(ValidationError, match="duplicate channel"):
         request(selectors=(selector(), selector()))
