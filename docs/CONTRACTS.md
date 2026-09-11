@@ -420,6 +420,29 @@ operator aggregation in [#205](https://github.com/cracketus/senior-pomidor-serve
 `pomidorctl` client/auth work in [#206](https://github.com/cracketus/senior-pomidor-server/issues/206).
 Reliability history and metrics remain outside this contract.
 
+### Operator summary/read-model v1
+
+The private trusted-LAN operator read model is additive and read-only. It does not invoke the State
+Estimator, write storage, expose raw JSON, or project `ActionSimulation` as a decision:
+
+```text
+GET /api/v1/operator/status
+GET /api/v1/operator/plants
+GET /api/v1/operator/edges
+GET /api/v1/operator/anomalies?node_id=&since_hours=24&limit=100
+GET /api/v1/operator/photos?node_id=&since_hours=24&limit=25
+GET /api/v1/operator/decisions
+```
+
+Every successful response uses `senior-pomidor.operator.v1`, with a view, request ID, UTC generation
+timestamp, status, availability, freshness, completeness, bounded reasons, and strict view data. The
+Draft 2020-12 contract is [`operator-v1.schema.json`](schemas/operator-v1.schema.json). Collection
+limits are bounded to 100 and fetch one extra row to report `PARTIAL`/`has_more`; active anomalies
+remain visible outside the recent time window. Pod records retain `pod_key` and explicitly return
+`plant_id: null` and `plant_identity_status: UNKNOWN` until a canonical mapping exists. Decisions
+returns HTTP 200 with `NOT_IMPLEMENTED` and an empty collection. Storage failures return a bounded
+versioned 503 error. Host health is explicitly `NOT_IMPLEMENTED` until #187 supplies its adapter.
+
 ### Edge reliability observability
 
 The provisioned `Senior Pomidor Edge Reliability` dashboard (`uid=senior-pomidor-edge-reliability`) is a

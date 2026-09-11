@@ -2,7 +2,7 @@ import hmac
 import json
 import logging
 from datetime import UTC, date, datetime, timedelta
-from typing import Annotated, Any
+from typing import Annotated, Any, cast
 
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, Request, Response, UploadFile, status
 from fastapi.responses import FileResponse, JSONResponse
@@ -25,6 +25,35 @@ from app.models import (
     TelemetryEvent,
 )
 from app.operator_edge_reliability import OperatorEdgeReliabilityV1, build_operator_edge_reliability
+from app.operator_summary import (
+    AnomaliesResponse,
+    AnomalyData,
+    Availability,
+    Completeness,
+    DecisionsResponse,
+    DecisionView,
+    EdgeData,
+    EdgesResponse,
+    Freshness,
+    Host,
+    OperatorError,
+    OperatorSummaryService,
+    PhotoData,
+    PhotosResponse,
+    PlantsData,
+    PlantsResponse,
+    Reason,
+    Status,
+    StatusData,
+    StatusResponse,
+    _request_id,
+    aggregate_freshness,
+    collection_freshness,
+    combine_freshness,
+    envelope_kwargs,
+    plants_status,
+    status_rank,
+)
 from app.services import (
     TelemetryConflictError,
     persist_photo,
@@ -372,6 +401,191 @@ def operator_edge_reliability(device_id: str, db: Session = Depends(get_db)) -> 
     if event is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="device telemetry not found")
     return build_operator_edge_reliability(event, now=datetime.now(UTC))
+
+
+def _operator_error(request_id: str, code: str, message: str) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        content=OperatorError(error_code=code, request_id=request_id, message=message).model_dump(mode="json"),
+    )
+
+
+@router.get("/operator/status", response_model=StatusResponse)
+def operator_status(db: Session = Depends(get_db)) -> StatusResponse | JSONResponse:
+    service = OperatorSummaryService(db)
+    now = service._now()
+    try:
+        plants, edges, state, reasons, is_partial = service.status()
+    except SQLAlchemyError:
+        return _operator_error(_request_id(), "storage_unavailable", "Operator storage is unavailable")
+    edge_statuses = [item.status for item in edges]
+    anomaly_statuses = [reason.status for reason in reasons if reason.code.startswith("active_anomaly_")]
+    current_status = max(
+        [
+            state.status if state else Status.UNKNOWN,
+            plants_status(plants, now),
+            *[cast(Status, value) for value in edge_statuses],
+            *anomaly_statuses,
+        ],
+        key=status_rank,
+    )
+    host = Host(
+        availability=Availability.NOT_IMPLEMENTED,
+        status=Status.UNKNOWN,
+        freshness=Freshness.NOT_APPLICABLE,
+        reason="host_health_not_implemented",
+    )
+    reasons.append(
+        Reason(code="host_health_not_implemented", status=Status.UNKNOWN, message="Host health is not implemented")
+    )
+    current_status = max((current_status, host.status), key=status_rank)
+    aggregate_state_freshness = aggregate_freshness(state, plants, edges, now)
+    if aggregate_state_freshness == Freshness.STALE:
+        current_status = max((current_status, Status.WARN), key=status_rank)
+    elif aggregate_state_freshness == Freshness.UNKNOWN:
+        current_status = max((current_status, Status.UNKNOWN), key=status_rank)
+    return StatusResponse(
+        **envelope_kwargs(
+            "status",
+            now=now,
+            status=current_status,
+            availability=Availability.AVAILABLE if plants else Availability.UNAVAILABLE,
+            freshness=aggregate_state_freshness,
+            completeness=Completeness.PARTIAL if is_partial else Completeness.COMPLETE,
+            reasons=reasons,
+        ),
+        data=StatusData(host=host, nodes=plants, state=state, edge=edges, decisions=Availability.NOT_IMPLEMENTED),
+    )
+
+
+@router.get("/operator/plants", response_model=PlantsResponse)
+def operator_plants(
+    db: Session = Depends(get_db), limit: int = Query(default=100, ge=1, le=100)
+) -> PlantsResponse | JSONResponse:
+    service = OperatorSummaryService(db)
+    now = service._now()
+    try:
+        items, has_more = service.plants(limit)
+    except SQLAlchemyError:
+        return _operator_error(_request_id(), "storage_unavailable", "Operator storage is unavailable")
+    return PlantsResponse(
+        **envelope_kwargs(
+            "plants",
+            now=now,
+            status=plants_status(items, now),
+            availability=Availability.AVAILABLE if items else Availability.UNAVAILABLE,
+            freshness=collection_freshness((item.observed_at_utc for item in items), now),
+            completeness=Completeness.PARTIAL if has_more else Completeness.COMPLETE,
+        ),
+        data=PlantsData(items=items, returned_count=len(items), has_more=has_more),
+    )
+
+
+@router.get("/operator/edges", response_model=EdgesResponse)
+def operator_edges(
+    db: Session = Depends(get_db), limit: int = Query(default=100, ge=1, le=100)
+) -> EdgesResponse | JSONResponse:
+    service = OperatorSummaryService(db)
+    now = service._now()
+    try:
+        items, has_more = service.edges(limit)
+    except SQLAlchemyError:
+        return _operator_error(_request_id(), "storage_unavailable", "Operator storage is unavailable")
+    current_status = max((Status(item.status) for item in items), key=status_rank, default=Status.UNKNOWN)
+    return EdgesResponse(
+        **envelope_kwargs(
+            "edges",
+            now=now,
+            status=current_status,
+            availability=Availability.AVAILABLE if items else Availability.UNAVAILABLE,
+            freshness=combine_freshness(Freshness(item.freshness.status) for item in items),
+            completeness=Completeness.PARTIAL if has_more else Completeness.COMPLETE,
+        ),
+        data=EdgeData(items=items, returned_count=len(items), has_more=has_more),
+    )
+
+
+@router.get("/operator/anomalies", response_model=AnomaliesResponse)
+def operator_anomalies(
+    node_id: str | None = None,
+    since_hours: int = Query(default=24, ge=0, le=168),
+    limit: int = Query(default=100, ge=1, le=100),
+    db: Session = Depends(get_db),
+) -> AnomaliesResponse | JSONResponse:
+    service = OperatorSummaryService(db)
+    now = service._now()
+    try:
+        items, has_more = service.anomalies(node_id=node_id, since_hours=since_hours, limit=limit)
+    except SQLAlchemyError:
+        return _operator_error(_request_id(), "storage_unavailable", "Operator storage is unavailable")
+    current_status = max((Status(item.severity) for item in items), key=status_rank, default=Status.UNKNOWN)
+    return AnomaliesResponse(
+        **envelope_kwargs(
+            "anomalies",
+            now=now,
+            status=current_status,
+            availability=Availability.AVAILABLE if items else Availability.UNAVAILABLE,
+            freshness=collection_freshness((item.observed_at_utc for item in items), now),
+            completeness=Completeness.PARTIAL if has_more else Completeness.COMPLETE,
+        ),
+        data=AnomalyData(items=items, returned_count=len(items), has_more=has_more),
+    )
+
+
+@router.get("/operator/photos", response_model=PhotosResponse)
+def operator_photos(
+    node_id: str | None = None,
+    since_hours: int = Query(default=24, ge=0, le=168),
+    limit: int = Query(default=25, ge=1, le=100),
+    db: Session = Depends(get_db),
+) -> PhotosResponse | JSONResponse:
+    service = OperatorSummaryService(db)
+    now = service._now()
+    try:
+        items, has_more = service.photos(node_id=node_id, since_hours=since_hours, limit=limit)
+    except SQLAlchemyError:
+        return _operator_error(_request_id(), "storage_unavailable", "Operator storage is unavailable")
+    photo_freshness = collection_freshness((item.captured_at_utc for item in items), now)
+    photo_status = {
+        Freshness.FRESH: Status.OK,
+        Freshness.STALE: Status.WARN,
+        Freshness.UNKNOWN: Status.UNKNOWN,
+        Freshness.NOT_APPLICABLE: Status.UNKNOWN,
+    }[photo_freshness]
+    return PhotosResponse(
+        **envelope_kwargs(
+            "photos",
+            now=now,
+            status=photo_status,
+            availability=Availability.AVAILABLE if items else Availability.UNAVAILABLE,
+            freshness=photo_freshness,
+            completeness=Completeness.PARTIAL if has_more else Completeness.COMPLETE,
+        ),
+        data=PhotoData(items=items, returned_count=len(items), has_more=has_more),
+    )
+
+
+@router.get("/operator/decisions", response_model=DecisionsResponse)
+def operator_decisions(db: Session = Depends(get_db)) -> DecisionsResponse:
+    now = datetime.now(UTC)
+    return DecisionsResponse(
+        **envelope_kwargs(
+            "decisions",
+            now=now,
+            status=Status.UNKNOWN,
+            availability=Availability.NOT_IMPLEMENTED,
+            freshness=Freshness.NOT_APPLICABLE,
+            completeness=Completeness.COMPLETE,
+            reasons=[
+                Reason(
+                    code="decisions_not_implemented",
+                    status=Status.UNKNOWN,
+                    message="Control decisions are not implemented",
+                )
+            ],
+        ),
+        data=DecisionView(items=[]),
+    )
 
 
 @router.get("/devices/{device_id}/telemetry")

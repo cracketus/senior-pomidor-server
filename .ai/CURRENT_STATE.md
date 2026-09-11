@@ -25,6 +25,9 @@ Owner: maintainer performing a release or operational change. Update after every
 - Private operators can read the current per-edge reliability projection through
   `senior-pomidor.operator.edge-reliability.v1`; it uses latest telemetry, explicit freshness, stable
   nullable fields, and a privacy-bounded allowlist without changing existing read or public contracts.
+- Private operators can read the additive `senior-pomidor.operator.v1` status, plants, edges, anomalies,
+  photos, and decisions views. They query persisted snapshots only; host health and Control decisions
+  are explicit `NOT_IMPLEMENTED`, and pod `plant_id` remains nullable until canonical identity mapping exists.
 - Canonical Docker Edge application health uses the explicit `service_manager=none` discriminator and
   process liveness without inventing systemd state. A complete discriminator-absent legacy systemd payload
   remains supported for one release cycle; ambiguous or contradictory application evidence is `UNKNOWN`.
@@ -44,7 +47,7 @@ See [`docs/CONTRACTS.md`](../docs/CONTRACTS.md), schemas in [`docs/schemas/`](..
 
 ## Implemented vs. not implemented
 
-Implemented: telemetry/photo ingestion and reads, deterministic edge reliability evaluation and its versioned current operator read model, MQTT reconnect behavior, readiness/migrations, State Estimator and deterministic replay, separate telemetry and edge-reliability Grafana dashboards/alerts, bounded plant and reliability public metrics export, backup/restore tooling, offline vision analysis, and local daily story. Provider-neutral assistant utilities remain under `app/assistant/`, but no assistant service is active in the current Compose topology.
+Implemented: telemetry/photo ingestion and reads, deterministic edge reliability evaluation and its versioned current operator read models, MQTT reconnect behavior, readiness/migrations, State Estimator and deterministic replay, separate telemetry and edge-reliability Grafana dashboards/alerts, bounded plant and reliability public metrics export, backup/restore tooling, offline vision analysis, and local daily story. Provider-neutral assistant utilities remain under `app/assistant/`, but no assistant service is active in the current Compose topology.
 
 The first three Tomato Brain Map R1 slices are implemented: immutable topology contracts, bounded strict YAML
 loading, digest verification, historical mode/cutoff selection, binding resolution, atomic reload of the
