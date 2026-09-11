@@ -64,6 +64,13 @@ def test_operator_edge_reliability_fixture_schema_and_pydantic_round_trip() -> N
     assert parsed.model_dump(mode="json") == fixture
 
 
+def test_operator_api_error_fixture_matches_published_schema() -> None:
+    schema = load_json(SCHEMA_DIR / "operator-error-v1.schema.json")
+    fixture = load_json(FIXTURE_DIR / "operator_error_v1.json")
+    Draft202012Validator(schema).validate(fixture)
+    assert fixture["schema_version"] == "senior-pomidor.operator-error.v1"
+
+
 def test_server_and_copied_edge_reliability_fixtures_validate_and_round_trip() -> None:
     schema = load_json(SCHEMA_DIR / "telemetry-v2.schema.json")
     validator = Draft202012Validator(schema)

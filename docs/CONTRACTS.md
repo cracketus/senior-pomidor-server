@@ -558,3 +558,14 @@ Deferred or out of scope for the active contract:
 - public dataset publishing APIs
 
 Current public outputs are limited to sanitized status JSON from `tools.public_status` and optional low-cardinality Grafana Cloud metrics export. Raw telemetry, raw photo metadata, stored photos, and database exports are not public dataset APIs.
+## `pomidorctl` error contract
+
+Operator API failures use the separate `senior-pomidor.operator-error.v1` contract, including storage
+failures returned with HTTP 503. This object is not a success `senior-pomidor.operator.v1` envelope and
+is defined in [`operator-error-v1.schema.json`](schemas/operator-error-v1.schema.json).
+
+Successful CLI JSON output is the validated server response with schema
+`senior-pomidor.operator.v1`, without a wrapper or field renaming. Errors use the bounded
+`senior-pomidor.pomidorctl-error.v1` object (`command`, stable `error_code`, and safe `message`),
+defined in [`pomidorctl-error-v1.schema.json`](schemas/pomidorctl-error-v1.schema.json). Neither
+format includes bearer tokens, URLs, headers, raw response bodies, or exception text.

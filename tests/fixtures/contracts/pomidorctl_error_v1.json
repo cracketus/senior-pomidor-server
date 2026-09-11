@@ -1,0 +1,6 @@
+{
+  "schema_version": "senior-pomidor.pomidorctl-error.v1",
+  "command": "status",
+  "error_code": "contract_mismatch",
+  "message": "API response does not match the operator contract"
+}

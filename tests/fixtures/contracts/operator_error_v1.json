@@ -1,0 +1,6 @@
+{
+  "schema_version": "senior-pomidor.operator-error.v1",
+  "error_code": "storage_unavailable",
+  "request_id": "request-206-fixture",
+  "message": "Operator storage is unavailable"
+}

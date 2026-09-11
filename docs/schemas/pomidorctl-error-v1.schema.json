@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://senior-pomidor.local/schemas/pomidorctl-error-v1.schema.json",
+  "title": "Senior Pomidor pomidorctl error v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "command", "error_code", "message"],
+  "properties": {
+    "schema_version": {"const": "senior-pomidor.pomidorctl-error.v1"},
+    "command": {"type": "string", "minLength": 1, "maxLength": 40},
+    "error_code": {"type": "string", "minLength": 1, "maxLength": 80},
+    "message": {"type": "string", "minLength": 1, "maxLength": 200}
+  }
+}

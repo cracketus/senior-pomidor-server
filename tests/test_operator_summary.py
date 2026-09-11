@@ -30,6 +30,23 @@ def test_operator_views_are_versioned_and_decisions_are_explicitly_unimplemented
     assert body["availability"] == "NOT_IMPLEMENTED"
 
 
+def test_operator_request_logs_bounded_response_metadata(client_factory, caplog) -> None:
+    client = client_factory()
+    with caplog.at_level("INFO", logger="app.api"):
+        response = client.get("/api/v1/operator/decisions")
+
+    assert response.status_code == 200
+    records = [record for record in caplog.records if record.message.startswith("operator_request ")]
+    assert len(records) == 1
+    message = records[0].message
+    assert "view=decisions" in message
+    assert "status=UNKNOWN" in message
+    assert "freshness=NOT_APPLICABLE" in message
+    assert "completeness=COMPLETE" in message
+    assert "elapsed_ms=" in message
+    assert "http" not in message.lower()
+
+
 def test_all_operator_views_validate_against_published_schema(client_factory) -> None:
     schema_path = Path(__file__).resolve().parents[1] / "docs" / "schemas" / "operator-v1.schema.json"
     schema = json.loads(schema_path.read_text(encoding="utf-8"))
@@ -102,11 +119,59 @@ def test_state_projection_rejects_non_finite_and_overflow_numbers() -> None:
         )
     )
     assert projected is not None
-    assert projected.status == "OK"
+    assert projected.status == "UNKNOWN"
     assert projected.confidence is None
     assert projected.env.air_temp_c is None
     assert projected.plant.leaf_temp_c is None
     assert projected.soil.probes[0].moisture_pct is None
+
+
+def test_state_projection_rejects_contradictory_quality_confidence() -> None:
+    for confidence in (None, 0.84, float("nan")):
+        projected = project_state(
+            StateSnapshot(
+                state_id="state-contradictory-quality",
+                node_id="pi-001",
+                ts=datetime(2026, 9, 11, 12, tzinfo=UTC),
+                generated_at=datetime(2026, 9, 11, 12, tzinfo=UTC),
+                payload_jsonb={
+                    "quality": {"level": "GOOD", "state_confidence": confidence},
+                    "env": {},
+                    "soil": {},
+                    "plant": {},
+                },
+            )
+        )
+        assert projected is not None
+        assert projected.status == "UNKNOWN"
+
+
+def test_state_projection_bounds_probe_text_fields() -> None:
+    projected = project_state(
+        StateSnapshot(
+            state_id="state-oversized-probes",
+            node_id="pi-001",
+            ts=datetime(2026, 9, 11, 12, tzinfo=UTC),
+            generated_at=datetime(2026, 9, 11, 12, tzinfo=UTC),
+            payload_jsonb={
+                "quality": {"level": "GOOD", "state_confidence": 0.9},
+                "env": {},
+                "soil": {
+                    "probes": [
+                        {"id": "i" * 129, "position": "top", "status": "OK"},
+                        {"id": "soil-2", "position": "p" * 129, "status": "s" * 129},
+                    ]
+                },
+                "plant": {},
+            },
+        )
+    )
+    assert projected is not None
+    assert len(projected.soil.probes) == 1
+    assert projected.soil.probes[0].id == "soil-2"
+    assert projected.soil.probes[0].position == "unknown"
+    assert projected.soil.probes[0].status == "UNKNOWN"
+    assert all(len(getattr(projected.soil.probes[0], field)) <= 128 for field in ("id", "position", "status"))
 
 
 def test_status_keeps_available_response_when_one_component_read_fails(client_factory, monkeypatch) -> None:
@@ -121,6 +186,19 @@ def test_status_keeps_available_response_when_one_component_read_fails(client_fa
     body = response.json()
     assert body["completeness"] == "PARTIAL"
     assert any(reason["code"] == "nodes_unavailable" for reason in body["reasons"])
+
+
+def test_operator_storage_error_uses_distinct_versioned_contract(client_factory, monkeypatch) -> None:
+    client = client_factory()
+
+    def fail_plants(self, limit=100):
+        raise SQLAlchemyError("synthetic")
+
+    monkeypatch.setattr(OperatorSummaryService, "plants", fail_plants)
+    response = client.get("/api/v1/operator/plants")
+    assert response.status_code == 503
+    assert response.json()["schema_version"] == "senior-pomidor.operator-error.v1"
+    assert set(response.json()) == {"schema_version", "error_code", "request_id", "message"}
 
 
 def test_anomaly_severity_vocabulary_maps_to_operator_status() -> None:
@@ -481,3 +559,30 @@ def test_devices_without_telemetry_are_projected_as_unknown_edges(monkeypatch) -
     assert items[0].device_id == "pi-no-telemetry"
     assert items[0].status == "UNKNOWN"
     assert items[0].reasons[0].code == "edge_reliability_telemetry_unavailable"
+
+
+def test_edge_projection_does_not_load_pod_readings(monkeypatch) -> None:
+    class Result:
+        def order_by(self, *args):
+            return self
+
+        def limit(self, value):
+            return self
+
+        def all(self):
+            return [type("Device", (), {"device_id": "pi-edge"})()]
+
+    class FakeDB:
+        def scalars(self, query):
+            return Result()
+
+        def scalar(self, query):
+            return None
+
+    def unexpected_relationship_load(*args, **kwargs):
+        raise AssertionError("edge projection must not load pod readings")
+
+    monkeypatch.setattr("app.operator_summary.selectinload", unexpected_relationship_load)
+    items, has_more = OperatorSummaryService(FakeDB()).edges()
+    assert not has_more
+    assert items[0].status == "UNKNOWN"

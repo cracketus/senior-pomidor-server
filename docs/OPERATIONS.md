@@ -733,3 +733,22 @@ Prompt inputs are intentionally limited to stored Core data:
 Each JSONL record includes the photo identity, model, analysis timestamp, matching telemetry event IDs, prompt inputs, model response text, runtime details, and a nullable `error` field. Per-photo failures are written as report records so a bad image or unavailable model does not hide which inputs were selected.
 
 Operational cost for the default path is zero external API spend because analysis runs against local Ollama. The real cost is local CPU/GPU time, memory pressure, and wall-clock runtime; keep `--limit` small until the model performance is known on the deployment machine.
+# Read-only operator CLI
+
+From an immutable application image or the operator virtual environment, use the packaged entry point:
+
+```text
+python -m pip install -e .
+pomidorctl status
+pomidorctl --json anomalies --since-hours 24 --limit 25
+```
+
+The client is read-only and accepts only the six `/api/v1/operator/*` GET views. Use a loopback or
+approved operator URL, and provide exactly one token source when the server requires authentication:
+`--token-file`, `POMIDORCTL_TOKEN_FILE`, or `POMIDORCTL_TOKEN`. Token files are UTF-8, one non-empty
+line, and at most 8 KiB. TLS verification is enabled; redirects and retries are disabled.
+
+Exit codes: `0` OK, `1` WARN, `2` ALERT, `3` UNKNOWN/NOT_IMPLEMENTED, `4` usage or configuration,
+`5` authentication failure, `6` timeout/connectivity/HTTP 5xx, and `7` protocol or contract failure.
+Do not treat a green command as physical-world evidence; production rollout and canary evidence remain
+operator-owned.

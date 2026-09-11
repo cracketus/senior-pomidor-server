@@ -8,11 +8,11 @@ from enum import StrEnum
 from typing import Any, Literal, cast
 from uuid import uuid4
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic import ValidationError as PydanticValidationError
 from sqlalchemy import case, desc, func, select
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session, aliased, selectinload
 
 from app.models import AnomalyRecord, Device, Photo, PodReading, StateSnapshot, TelemetryEvent
 from app.operator_edge_reliability import (
@@ -24,14 +24,23 @@ from app.operator_edge_reliability import (
     OperatorEdgeReliabilityV1,
     build_operator_edge_reliability,
 )
+from app.state_estimator.confidence import quality_level as confidence_quality_level
 
 SCHEMA_VERSION = "senior-pomidor.operator.v1"
 MAX_AGE_SECONDS = 1200
 MAX_REASONS = 20
+MAX_PROBE_TEXT_LENGTH = 128
 
 
 class Strict(BaseModel):
     model_config = ConfigDict(extra="forbid")
+
+    @field_validator("*", mode="after")
+    @classmethod
+    def require_utc_timestamps(cls, value: Any) -> Any:
+        if isinstance(value, datetime) and (value.tzinfo is None or value.utcoffset() != timedelta(0)):
+            raise ValueError("timestamps must be timezone-aware UTC")
+        return value
 
 
 class Status(StrEnum):
@@ -228,12 +237,12 @@ class StateSoil(Strict):
 
 
 class StateProbe(Strict):
-    id: str
-    position: str
+    id: str = Field(max_length=MAX_PROBE_TEXT_LENGTH)
+    position: str = Field(max_length=MAX_PROBE_TEXT_LENGTH)
     moisture_pct: float | None = Field(default=None, ge=0, le=100)
     dry_threshold_pct: float | None = Field(default=None, ge=0, le=100)
     confidence: float | None = Field(default=None, ge=0, le=1)
-    status: str
+    status: str = Field(max_length=MAX_PROBE_TEXT_LENGTH)
 
 
 class StatePlant(Strict):
@@ -328,7 +337,7 @@ class DecisionsResponse(Envelope):
 
 
 class OperatorError(Strict):
-    schema_version: Literal["senior-pomidor.operator.v1"] = "senior-pomidor.operator.v1"
+    schema_version: Literal["senior-pomidor.operator-error.v1"] = "senior-pomidor.operator-error.v1"
     error_code: str
     request_id: str
     message: str
@@ -388,31 +397,41 @@ def project_state(snapshot: StateSnapshot | None) -> StateView | None:
     plant_raw = payload.get("plant") if isinstance(payload.get("plant"), dict) else {}
     quality_raw = cast(dict[str, Any], payload.get("quality")) if isinstance(payload.get("quality"), dict) else {}
     confidence = _safe_number(quality_raw.get("state_confidence"), minimum=0, maximum=1)
-    quality_level: str | None = None
+    quality_label: str | None = None
     if isinstance(quality_raw.get("level"), str):
-        quality_level = str(quality_raw["level"])
+        quality_label = str(quality_raw["level"])
     state_status = Status.UNKNOWN
-    if quality_level is not None:
+    if quality_label is not None and confidence is not None and confidence_quality_level(confidence) == quality_label:
         state_status = {
             "GOOD": Status.OK,
             "DEGRADED": Status.WARN,
             "LOW_CONFIDENCE": Status.WARN,
             "UNSAFE_FOR_AUTONOMY": Status.ALERT,
-        }.get(quality_level, Status.UNKNOWN)
+        }.get(quality_label, Status.UNKNOWN)
     probes: list[StateProbe] = []
     probes_raw = cast(dict[str, Any], soil_raw).get("probes")
     if isinstance(probes_raw, list):
         for raw_probe in probes_raw[:100]:
-            if not isinstance(raw_probe, dict) or not isinstance(raw_probe.get("id"), str):
+            if (
+                not isinstance(raw_probe, dict)
+                or not isinstance(raw_probe.get("id"), str)
+                or len(raw_probe["id"]) > MAX_PROBE_TEXT_LENGTH
+            ):
                 continue
+            position = raw_probe.get("position")
+            if not isinstance(position, str) or not position or len(position) > MAX_PROBE_TEXT_LENGTH:
+                position = "unknown"
+            probe_status = raw_probe.get("status")
+            if not isinstance(probe_status, str) or not probe_status or len(probe_status) > MAX_PROBE_TEXT_LENGTH:
+                probe_status = "UNKNOWN"
             probes.append(
                 StateProbe(
                     id=raw_probe["id"],
-                    position=str(raw_probe.get("position") or "unknown"),
+                    position=position,
                     moisture_pct=_safe_number(raw_probe.get("moisture_pct"), minimum=0, maximum=100),
                     dry_threshold_pct=_safe_number(raw_probe.get("dry_threshold_pct"), minimum=0, maximum=100),
                     confidence=_safe_number(raw_probe.get("confidence"), minimum=0, maximum=1),
-                    status=str(raw_probe.get("status") or "UNKNOWN"),
+                    status=probe_status,
                 )
             )
     observed_at = utc(snapshot.ts)
@@ -467,44 +486,81 @@ class OperatorSummaryService:
     def _now(self) -> datetime:
         return utc(self.now()) or datetime.now(UTC)
 
-    def _latest_event(self, node_id: str) -> TelemetryEvent | None:
-        return self.db.scalar(
-            select(TelemetryEvent)
-            .options(selectinload(TelemetryEvent.readings))
-            .where(TelemetryEvent.device_id == node_id)
-            .order_by(desc(TelemetryEvent.timestamp_utc), desc(TelemetryEvent.id))
-            .limit(1)
-        )
+    def _devices(self, limit: int) -> tuple[list[Device], bool]:
+        devices = list(self.db.scalars(select(Device).order_by(Device.device_id).limit(limit + 1)).all())
+        return devices[:limit], len(devices) > limit
 
-    def _plant(self, device: Device) -> PlantView:
-        event = self._latest_event(device.device_id)
-        state = self.db.scalar(
-            select(StateSnapshot)
-            .where(StateSnapshot.node_id == device.device_id)
-            .order_by(desc(StateSnapshot.ts), desc(StateSnapshot.state_id))
-            .limit(1)
+    def _latest_events(self, node_ids: list[str], *, include_readings: bool = False) -> dict[str, TelemetryEvent]:
+        if not node_ids:
+            return {}
+        ranked = (
+            select(
+                TelemetryEvent.id.label("event_id"),
+                func.row_number()
+                .over(
+                    partition_by=TelemetryEvent.device_id,
+                    order_by=(desc(TelemetryEvent.timestamp_utc), desc(TelemetryEvent.id)),
+                )
+                .label("row_number"),
+            )
+            .where(TelemetryEvent.device_id.in_(node_ids))
+            .subquery()
         )
-        readings = event.readings if event is not None else []
-        observed = event.timestamp_utc if event is not None else None
-        return PlantView(
-            node_id=device.device_id,
-            observed_at_utc=utc(observed),
-            state_id=state.state_id if state is not None else None,
-            pods=[pod_view(reading, observed) for reading in readings] if observed else [],
+        event_alias = aliased(TelemetryEvent)
+        query = select(event_alias).join(ranked, event_alias.id == ranked.c.event_id).where(ranked.c.row_number == 1)
+        if include_readings:
+            query = query.options(selectinload(event_alias.readings))
+        events = self.db.scalars(query).all()
+        return {event.device_id: event for event in events if isinstance(event, TelemetryEvent)}
+
+    def _latest_states(self, node_ids: list[str]) -> dict[str, StateSnapshot]:
+        if not node_ids:
+            return {}
+        ranked = (
+            select(
+                StateSnapshot.state_id.label("state_id"),
+                func.row_number()
+                .over(
+                    partition_by=StateSnapshot.node_id,
+                    order_by=(desc(StateSnapshot.ts), desc(StateSnapshot.state_id)),
+                )
+                .label("row_number"),
+            )
+            .where(StateSnapshot.node_id.in_(node_ids))
+            .subquery()
         )
+        state_alias = aliased(StateSnapshot)
+        states = self.db.scalars(
+            select(state_alias).join(ranked, state_alias.state_id == ranked.c.state_id).where(ranked.c.row_number == 1)
+        ).all()
+        return {state.node_id: state for state in states if isinstance(state, StateSnapshot)}
 
-    def plants(self, limit: int = 100) -> tuple[list[PlantView], bool]:
-        devices = self.db.scalars(select(Device).order_by(Device.device_id).limit(limit + 1)).all()
-        has_more = len(devices) > limit
-        return [self._plant(device) for device in devices[:limit]], has_more
+    def _plants_from(self, devices: list[Device]) -> list[PlantView]:
+        node_ids = [device.device_id for device in devices]
+        events = self._latest_events(node_ids, include_readings=True)
+        states = self._latest_states(node_ids)
+        plants: list[PlantView] = []
+        for device in devices:
+            event = events.get(device.device_id)
+            state = states.get(device.device_id)
+            readings = event.readings if event is not None else []
+            observed = event.timestamp_utc if event is not None else None
+            plants.append(
+                PlantView(
+                    node_id=device.device_id,
+                    observed_at_utc=utc(observed),
+                    state_id=state.state_id if state is not None else None,
+                    pods=[pod_view(reading, observed) for reading in readings] if observed else [],
+                )
+            )
+        return plants
 
-    def edges(self, limit: int = 100) -> tuple[list[OperatorEdgeReliabilityV1], bool]:
-        devices = self.db.scalars(select(Device).order_by(Device.device_id).limit(limit + 1)).all()
-        has_more = len(devices) > limit
+    def _edges_from(self, devices: list[Device]) -> list[OperatorEdgeReliabilityV1]:
+        events = self._latest_events([device.device_id for device in devices])
         now = self._now()
         result: list[OperatorEdgeReliabilityV1] = []
-        for device in devices[:limit]:
-            event = self._latest_event(device.device_id)
+        for device in devices:
+            event = events.get(device.device_id)
             if event is not None:
                 try:
                     result.append(build_operator_edge_reliability(event, now=now))
@@ -520,7 +576,28 @@ class OperatorSummaryService:
                         reason_message="Edge reliability telemetry is unavailable",
                     )
                 )
-        return result, has_more
+        return result
+
+    def _plant(self, device: Device) -> PlantView:
+        """Compatibility helper for callers that project one plant."""
+        event = self._latest_events([device.device_id], include_readings=True).get(device.device_id)
+        state = self._latest_states([device.device_id]).get(device.device_id)
+        readings = event.readings if event is not None else []
+        observed = event.timestamp_utc if event is not None else None
+        return PlantView(
+            node_id=device.device_id,
+            observed_at_utc=utc(observed),
+            state_id=state.state_id if state is not None else None,
+            pods=[pod_view(reading, observed) for reading in readings] if observed else [],
+        )
+
+    def plants(self, limit: int = 100) -> tuple[list[PlantView], bool]:
+        devices, has_more = self._devices(limit)
+        return self._plants_from(devices), has_more
+
+    def edges(self, limit: int = 100) -> tuple[list[OperatorEdgeReliabilityV1], bool]:
+        devices, has_more = self._devices(limit)
+        return self._edges_from(devices), has_more
 
     def anomalies(self, *, node_id: str | None, since_hours: int, limit: int) -> tuple[list[AnomalyView], bool]:
         cutoff = self._now() - timedelta(hours=since_hours)

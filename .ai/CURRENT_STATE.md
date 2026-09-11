@@ -28,6 +28,9 @@ Owner: maintainer performing a release or operational change. Update after every
 - Private operators can read the additive `senior-pomidor.operator.v1` status, plants, edges, anomalies,
   photos, and decisions views. They query persisted snapshots only; host health and Control decisions
   are explicit `NOT_IMPLEMENTED`, and pod `plant_id` remains nullable until canonical identity mapping exists.
+- The additive read-only `pomidorctl` package consumes only those six operator GET views, validates the
+  full response contract, and exposes stable JSON/human output and exit codes. TUI, local fallback, and
+  production rollout are not implemented.
 - Canonical Docker Edge application health uses the explicit `service_manager=none` discriminator and
   process liveness without inventing systemd state. A complete discriminator-absent legacy systemd payload
   remains supported for one release cycle; ambiguous or contradictory application evidence is `UNKNOWN`.
