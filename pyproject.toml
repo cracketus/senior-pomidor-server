@@ -23,6 +23,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+tui = [
+    "textual>=8.2,<9",
+]
 dev = [
     "anyio<4.15", # Temporary Starlette TestClient compatibility; keep warnings-as-errors enabled.
     "bandit[toml]>=1.7.10",
@@ -34,6 +37,7 @@ dev = [
     "pre-commit>=4.0",
     "pytest>=8.3",
     "ruff>=0.8",
+    "textual>=8.2,<9",
     "types-PyYAML>=6.0.12.20250516",
     "types-jsonschema>=4.23",
 ]
