@@ -30,11 +30,12 @@ def test_pomidorctl_source_uses_only_get_and_preserves_errors() -> None:
 
     source = PomidorCtlOperatorSource(config(), transport=httpx.MockTransport(handler))
     snapshot = run(source.fetch_all())
+    status = snapshot.result("status")
     assert methods
     assert set(methods) == {"GET"}
-    assert snapshot.result("status") is not None
-    assert snapshot.result("status").payload is None
-    assert "api_unavailable" in (snapshot.result("status").error or "")
+    assert status is not None
+    assert status.payload is None
+    assert "api_unavailable" in (status.error or "")
 
 
 def test_snapshot_retains_last_known_payload_but_marks_transport_stale() -> None:
