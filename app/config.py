@@ -37,6 +37,11 @@ class Settings(BaseSettings):
     state_estimator_private_log_dir: str = "data/private"
     state_estimator_public_log_dir: str = "data/public"
     state_estimator_replay_enabled: bool = False
+    map_api_enabled: bool = False
+    map_api_token: str | None = Field(default=None)
+    map_api_allowed_target_ids: str = "[]"
+    map_api_adapter_config_path: str = "config/map/adapter_v1.json"
+    map_api_topology_path: str = "config/topology"
     state_estimator_config_path: str = "config/state_estimator_v1.yaml"
     assistant_provider: str | None = None
     daily_story_node_id: str = "pi-001"

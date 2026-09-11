@@ -65,7 +65,8 @@ WITH selectors AS (
 ), base_events AS (
     SELECT e.*, ss.source_id
     FROM telemetry_events e
-    JOIN selected_sources ss ON ss.storage_device_id = e.device_id
+    JOIN selected_sources ss
+      ON ss.storage_device_id = e.device_id
     WHERE e.received_at <= :receipt_cutoff
       AND (
         (e.timestamp_utc >= :coverage_start AND e.timestamp_utc < :window_end)
@@ -395,8 +396,10 @@ def normalize_evidence_rows(
     for item in selected:
         unique[(item.event_identity, item.evidence_kind.value, item.child_identity)] = item
     items = tuple(sorted(unique.values(), key=_sort_key))
-    coverage_start = min(
-        request.window_start - timedelta(seconds=selector.max_age_seconds) for selector in request.selectors
+    coverage_start = (
+        min(request.window_start - timedelta(seconds=selector.max_age_seconds) for selector in request.selectors)
+        if request.selectors
+        else request.window_start
     )
     profiles = tuple(
         ProfileIdentity(profile_id=profile_id, version=version)
@@ -451,10 +454,16 @@ class RawEvidenceReader:
         if data_cutoff > evaluation_time:
             raise ValueError("data_cutoff must not be in the future relative to the evaluation clock")
         receipt_cutoff = (
-            min(data_cutoff, request.window_end) if request.mode == EvidenceMode.AS_KNOWN_CORE else data_cutoff
+            request.receipt_cutoff
+            if request.mode == EvidenceMode.AS_KNOWN_CORE and request.receipt_cutoff is not None
+            else min(data_cutoff, request.window_end)
+            if request.mode == EvidenceMode.AS_KNOWN_CORE
+            else data_cutoff
         )
-        coverage_start = min(
-            request.window_start - timedelta(seconds=selector.max_age_seconds) for selector in request.selectors
+        coverage_start = (
+            min(request.window_start - timedelta(seconds=selector.max_age_seconds) for selector in request.selectors)
+            if request.selectors
+            else request.window_start
         )
         selector_json = json.dumps(
             [
@@ -513,6 +522,88 @@ class RawEvidenceReader:
             )
         return batch
 
+    def read_many(self, requests: tuple[RawEvidenceRequest, ...]) -> tuple[RawEvidenceBatch, ...]:
+        """Read bounded segments from one repeatable-read, read-only transaction."""
+        if not requests:
+            return ()
+        if self._engine.dialect.name != "postgresql":
+            raise RawEvidenceReadError(RawEvidenceErrorCode.UNSUPPORTED_BACKEND)
+        evaluation_time = _as_utc(self._clock())
+        cutoff = requests[0].data_cutoff or evaluation_time
+        if any((request.data_cutoff or evaluation_time) != cutoff for request in requests):
+            raise RawEvidenceReadError(RawEvidenceErrorCode.BACKEND_UNAVAILABLE)
+        batches: list[RawEvidenceBatch] = []
+        aggregate_rows = 0
+        try:
+            with self._engine.connect() as connection:
+                transaction = connection.begin()
+                try:
+                    for index, request in enumerate(requests):
+                        if evaluation_time < request.window_end or cutoff > evaluation_time:
+                            raise RawEvidenceReadError(RawEvidenceErrorCode.BACKEND_UNAVAILABLE)
+                        receipt_cutoff = (
+                            request.receipt_cutoff
+                            if request.mode == EvidenceMode.AS_KNOWN_CORE and request.receipt_cutoff is not None
+                            else min(cutoff, request.window_end)
+                            if request.mode == EvidenceMode.AS_KNOWN_CORE
+                            else cutoff
+                        )
+                        coverage_start = (
+                            min(
+                                request.window_start - timedelta(seconds=selector.max_age_seconds)
+                                for selector in request.selectors
+                            )
+                            if request.selectors
+                            else request.window_start
+                        )
+                        selector_json = json.dumps(
+                            [
+                                {
+                                    "source_id": item.source_id,
+                                    "storage_device_id": item.storage_device_id,
+                                    "channel_id": item.channel_id,
+                                    "pod_key": item.pod_key,
+                                    "metric_name": item.metric_name.value,
+                                    "error_sensors": list(item.error_sensors),
+                                }
+                                for item in request.selectors
+                            ],
+                            separators=(",", ":"),
+                        )
+                        rows = self._extract_rows(
+                            connection,
+                            selector_json=selector_json,
+                            receipt_cutoff=receipt_cutoff,
+                            coverage_start=coverage_start,
+                            window_end=request.window_end,
+                            evaluation_time=evaluation_time,
+                            configure=index == 0,
+                        )
+                        aggregate_rows += len(rows)
+                        if aggregate_rows > MAX_QUERY_ROWS:
+                            raise RawEvidenceReadError(RawEvidenceErrorCode.QUERY_LIMIT_EXCEEDED)
+                        batches.append(
+                            normalize_evidence_rows(
+                                request,
+                                cast(Iterable[Mapping[str, Any]], rows),
+                                evaluation_time=evaluation_time,
+                                data_cutoff=cutoff,
+                            )
+                        )
+                finally:
+                    transaction.rollback()
+        except RawEvidenceReadError:
+            raise
+        except DBAPIError as exc:
+            sqlstate = getattr(exc.orig, "sqlstate", None) or getattr(exc.orig, "pgcode", None)
+            code = (
+                RawEvidenceErrorCode.QUERY_TIMEOUT if sqlstate == "57014" else RawEvidenceErrorCode.BACKEND_UNAVAILABLE
+            )
+            raise RawEvidenceReadError(code) from None
+        except SQLAlchemyError:
+            raise RawEvidenceReadError(RawEvidenceErrorCode.BACKEND_UNAVAILABLE) from None
+        return tuple(batches)
+
     @staticmethod
     def _extract_rows(
         connection: Any,
@@ -522,26 +613,28 @@ class RawEvidenceReader:
         coverage_start: datetime,
         window_end: datetime,
         evaluation_time: datetime,
+        configure: bool = True,
     ) -> Any:
-        connection.execute(text("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY"))
-        connection.execute(text("SET LOCAL statement_timeout = '5s'"))
-        settings = (
-            connection.execute(
-                text(
-                    "SELECT current_setting('transaction_isolation') AS isolation, "
-                    "current_setting('transaction_read_only') AS read_only, "
-                    "current_setting('statement_timeout') AS statement_timeout"
+        if configure:
+            connection.execute(text("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY"))
+            connection.execute(text("SET LOCAL statement_timeout = '5s'"))
+            settings = (
+                connection.execute(
+                    text(
+                        "SELECT current_setting('transaction_isolation') AS isolation, "
+                        "current_setting('transaction_read_only') AS read_only, "
+                        "current_setting('statement_timeout') AS statement_timeout"
+                    )
                 )
+                .mappings()
+                .one()
             )
-            .mappings()
-            .one()
-        )
-        if dict(settings) != {
-            "isolation": "repeatable read",
-            "read_only": "on",
-            "statement_timeout": "5s",
-        }:
-            raise RawEvidenceReadError(RawEvidenceErrorCode.BACKEND_UNAVAILABLE)
+            if dict(settings) != {
+                "isolation": "repeatable read",
+                "read_only": "on",
+                "statement_timeout": "5s",
+            }:
+                raise RawEvidenceReadError(RawEvidenceErrorCode.BACKEND_UNAVAILABLE)
         return (
             connection.execute(
                 text(RAW_EVIDENCE_SQL),

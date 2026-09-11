@@ -12,6 +12,7 @@ from app.config import Settings, get_settings, settings
 from app.db import engine, get_db
 from app.health_summary import build_health_summary
 from app.logging_config import configure_logging
+from app.map.api import router as map_router
 from app.readiness import check_readiness
 
 configure_logging()
@@ -29,6 +30,7 @@ app = FastAPI(
     openapi_url=openapi_url,
 )
 app.include_router(router)
+app.include_router(map_router)
 
 
 @app.exception_handler(SQLAlchemyError)

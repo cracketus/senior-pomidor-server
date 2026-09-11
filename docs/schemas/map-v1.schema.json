@@ -1,0 +1,117 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "senior-pomidor.map.v1",
+  "title": "Scoped Tomato Brain Map API envelope",
+  "type": "object",
+  "oneOf": [
+    {"$ref": "#/$defs/topologyResponse"},
+    {"$ref": "#/$defs/evaluationResponse"},
+    {"$ref": "#/$defs/evidenceResponse"},
+    {"$ref": "#/$defs/errorResponse"}
+  ],
+  "unevaluatedProperties": false,
+  "$defs": {
+    "common": {
+      "type": "object",
+      "properties": {
+        "schema_version": {"const": "senior-pomidor.map.v1"},
+        "request_id": {"type": "string", "minLength": 1, "maxLength": 128}
+      },
+      "required": ["schema_version", "request_id"]
+    },
+    "scope": {
+      "type": "object",
+      "properties": {
+        "entity_ids": {"type": "array", "minItems": 1, "maxItems": 50, "uniqueItems": true, "items": {"$ref": "#/$defs/id"}}
+      },
+      "required": ["entity_ids"],
+      "additionalProperties": false
+    },
+    "query": {
+      "type": "object",
+      "properties": {
+        "at": {"$ref": "#/$defs/time"},
+        "window_start": {"$ref": "#/$defs/time"},
+        "window_end": {"$ref": "#/$defs/time"},
+        "mode": {"enum": ["AS_KNOWN_CORE", "RECONSTRUCTED"]},
+        "data_cutoff": {"$ref": "#/$defs/time"}
+      },
+      "required": ["mode", "data_cutoff"],
+      "additionalProperties": false
+    },
+    "versions": {
+      "type": "object",
+      "properties": {
+        "topology_digest": {"$ref": "#/$defs/digest"},
+        "adapter_version": {"type": "string", "minLength": 1, "maxLength": 32},
+        "adapter_digest": {"$ref": "#/$defs/digest"},
+        "evidence_digest": {"$ref": "#/$defs/digest"},
+        "profile_versions": {"type": "array", "maxItems": 256, "items": {"type": "object", "properties": {"profile_id": {"$ref": "#/$defs/id"}, "version": {"type": "string", "minLength": 1, "maxLength": 32}}, "required": ["profile_id", "version"], "additionalProperties": false}},
+        "ordering": {"type": "string", "minLength": 1, "maxLength": 64}
+      },
+      "required": ["topology_digest", "adapter_version", "adapter_digest", "ordering"],
+      "additionalProperties": false
+    },
+    "completeness": {
+      "type": "object",
+      "properties": {
+        "complete": {"type": "boolean"},
+        "has_more": {"type": "boolean"},
+        "page_size": {"type": "integer", "minimum": 1, "maximum": 500}
+      },
+      "required": ["complete", "has_more"],
+      "additionalProperties": false
+    },
+    "topologyResponse": {
+      "allOf": [
+        {"$ref": "#/$defs/common"},
+        {"type": "object", "properties": {"scope": {"$ref": "#/$defs/scope"}, "query": {"$ref": "#/$defs/query"}, "versions": {"$ref": "#/$defs/versions"}, "completeness": {"$ref": "#/$defs/completeness"}, "topology": {"$ref": "#/$defs/topology"}}, "required": ["scope", "query", "versions", "completeness", "topology"]}
+      ]
+    },
+    "evaluationResponse": {
+      "allOf": [
+        {"$ref": "#/$defs/common"},
+        {"type": "object", "properties": {"scope": {"$ref": "#/$defs/scope"}, "query": {"$ref": "#/$defs/query"}, "versions": {"$ref": "#/$defs/versions"}, "completeness": {"$ref": "#/$defs/completeness"}, "evaluation": {"$ref": "#/$defs/evaluation"}, "next_cursor": {"type": ["string", "null"], "maxLength": 8192}}, "required": ["scope", "query", "versions", "completeness", "evaluation", "next_cursor"]}
+      ]
+    },
+    "evidenceResponse": {
+      "allOf": [
+        {"$ref": "#/$defs/common"},
+        {"type": "object", "properties": {"scope": {"$ref": "#/$defs/scope"}, "query": {"$ref": "#/$defs/query"}, "versions": {"$ref": "#/$defs/versions"}, "completeness": {"$ref": "#/$defs/completeness"}, "evidence": {"$ref": "#/$defs/evidence"}}, "required": ["scope", "query", "versions", "completeness", "evidence"]}
+      ]
+    },
+    "errorResponse": {
+      "allOf": [
+        {"$ref": "#/$defs/common"},
+        {"type": "object", "properties": {"error": {"type": "object", "properties": {"code": {"type": "string", "minLength": 1, "maxLength": 64}, "message": {"type": "string", "minLength": 1, "maxLength": 256}}, "required": ["code", "message"], "additionalProperties": false}}, "required": ["error"]}
+      ]
+    },
+    "id": {"type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-z][a-z0-9_.-]*$"},
+    "digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "time": {"type": "string", "format": "date-time"},
+    "topology": {
+      "type": "object",
+      "properties": {
+        "schema_version": {"type": "string"}, "selected_at": {"$ref": "#/$defs/time"}, "mode": {"enum": ["AS_KNOWN_CORE", "RECONSTRUCTED"]}, "data_cutoff": {"$ref": "#/$defs/time"}, "revision_id": {"$ref": "#/$defs/id"}, "digest": {"$ref": "#/$defs/digest"}, "provenance": {"type": "object"}, "profile_identities": {"type": "array", "items": {"type": "object"}}, "physical_assets": {"type": "array", "items": {"type": "object"}}, "sources": {"type": "array", "items": {"type": "object"}}, "source_channels": {"type": "array", "items": {"type": "object"}}, "targets": {"type": "array", "items": {"type": "object"}}, "deployments": {"type": "array", "items": {"type": "object"}}, "relationships": {"type": "array", "items": {"type": "object"}}, "bindings": {"type": "array", "items": {"type": "object"}}, "capability_profiles": {"type": "array", "items": {"type": "object"}}
+      },
+      "required": ["schema_version", "selected_at", "mode", "data_cutoff", "revision_id", "digest", "provenance", "profile_identities", "physical_assets", "sources", "source_channels", "targets", "deployments", "relationships", "bindings", "capability_profiles"],
+      "additionalProperties": false
+    },
+    "evaluation": {
+      "type": "object",
+      "properties": {
+        "schema_version": {"const": "senior-pomidor.map.v1"}, "evaluated_at": {"$ref": "#/$defs/time"}, "window_start": {"$ref": "#/$defs/time"}, "window_end": {"$ref": "#/$defs/time"}, "coverage_start": {"$ref": "#/$defs/time"}, "coverage_end": {"$ref": "#/$defs/time"}, "mode": {"enum": ["AS_KNOWN_CORE", "RECONSTRUCTED"]}, "data_cutoff": {"$ref": "#/$defs/time"}, "topology_revision_id": {"$ref": "#/$defs/id"}, "topology_digest": {"$ref": "#/$defs/digest"}, "profile_identities": {"type": "array", "items": {"type": "object"}}, "fidelity": {"type": "string"}, "targets": {"type": "array", "items": {"type": "object"}}, "digest": {"$ref": "#/$defs/digest"}
+      },
+      "required": ["schema_version", "evaluated_at", "window_start", "window_end", "coverage_start", "coverage_end", "mode", "data_cutoff", "topology_revision_id", "topology_digest", "profile_identities", "fidelity", "targets", "digest"],
+      "additionalProperties": false
+    },
+    "evidence": {
+      "type": "object",
+      "properties": {
+        "observation_at": {"$ref": "#/$defs/time"}, "received_at": {"$ref": "#/$defs/time"}, "evidence_kind": {"type": "string"}, "source_id": {"$ref": "#/$defs/id"}, "source_schema_version": {"type": "string", "minLength": 1, "maxLength": 128}, "channel_id": {"type": ["string", "null"]}, "pod_key": {"type": ["string", "null"]}, "metric_name": {"type": ["string", "null"]}, "unit": {"type": ["string", "null"]}, "value": {"type": ["number", "null"]}, "validity": {"type": "string"}, "reason": {"type": ["string", "null"]}, "sensor": {"type": ["string", "null"]}, "detail_digest": {"anyOf": [{"$ref": "#/$defs/digest"}, {"type": "null"}]}, "health_facts": {"type": "array", "maxItems": 256, "items": {"type": "object"}}
+      },
+      "required": ["observation_at", "received_at", "evidence_kind", "source_id", "source_schema_version", "validity"],
+      "additionalProperties": false
+    }
+  }
+}

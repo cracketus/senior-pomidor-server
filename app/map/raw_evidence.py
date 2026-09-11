@@ -151,32 +151,48 @@ class ChannelSelector(StrictModel):
 
 class RawEvidenceRequest(StrictModel):
     schema_version: Literal["senior-pomidor.map.v1"] = "senior-pomidor.map.v1"
-    selectors: Annotated[tuple[ChannelSelector, ...], Field(min_length=1, max_length=256)]
+    selectors: Annotated[tuple[ChannelSelector, ...], Field(max_length=256)]
     window_start: datetime
     window_end: datetime
     mode: EvidenceMode
     data_cutoff: datetime | None = None
+    receipt_cutoff: datetime | None = None
+    point_query_at: datetime | None = None
+    allow_empty_selectors: bool = False
     topology_revision_id: Identifier
     topology_digest: Sha256Digest
 
-    @field_validator("window_start", "window_end", "data_cutoff", mode="before")
+    @field_validator("window_start", "window_end", "data_cutoff", "receipt_cutoff", "point_query_at", mode="before")
     @classmethod
     def reject_submicrosecond(cls, value: Any) -> Any:
         return _reject_submicrosecond(value)
 
-    @field_validator("window_start", "window_end", "data_cutoff")
+    @field_validator("window_start", "window_end", "data_cutoff", "receipt_cutoff", "point_query_at")
     @classmethod
     def validate_utc(cls, value: datetime | None) -> datetime | None:
         return None if value is None else _utc(value)
 
     @model_validator(mode="after")
     def validate_scope(self) -> Self:
+        if not self.selectors and not self.allow_empty_selectors:
+            raise ValueError("at least 1 selector is required")
         if self.window_start >= self.window_end:
             raise ValueError("window must be non-empty and half-open")
         if self.window_end - self.window_start > MAX_QUERY_WINDOW:
             raise ValueError("window exceeds 7 days")
         if self.data_cutoff is not None and self.window_end > self.data_cutoff:
-            raise ValueError("window_end must not exceed data_cutoff")
+            point_window = (
+                self.point_query_at is not None
+                and self.window_start == self.point_query_at
+                and self.window_end == self.point_query_at + timedelta(microseconds=1)
+                and self.data_cutoff == self.point_query_at
+            )
+            if not point_window:
+                raise ValueError("window_end must not exceed data_cutoff")
+        if self.receipt_cutoff is not None and self.data_cutoff is not None and self.receipt_cutoff > self.data_cutoff:
+            raise ValueError("receipt_cutoff must not exceed data_cutoff")
+        if self.point_query_at is not None and not (self.window_start <= self.point_query_at <= self.window_end):
+            raise ValueError("point_query_at must be inside the query window")
         selector_keys = [
             (item.source_id, item.storage_device_id, item.channel_id, item.pod_key) for item in self.selectors
         ]
