@@ -36,6 +36,12 @@ def _parser() -> argparse.ArgumentParser:
             child.add_argument("--node-id")
             child.add_argument("--since-hours", type=int, default=24)
             child.add_argument("--limit", type=int, default=100 if command == "anomalies" else 25)
+    tui = sub.add_parser("tui")
+    tui.add_argument("--server-url", default=argparse.SUPPRESS)
+    tui.add_argument("--timeout-seconds", type=float, default=argparse.SUPPRESS)
+    tui.add_argument("--token-file", default=argparse.SUPPRESS)
+    tui.add_argument("--refresh-seconds", type=float, default=60.0)
+    tui.add_argument("--demo", action="store_true")
     return parser
 
 
@@ -56,6 +62,15 @@ def main(argv: list[str] | None = None) -> int:
             timeout_seconds=args.get("timeout_seconds"),
             token_file=args.get("token_file"),
         )
+        if command == "tui":
+            if not 5.0 <= args["refresh_seconds"] <= 3600.0:
+                raise ConfigError("refresh_seconds must be between 5 and 3600 seconds")
+            try:
+                from app.operator_tui.__main__ import launch
+            except ImportError as exc:
+                raise ConfigError("TUI support is not installed; install senior-pomidor-server[tui]") from exc
+            launch(config, refresh_seconds=args["refresh_seconds"], demo=bool(args.get("demo")))
+            return 0
         params: dict[str, Any] = {
             key: args[key] for key in ("node_id", "since_hours", "limit") if key in args and args[key] is not None
         }
