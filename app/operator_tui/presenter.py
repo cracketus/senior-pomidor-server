@@ -260,7 +260,15 @@ def render_anomalies(snapshot: OperatorSnapshot) -> str:
         node_id = _text(item.get("node_id"))
         status = _text(item.get("status"))
         anomaly_id = _text(item.get("anomaly_id"))
-        lines.append(f"{observed} | {severity:<7} | {anomaly_type} | node={node_id} | status={status} | id={anomaly_id}")
+        event_parts = [
+            observed,
+            f"{severity:<7}",
+            anomaly_type,
+            f"node={node_id}",
+            f"status={status}",
+            f"id={anomaly_id}",
+        ]
+        lines.append(" | ".join(event_parts))
         if item.get("state_id"):
             lines.append(f"  state_id={_text(item.get('state_id'))}")
     if data.get("has_more") is True:
