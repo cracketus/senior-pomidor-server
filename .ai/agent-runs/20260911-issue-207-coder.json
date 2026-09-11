@@ -1,0 +1,42 @@
+{
+  "schema": "agent_run_v1",
+  "run_id": "20260911-issue-207-coder",
+  "issue_ref": "#207",
+  "pr_ref": "#352",
+  "role": "coder",
+  "agent_id": "gpt-5.6-sol",
+  "prompt_version": "gpt-5.6-sol",
+  "started_at_utc": "2026-09-11T14:39:00Z",
+  "finished_at_utc": "2026-09-11T19:55:00Z",
+  "input_refs": [
+    ".ai/CORE_INVARIANTS.md",
+    ".ai/planning/implementation-brief-207.md",
+    ".ai/known-failures.yaml",
+    "app/pomidorctl/client.py",
+    "app/pomidorctl/config.py",
+    "app/pomidorctl/cli.py"
+  ],
+  "output_refs": [
+    "app/operator_tui",
+    "app/pomidorctl/cli.py",
+    "tests/test_operator_tui.py",
+    "docs/OPERATOR_TUI.md",
+    "docs/implementation-reports/ISSUE-207.md"
+  ],
+  "status": "completed_pending_ci",
+  "commands": [],
+  "validation_results": [
+    {"check": "issue_206_integration", "status": "PASS", "evidence": "branch rebased onto main commit 583a4ae and TUI reuses OperatorClient/Config"},
+    {"check": "read_only_boundary", "status": "PASS", "evidence": "TUI adapter calls only canonical pomidorctl request paths; focused test records GET only"},
+    {"check": "full_ci", "status": "PENDING", "evidence": "GitHub Actions run triggered by rebased PR head"},
+    {"check": "manual_public_capture", "status": "NOT_RUN", "evidence": "pomidorctl tui --demo implemented"}
+  ],
+  "human_edits": [],
+  "findings": [
+    "#206 merged as main commit 583a4ae after the initial #207 draft was created.",
+    "The old #207 branch was reset onto current main to eliminate add/add and pyproject merge conflicts before reapplying TUI changes.",
+    "The temporary duplicate HTTP/config adapter was removed in favor of the canonical #206 client stack."
+  ],
+  "errors": [],
+  "usage": {"file_count": 11, "input_characters": 0, "tool_output_bytes": 0, "elapsed_seconds": 0}
+}
