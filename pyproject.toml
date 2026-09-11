@@ -27,7 +27,7 @@ tui = [
     "textual>=8.2,<9",
 ]
 dev = [
-    "anyio<4.15", # Temporary Starlette TestClient compatibility; keep warnings-as-errors enabled.
+    "anyio<4.16", # Temporary Starlette TestClient compatibility; keep warnings-as-errors enabled.
     "bandit[toml]>=1.7.10",
     "coverage[toml]>=7.6",
     "jsonschema>=4.23",
