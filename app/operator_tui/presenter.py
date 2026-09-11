@@ -171,11 +171,14 @@ def render_plants(snapshot: OperatorSnapshot) -> str:
         for raw_pod in _items(node.get("pods")):
             pod = _mapping(raw_pod)
             metrics = _mapping(pod.get("metrics"))
+            air = _number(metrics.get("air_temperature_c"), "°C")
+            rh = _number(metrics.get("air_humidity_percent"), "%")
+            vpd = _number(metrics.get("air_vpd_kpa"), " kPa", 2)
+            light = _number(metrics.get("light_lux"), " lux", 0)
             lines.append(
                 f"  {_text(pod.get('pod_key'))}: moisture {_number(metrics.get('soil_moisture_percent'), '%')} | "
                 f"soil {_number(metrics.get('soil_temperature_c'), '°C')} | "
-                f"air {_number(metrics.get('air_temperature_c'), '°C')} / RH {_number(metrics.get('air_humidity_percent'), '%')} | "
-                f"VPD {_number(metrics.get('air_vpd_kpa'), ' kPa', 2)} | light {_number(metrics.get('light_lux'), ' lux', 0)}"
+                f"air {air} / RH {rh} | VPD {vpd} | light {light}"
             )
     lines.extend(["", "Canonical current state"])
     lines.extend(_state_lines(_mapping(_data(snapshot.result("status")).get("state"))))
@@ -201,9 +204,14 @@ def render_edges(snapshot: OperatorSnapshot) -> str:
         spool = _mapping(edge.get("spool"))
         app = _mapping(edge.get("application"))
         watchdog = _mapping(edge.get("watchdog"))
+        device_id = _text(edge.get("device_id"))
+        edge_status = _text(edge.get("status"))
+        freshness_status = _text(freshness.get("status"))
+        oldest = _number(spool.get("oldest_pending_age_seconds"), "s", 0)
+        disk = _number(spool.get("disk_usage_percent"), "%")
         lines.extend(
             [
-                f"{_text(edge.get('device_id'))}: status={_text(edge.get('status'))} freshness={_text(freshness.get('status'))} "
+                f"{device_id}: status={edge_status} freshness={freshness_status} "
                 f"age={_number(freshness.get('age_seconds'), 's', 0)}",
                 f"  app: status={_text(app.get('status'))} running={_text(app.get('process_running'))} "
                 f"uptime={_number(app.get('process_uptime_seconds'), 's', 0)}",
@@ -211,7 +219,7 @@ def render_edges(snapshot: OperatorSnapshot) -> str:
                 f"reboots={_text(watchdog.get('reboot_count'))}",
                 f"  spool: status={_text(spool.get('status'))} pending={_text(spool.get('pending_count'))} "
                 f"backlog={_text(spool.get('backlog_count'))} dead={_text(spool.get('dead_letter_count'))} "
-                f"oldest={_number(spool.get('oldest_pending_age_seconds'), 's', 0)} disk={_number(spool.get('disk_usage_percent'), '%')}",
+                f"oldest={oldest} disk={disk}",
             ]
         )
         for raw_reason in _items(edge.get("reasons"))[:5]:
@@ -228,9 +236,8 @@ def render_decisions(snapshot: OperatorSnapshot) -> str:
     lines = _header("DECISIONS", result)
     items = _items(_data(result).get("items"))
     if not items:
-        lines.append(
-            f"Decision feed: {_text(_envelope(result).get('availability'))}; no decision records exposed by operator.v1."
-        )
+        availability = _text(_envelope(result).get("availability"))
+        lines.append(f"Decision feed: {availability}; no decision records exposed by operator.v1.")
         lines.append("No candidate action, guardrail result, execution result, or provenance is fabricated by the TUI.")
         return "\n".join(lines)
     for index, raw_item in enumerate(items, start=1):
@@ -247,9 +254,15 @@ def render_anomalies(snapshot: OperatorSnapshot) -> str:
         lines.append("No recent anomalies exposed by the bounded operator view.")
     for raw_item in items:
         item = _mapping(raw_item)
+        observed = _timestamp(item.get("observed_at_utc"))
+        severity = _text(item.get("severity"))
+        anomaly_type = _text(item.get("type"))
+        node_id = _text(item.get("node_id"))
+        status = _text(item.get("status"))
+        anomaly_id = _text(item.get("anomaly_id"))
         lines.append(
-            f"{_timestamp(item.get('observed_at_utc'))} | {_text(item.get('severity')):<7} | {_text(item.get('type'))} | "
-            f"node={_text(item.get('node_id'))} | status={_text(item.get('status'))} | id={_text(item.get('anomaly_id'))}"
+            f"{observed} | {severity:<7} | {anomaly_type} | node={node_id} | "
+            f"status={status} | id={anomaly_id}"
         )
         if item.get("state_id"):
             lines.append(f"  state_id={_text(item.get('state_id'))}")
@@ -270,10 +283,15 @@ def render_camera(snapshot: OperatorSnapshot) -> str:
         sha = _text(item.get("sha256"))
         if sha != UNAVAILABLE:
             sha = sha[:12]
+        captured = _timestamp(item.get("captured_at_utc"))
+        photo_id = _text(item.get("photo_id"))
+        node_id = _text(item.get("node_id"))
+        content_type = _text(item.get("content_type"))
+        size = _text(item.get("file_size_bytes"))
+        sharpness = _number(item.get("sharpness_score"), digits=2)
         lines.append(
-            f"{_timestamp(item.get('captured_at_utc'))} | {_text(item.get('photo_id'))} | node={_text(item.get('node_id'))} | "
-            f"{_text(item.get('content_type'))} | size={_text(item.get('file_size_bytes'))} B | "
-            f"sharpness={_number(item.get('sharpness_score'), digits=2)} | sha256={sha}…"
+            f"{captured} | {photo_id} | node={node_id} | {content_type} | "
+            f"size={size} B | sharpness={sharpness} | sha256={sha}…"
         )
     lines.extend(["", "Terminal image rendering: disabled in v1; photo metadata remains read-only."])
     return "\n".join(lines)
