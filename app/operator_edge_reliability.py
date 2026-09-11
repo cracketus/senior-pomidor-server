@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any, Literal, cast
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.edge_reliability import evaluate_edge_reliability
 from app.models import TelemetryEvent
@@ -23,6 +23,13 @@ RecordId = Annotated[str, Field(min_length=1, max_length=128, pattern=r"^[A-Za-z
 
 class StrictResponseModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
+
+    @field_validator("*", mode="after")
+    @classmethod
+    def require_utc_timestamps(cls, value: Any) -> Any:
+        if isinstance(value, datetime) and (value.tzinfo is None or value.utcoffset() != timedelta(0)):
+            raise ValueError("timestamps must be timezone-aware UTC")
+        return value
 
 
 class EdgeReliabilityFreshness(StrictResponseModel):

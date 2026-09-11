@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add the read-only `pomidorctl` CLI with validated operator JSON passthrough, bounded human output,
+  safe token configuration, and stable exit codes. TUI and edge-local fallback remain future work.
+
 - Add the private, versioned, read-only `senior-pomidor.operator.v1` summary views for status, plants,
   edge reliability, anomalies, photos, and explicitly unavailable decisions.
 - Add a low-cardinality public edge reliability metrics projection, a separate PostgreSQL-backed Grafana

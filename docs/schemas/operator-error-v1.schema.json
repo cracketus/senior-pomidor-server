@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://senior-pomidor.local/schemas/operator-error-v1.schema.json",
+  "title": "Senior Pomidor operator API error v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "error_code", "request_id", "message"],
+  "properties": {
+    "schema_version": {"const": "senior-pomidor.operator-error.v1"},
+    "error_code": {"type": "string", "minLength": 1, "maxLength": 80},
+    "request_id": {"type": "string", "minLength": 1, "maxLength": 64},
+    "message": {"type": "string", "minLength": 1, "maxLength": 200}
+  }
+}

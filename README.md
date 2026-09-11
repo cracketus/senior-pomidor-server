@@ -1,5 +1,21 @@
 # senior-pomidor-server
 
+## Read-only operator CLI
+
+Install the application in an operator virtual environment and query the versioned read model:
+
+```text
+python -m pip install -e .
+pomidorctl status
+pomidorctl --json plants --limit 10
+```
+
+`pomidorctl` performs only bounded `GET` requests to `/api/v1/operator/*`. Configure the server with
+`--server-url` or `POMIDORCTL_SERVER_URL`, timeout with `--timeout-seconds` or
+`POMIDORCTL_TIMEOUT_SECONDS`, and authentication with one UTF-8 single-line `--token-file`,
+`POMIDORCTL_TOKEN_FILE`, or `POMIDORCTL_TOKEN`. Tokens and response bodies are never printed in
+diagnostics. `--json` emits the validated `senior-pomidor.operator.v1` response unchanged.
+
 Server implementation for the Senior Pomidor project.
 
 **Roadmap:** [Server/Core roadmap through the 2027 growing season](docs/ROADMAP_2027.md)
