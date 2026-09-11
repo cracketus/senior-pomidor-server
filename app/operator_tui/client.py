@@ -235,12 +235,7 @@ class DemoOperatorSource:
                 status="OK",
             ),
         }
-        return OperatorSnapshot(
-            {
-                view: ViewResult(view, payload, None, now, now)
-                for view, payload in payloads.items()
-            }
-        )
+        return OperatorSnapshot({view: ViewResult(view, payload, None, now, now) for view, payload in payloads.items()})
 
     async def aclose(self) -> None:
         return None
