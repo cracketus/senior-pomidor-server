@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add the private, versioned, read-only `senior-pomidor.operator.v1` summary views for status, plants,
+  edge reliability, anomalies, photos, and explicitly unavailable decisions.
 - Add a low-cardinality public edge reliability metrics projection, a separate PostgreSQL-backed Grafana
   dashboard, and four provisioned reliability alert rules with fail-safe freshness and privacy semantics.
 - Add the private read-only `senior-pomidor.operator.edge-reliability.v1` endpoint for current per-edge
