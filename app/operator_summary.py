@@ -487,7 +487,11 @@ class OperatorSummaryService:
         return utc(self.now()) or datetime.now(UTC)
 
     def _devices(self, limit: int) -> tuple[list[Device], bool]:
-        devices = list(self.db.scalars(select(Device).order_by(Device.device_id).limit(limit + 1)).all())
+        devices = list(
+            self.db.scalars(
+                select(Device).where(Device.lifecycle_state == "ACTIVE").order_by(Device.device_id).limit(limit + 1)
+            ).all()
+        )
         return devices[:limit], len(devices) > limit
 
     def _latest_events(self, node_ids: list[str], *, include_readings: bool = False) -> dict[str, TelemetryEvent]:
@@ -601,9 +605,20 @@ class OperatorSummaryService:
 
     def anomalies(self, *, node_id: str | None, since_hours: int, limit: int) -> tuple[list[AnomalyView], bool]:
         cutoff = self._now() - timedelta(hours=since_hours)
-        query = select(AnomalyRecord).where((AnomalyRecord.status == "ACTIVE") | (AnomalyRecord.ts >= cutoff))
         if node_id:
-            query = query.where(AnomalyRecord.node_id == node_id)
+            query = select(AnomalyRecord).where(
+                AnomalyRecord.node_id == node_id,
+                (AnomalyRecord.status == "ACTIVE") | (AnomalyRecord.ts >= cutoff),
+            )
+        else:
+            query = (
+                select(AnomalyRecord)
+                .join(Device, Device.device_id == AnomalyRecord.node_id)
+                .where(
+                    Device.lifecycle_state == "ACTIVE",
+                    (AnomalyRecord.status == "ACTIVE") | (AnomalyRecord.ts >= cutoff),
+                )
+            )
         records = self.db.scalars(
             query.order_by(desc(AnomalyRecord.ts), desc(AnomalyRecord.anomaly_id)).limit(limit + 1)
         ).all()
@@ -630,6 +645,8 @@ class OperatorSummaryService:
         query = select(Photo)
         if node_id:
             query = query.where(Photo.device_id == node_id)
+        else:
+            query = query.join(Device, Device.device_id == Photo.device_id).where(Device.lifecycle_state == "ACTIVE")
         query = query.where(Photo.captured_at_utc >= self._now() - timedelta(hours=since_hours))
         rows = self.db.scalars(query.order_by(desc(Photo.captured_at_utc), desc(Photo.photo_id)).limit(limit + 1)).all()
         items: list[PhotoView] = []
@@ -678,9 +695,13 @@ class OperatorSummaryService:
         state = None
         try:
             if plants:
+                active_node_ids = [plant.node_id for plant in plants]
                 state = project_state(
                     self.db.scalar(
-                        select(StateSnapshot).order_by(desc(StateSnapshot.ts), desc(StateSnapshot.state_id)).limit(1)
+                        select(StateSnapshot)
+                        .where(StateSnapshot.node_id.in_(active_node_ids))
+                        .order_by(desc(StateSnapshot.ts), desc(StateSnapshot.state_id))
+                        .limit(1)
                     )
                 )
         except SQLAlchemyError:
@@ -706,7 +727,9 @@ class OperatorSummaryService:
                             else_=0,
                         )
                     )
-                ).where(AnomalyRecord.status == "ACTIVE")
+                )
+                .join(Device, Device.device_id == AnomalyRecord.node_id)
+                .where(AnomalyRecord.status == "ACTIVE", Device.lifecycle_state == "ACTIVE")
             )
             if active_status_rank == 3:
                 reasons.append(_reason("active_anomaly_alert", Status.ALERT, "An active alert anomaly is present"))

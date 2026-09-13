@@ -20,7 +20,7 @@ The API, MQTT broker, PostgreSQL port, dashboard, and Grafana UI are intended fo
 
 Before tagging or publishing a server release:
 
-- Follow the step-by-step [Server/Core release-to-E2E runbook](RELEASE_TO_E2E_RUNBOOK.md) to bind the
+- Follow the step-by-step [Server/Core release-to-E2E runbook](ru/RELEASE_TO_E2E_RUNBOOK.md) to bind the
   tag, required CI, runtime bundle, and GHCR image to one exact candidate before qualification.
 
 - Run `python -m pytest -q`.
@@ -752,3 +752,28 @@ Exit codes: `0` OK, `1` WARN, `2` ALERT, `3` UNKNOWN/NOT_IMPLEMENTED, `4` usage 
 `5` authentication failure, `6` timeout/connectivity/HTTP 5xx, and `7` protocol or contract failure.
 Do not treat a green command as physical-world evidence; production rollout and canary evidence remain
 operator-owned.
+## Device lifecycle administration
+
+Lifecycle changes are explicit and guarded; there is no write HTTP endpoint. Inspect a device with:
+
+```powershell
+python -m tools.lifecycle show pi-001 --database-url <isolated-database-url>
+```
+
+Decommission only after confirming the expected state. The command requires `--apply`, validates the
+bounded reason code, and records the transition atomically:
+
+```powershell
+python -m tools.lifecycle set pi-001 --state DECOMMISSIONED --expected-state ACTIVE --reason-code retired --apply --database-url <isolated-database-url>
+```
+
+Use `ACTIVE` to reverse the transition with a new bounded reason. Historical telemetry, state, anomaly
+and photo rows are retained. Decommissioned ingress is accepted for audit but does not reactivate the
+device or include it in active-fleet aggregates.
+
+## Shared worker health
+
+The API and MQTT worker use `/run/senior-pomidor/worker-health.json` from the project-scoped
+`worker-health` volume. The API mounts it read-only and the worker read-write. Health writes replace a
+fully flushed temporary file atomically; missing, malformed, or stale files remain fail-safe (`UNKNOWN`
+or `WARN`) and are not interpreted as healthy.

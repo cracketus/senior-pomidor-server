@@ -569,3 +569,11 @@ Successful CLI JSON output is the validated server response with schema
 `senior-pomidor.pomidorctl-error.v1` object (`command`, stable `error_code`, and safe `message`),
 defined in [`pomidorctl-error-v1.schema.json`](schemas/pomidorctl-error-v1.schema.json). Neither
 format includes bearer tokens, URLs, headers, raw response bodies, or exception text.
+### Device lifecycle (Core storage)
+
+`devices.lifecycle_state` is an additive, bounded value: `ACTIVE` or `DECOMMISSIONED`.
+Existing rows are backfilled as `ACTIVE`. Lifecycle transitions are written by the human-operated
+`python -m tools.lifecycle set ... --apply` command and append a UTC row to
+`device_lifecycle_events`; repeated requests for the current state are idempotent. Incoming telemetry
+for a decommissioned device remains stored and never reactivates it. Active-fleet operator, estimator,
+Grafana and export queries exclude decommissioned devices; device-specific history reads remain available.

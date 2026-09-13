@@ -11,7 +11,9 @@ from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.config import settings
-from app.models import Photo, TelemetryEvent
+from app.device_lifecycle import set_device_lifecycle, show_device_lifecycle
+from app.models import DeviceLifecycleState, Photo, TelemetryEvent
+from app.validation import ValidationError
 
 
 @dataclass(frozen=True)
@@ -117,8 +119,53 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def parse_admin_args(argv: list[str]) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Human-operated Senior Pomidor device lifecycle admin CLI.")
+    parser.add_argument("command", choices=("show", "set"))
+    parser.add_argument("device_id")
+    parser.add_argument("--database-url", default=settings.database_url)
+    parser.add_argument("--state", choices=[state.value for state in DeviceLifecycleState])
+    parser.add_argument("--reason-code", required=False)
+    parser.add_argument(
+        "--expected-state",
+        choices=[state.value for state in DeviceLifecycleState],
+    )
+    parser.add_argument("--apply", action="store_true")
+    return parser.parse_args(argv)
+
+
+def admin_main(argv: list[str]) -> int:
+    args = parse_admin_args(argv)
+    engine = create_engine(args.database_url)
+    try:
+        with Session(engine) as db:
+            if args.command == "show":
+                report = show_device_lifecycle(db, args.device_id)
+            else:
+                if args.state is None or args.reason_code is None or args.expected_state is None:
+                    raise ValidationError("set requires --state, --reason-code and --expected-state")
+                report = set_device_lifecycle(
+                    db,
+                    device_id=args.device_id,
+                    target_state=args.state,
+                    reason_code=args.reason_code,
+                    expected_state=args.expected_state,
+                    apply=args.apply,
+                )
+    except ValidationError as exc:
+        print(json.dumps({"error_code": "lifecycle_validation", "message": str(exc)}))
+        return 2
+    finally:
+        engine.dispose()
+    print(json.dumps(report, indent=2, sort_keys=True))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
-    args = parse_args(argv)
+    raw_argv = list(argv) if argv is not None else __import__("sys").argv[1:]
+    if raw_argv and raw_argv[0] in {"show", "set"}:
+        return admin_main(raw_argv)
+    args = parse_args(raw_argv)
     engine = create_engine(args.database_url)
     SessionLocal = sessionmaker(bind=engine)
     try:

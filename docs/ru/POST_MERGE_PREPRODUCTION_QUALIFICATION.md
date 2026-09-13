@@ -1,4 +1,4 @@
-# Post-merge pre-production qualification
+# Post-merge pre-production qualification — v0.3.0 campaign
 
 ## Цель и мотивация
 
@@ -20,6 +20,11 @@
 Цель этого этапа — получить честный pre-production PASS или зафиксировать NOT_RUN. Это не разрешение
 на production rollout и не доказательство физических или биологических результатов.
 
+| Поле | Значение |
+| --- | --- |
+| Ожидаемый результат | Границы laptop, staging и production определены |
+| Переход | Все действия ниже выполняются только в указанной среде |
+
 ## Дорожная карта участка вокруг эпика #225
 
 | Этап | Что доказывает | Где выполняется | Статус/результат |
@@ -27,13 +32,18 @@
 | #225 foundation | telemetry, persistence, reads, reliability contracts | server CI + local tests | реализовано |
 | #247 / PR #268 | Docker E2E, evidence schemas, invariant checks, fail-closed workflow | laptop + GitHub CI | реализовано |
 | #260 / PR #270 | Core SHA-only RC, staging boundary, preproduction/full validator | laptop + GitHub CI | реализовано |
-| Immutable Core/Edge RC pair | exact Git SHAs, image digests and green publishing CI | Core and Edge repositories | PASS: pair pinned 2026-09-05 |
+| Immutable Core/Edge RC pair | exact Git SHAs, image digests and green publishing CI | Core and Edge repositories | PASS: pair pinned 2026-09-12 |
 | Pre-production qualification | real compatibility, isolated staging, 24h soak, exact bundle, rollback | isolated laptop rehearsal или отдельный staging host | NOT_RUN; следующий этап |
 | Canary | один production Edge после Core rollout | production server + production Edge | NOT_RUN, human approval |
 | Production observation | стабильность после canary и rollback | production | NOT_RUN, human approval |
 
 Результат pre-production не закрывает #225 полностью: canary, production rollout и 24-hour production
 observation остаются отдельными этапами.
+
+| Поле | Значение |
+| --- | --- |
+| Ожидаемый результат | Текущий этап — pre-production; canary и production observation отделены |
+| Переход | Выполнять только pre-production steps 1–13 |
 
 ## Матрица: что где тестировать
 
@@ -47,11 +57,26 @@ observation остаются отдельными этапами.
 | 24h compatibility soak | только с отдельным Edge или отдельным staging host | не на production данных | только human-owned evidence |
 | Canary/production | нет | только с approval | только с approval |
 
+| Поле | Значение |
+| --- | --- |
+| Ожидаемый результат | Для каждой проверки назначена единственная допустимая среда |
+| Переход | Недоступная в допустимой среде проверка получает `NOT_RUN` |
+
 ## Как пользоваться
 
 Работайте блоками сверху вниз. После каждого блока проверяйте ожидаемый результат.
 
 Если результат не совпал: STOP. Не переходить к следующему шагу.
+
+Каждый исполняемый раздел завершается таблицей:
+
+| Поле | Правило |
+| --- | --- |
+| Ожидаемый результат | Наблюдаемое состояние после команд раздела |
+| Переход | Проверяемое условие запуска следующего раздела |
+
+`returncode: 0` подтверждает выполнение команды, но не заменяет `status: PASS`.
+Обязательный `NOT_RUN`, `FAIL`, restart loop или identity mismatch блокирует переход.
 
 Запрещено:
 
@@ -61,30 +86,45 @@ observation остаются отдельными этапами.
 - выполнять команды против GPIO/актуаторов;
 - вручную менять production database.
 
+| Поле | Значение |
+| --- | --- |
+| Ожидаемый результат | Оператор применяет fail-closed переходы и запреты |
+| Переход | Начать шаг 1 только после принятия этих правил |
+
 ## Текущий статус предусловий
+
+| Поле | Значение |
+| --- | --- |
+| Ожидаемый результат | Выбрана одна immutable Core/Edge pair; текущие `PASS` и `NOT_RUN` перечислены ниже |
+| Переход | Не заменять identity во время campaign |
 
 ### Server repository
 
 | Предусловие | Статус |
 | --- | --- |
 | PR #270 влит в main | PASS |
-| Selected Core SHA | `3bcbc15bc94b2eca1d45be8e3713c26d5b0b5c73` |
-| Immutable Core image | `ghcr.io/cracketus/senior-pomidor-server@sha256:7b14b208bab3181fd5234581c5e851d44d4e78fa024f334b90d3611ff04864c0` |
+| Selected Core SHA | `549dc4d21897203c167749611416355f820d6372` |
+| Immutable Core image | `ghcr.io/cracketus/senior-pomidor-server@sha256:5c9f82606bfd499e894fbd8e5a99dfaccb23843f6d9ca1477d5151e0ac194e3e` |
 | Approved brief #260 | PASS |
 | Core RC workflow и staging controller | PASS |
 | Server tests | PASS: `483 passed, 3 skipped` |
 | Bandit и pip-audit | PASS |
 | Staging Compose rendering | PASS |
-| GitHub CI и GHCR artifact | PASS: [CI run 33738751416](https://github.com/cracketus/senior-pomidor-server/actions/runs/33738751416) |
-| Docker на локальной Windows машине | NOT AVAILABLE: нет доступа к Docker daemon |
+| GitHub CI и GHCR artifact | PASS: [CI run 34682810857](https://github.com/cracketus/senior-pomidor-server/actions/runs/34682810857) |
+| Docker на локальной Windows машине | PASS для release image inspection; staging daemon evidence остаётся отдельным gate |
+
+| Поле | Значение |
+| --- | --- |
+| Ожидаемый результат | Core SHA, image digest и CI run зафиксированы |
+| Переход | Использовать эти значения в шагах 1–13 |
 
 ### Edge repository
 
 Для первой qualification явно выбрана и зафиксирована следующая Edge RC identity:
 
-- Edge SHA `553eb44ca7add9a99031f9a096683c1502c5a5a8`;
-- immutable image `ghcr.io/cracketus/senior-pomidor-edge@sha256:acaef9ffbfe32d9f4bd88dfce714026ea191d8271a5172b531861c6094bf4c43`;
-- [green Edge RC workflow run 33548751432](https://github.com/cracketus/senior-pomidor-plant-v2/actions/runs/33548751432).
+- Edge SHA `75d6dee136165baa810faf8c2a37206260bcd01c`;
+- immutable image `ghcr.io/cracketus/senior-pomidor-edge@sha256:0bfa9e67cce7d5b67190f041f71b91c38e284c7263c2b3c112f2ad2f4d75ae6c`;
+- [green Edge RC workflow run 34317752297](https://github.com/cracketus/senior-pomidor-plant-v2/actions/runs/34317752297).
 
 Эта выбранная RC не должна автоматически заменяться более новым кандидатом. Ещё не подтверждены реальные
 qualification prerequisites:
@@ -101,14 +141,19 @@ required CI завершены, но это не означает, что qualif
 evidence не переводит ни один из этих gate в `PASS`; canary требует отдельного production approval.
 Любой identity drift открывает новую qualification campaign и требует повторить все gate.
 
+| Поле | Значение |
+| --- | --- |
+| Ожидаемый результат | Core/Edge RC pair зафиксирована; незавершённые gates имеют `NOT_RUN` |
+| Переход | Шаг 1 использует только указанные SHA и digests; другое значение открывает новую campaign |
+
 ## 1. Проверить server merge и CI
 
 Откройте:
 
     https://github.com/cracketus/senior-pomidor-server/actions
 
-Для Core SHA `3bcbc15bc94b2eca1d45be8e3713c26d5b0b5c73` jobs должны быть PASS в
-[CI run 33738751416](https://github.com/cracketus/senior-pomidor-server/actions/runs/33738751416):
+Для Core SHA `549dc4d21897203c167749611416355f820d6372` jobs должны быть PASS в
+[CI run 34682810857](https://github.com/cracketus/senior-pomidor-server/actions/runs/34682810857):
 
 - `test`
 - `quality`
@@ -126,6 +171,11 @@ evidence не переводит ни один из этих gate в `PASS`; can
 
 Ожидается полный merge SHA и чистое дерево.
 
+| Поле | Значение |
+| --- | --- |
+| Ожидаемый результат | Все пять required jobs — PASS; checkout указывает на выбранный Core SHA; дерево чистое |
+| Переход | Нет failed/cancelled jobs; `git rev-parse HEAD` совпал; `git status --short` пуст |
+
 ## 2. Получить Core RC artifact
 
 Скачайте artifact `senior-pomidor.core.release-candidate.v1` из job `core-release-candidate`.
@@ -134,9 +184,9 @@ evidence не переводит ни один из этих gate в `PASS`; can
     export CORE_SHA="$(jq -r '.git_sha' senior-pomidor.core.release-candidate.v1.json)"
     export CORE_IMAGE="$(jq -r '.image_ref' senior-pomidor.core.release-candidate.v1.json)"
     export CORE_DIGEST="$(jq -r '.image_digest' senior-pomidor.core.release-candidate.v1.json)"
-    test "$CORE_SHA" = "3bcbc15bc94b2eca1d45be8e3713c26d5b0b5c73"
-    test "$CORE_IMAGE" = "ghcr.io/cracketus/senior-pomidor-server@sha256:7b14b208bab3181fd5234581c5e851d44d4e78fa024f334b90d3611ff04864c0"
-    test "$CORE_DIGEST" = "sha256:7b14b208bab3181fd5234581c5e851d44d4e78fa024f334b90d3611ff04864c0"
+    test "$CORE_SHA" = "549dc4d21897203c167749611416355f820d6372"
+    test "$CORE_IMAGE" = "ghcr.io/cracketus/senior-pomidor-server@sha256:5c9f82606bfd499e894fbd8e5a99dfaccb23843f6d9ca1477d5151e0ac194e3e"
+    test "$CORE_DIGEST" = "sha256:5c9f82606bfd499e894fbd8e5a99dfaccb23843f6d9ca1477d5151e0ac194e3e"
     [[ "$CORE_IMAGE" == *"@$CORE_DIGEST" ]]
     [[ "$CORE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
     jq -e '.platforms == ["linux/amd64", "linux/arm64"]' \
@@ -152,42 +202,57 @@ evidence не переводит ни один из этих gate в `PASS`; can
 
 Последняя команда должна вывести полный CORE_SHA.
 
+| Поле | Значение |
+| --- | --- |
+| Ожидаемый результат | Artifact identity, registry digest, platforms и OCI revision согласованы |
+| Переход | Все `test`/`jq` завершились с кодом `0`; OCI revision равен `CORE_SHA` |
+
 ## 3. Проверить Edge repository
 
 В Edge checkout:
 
     cd /path/to/senior-pomidor-plant-v2
     git fetch --all --tags
-    git checkout 553eb44ca7add9a99031f9a096683c1502c5a5a8
+    git checkout 75d6dee136165baa810faf8c2a37206260bcd01c
     git rev-parse HEAD
     git status --short
 
 Должен быть SHA:
 
-    553eb44ca7add9a99031f9a096683c1502c5a5a8
+    75d6dee136165baa810faf8c2a37206260bcd01c
 
 Проверьте Edge CI для этого SHA и получите Edge RC artifact. Digest нельзя вычислять из Git SHA.
 
-    export EDGE_SHA=553eb44ca7add9a99031f9a096683c1502c5a5a8
-    export EDGE_IMAGE='ghcr.io/cracketus/senior-pomidor-edge@sha256:acaef9ffbfe32d9f4bd88dfce714026ea191d8271a5172b531861c6094bf4c43'
-    export EDGE_DIGEST='sha256:acaef9ffbfe32d9f4bd88dfce714026ea191d8271a5172b531861c6094bf4c43'
+    export EDGE_SHA=75d6dee136165baa810faf8c2a37206260bcd01c
+    export EDGE_IMAGE='ghcr.io/cracketus/senior-pomidor-edge@sha256:0bfa9e67cce7d5b67190f041f71b91c38e284c7263c2b3c112f2ad2f4d75ae6c'
+    export EDGE_DIGEST='sha256:0bfa9e67cce7d5b67190f041f71b91c38e284c7263c2b3c112f2ad2f4d75ae6c'
     [[ "$EDGE_IMAGE" == *"@$EDGE_DIGEST" ]]
     [[ "$EDGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
     docker pull "$EDGE_IMAGE"
     docker image inspect "$EDGE_IMAGE" \
       --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}'
 
-Ожидается OCI revision `553eb44ca7add9a99031f9a096683c1502c5a5a8`. Required Edge RC CI для этой
-identity подтверждён [workflow run 33548751432](https://github.com/cracketus/senior-pomidor-plant-v2/actions/runs/33548751432).
+Ожидается OCI revision `75d6dee136165baa810faf8c2a37206260bcd01c`. Required Edge RC CI для этой
+identity подтверждён [workflow run 34317752297](https://github.com/cracketus/senior-pomidor-plant-v2/actions/runs/34317752297).
 
 Edge maintainer дополнительно подтверждает staging identity, MQTT topic prefix, container name,
 interop network и безопасные software-only fault paths. Недоступный Edge path остаётся NOT_RUN.
+
+| Поле | Значение |
+| --- | --- |
+| Ожидаемый результат | Edge checkout, immutable image digest, OCI revision и required CI согласованы |
+| Переход | Identity совпала; Edge maintainer подтвердил staging-only software paths; иначе Edge gates — `NOT_RUN` |
 
 ### Что делать с production Edge node
 
 На production Edge node разрешена только read-only проверка текущей версии и health. Не подключайте
 его к `senior-pomidor-staging-interop`, не переименовывайте production identity в `edge-staging-*`
 и не направляйте его telemetry в staging без отдельного human-approved maintenance window.
+
+| Поле | Значение |
+| --- | --- |
+| Ожидаемый результат | Production Edge не изменён и не подключён к staging |
+| Переход | Для следующих шагов используется только dedicated Edge staging container |
 
 Если отдельного staging Edge container или simulator нет, Edge/Core compatibility, fault scenarios
 и 24-hour soak нельзя выполнить на ноутбуке. Их нужно оставить `NOT_RUN` и запросить отдельный staging
@@ -212,8 +277,8 @@ interop network и безопасные software-only fault paths. Недост�
     test -d "$SERVER_ROOT" -a -d "$EDGE_ROOT"
     cd "$SERVER_ROOT"
     git fetch origin
-    git checkout --detach 3bcbc15bc94b2eca1d45be8e3713c26d5b0b5c73
-    test "$(git rev-parse HEAD)" = "3bcbc15bc94b2eca1d45be8e3713c26d5b0b5c73"
+    git checkout --detach 549dc4d21897203c167749611416355f820d6372
+    test "$(git rev-parse HEAD)" = "549dc4d21897203c167749611416355f820d6372"
 
 Создать staging data directories:
 
@@ -222,6 +287,11 @@ interop network и безопасные software-only fault paths. Недост�
       "$STAGING_ROOT/data/estimator-private" "$STAGING_ROOT/data/grafana" \
       "$STAGING_ROOT/secrets"
     chmod 700 "$STAGING_ROOT/data" "$STAGING_ROOT/secrets"
+
+| Поле | Значение |
+| --- | --- |
+| Ожидаемый результат | Core checkout равен выбранному `CORE_SHA`; staging data и secrets находятся в `$STAGING_ROOT` на WSL2/ext4 |
+| Переход | `test` и `git rev-parse` завершились с кодом `0`; Docker daemon доступен |
 
 ## 5. Подготовить env и MQTT credentials
 
@@ -234,10 +304,12 @@ interop network и безопасные software-only fault paths. Недост�
 не выводя содержимое файла:
 
     sed -i 's/\r$//' "$STAGING_ROOT/secrets/staging.env"
+    sed -i '1s/^\xEF\xBB\xBF//' "$STAGING_ROOT/secrets/staging.env"
+    ! grep -q $'\r' "$STAGING_ROOT/secrets/staging.env"
 
 Обязательные значения:
 
-    APP_IMAGE=ghcr.io/cracketus/senior-pomidor-server@sha256:7b14b208bab3181fd5234581c5e851d44d4e78fa024f334b90d3611ff04864c0
+    APP_IMAGE=ghcr.io/cracketus/senior-pomidor-server@sha256:5c9f82606bfd499e894fbd8e5a99dfaccb23843f6d9ca1477d5151e0ac194e3e
     COMPOSE_PROFILES=observability
     DEPLOYMENT_MODE=staging
     STAGING_DEVICE_PREFIX=edge-staging-
@@ -269,15 +341,33 @@ interop network и безопасные software-only fault paths. Недост�
 Создать password file интерактивно:
 
     mosquitto_passwd -c "$STAGING_ROOT/secrets/mosquitto.password" senior-pomidor-staging
-    chmod 600 "$STAGING_ROOT/secrets/mosquitto.password"
+    sudo chown 1883:1883 "$STAGING_ROOT/secrets/mosquitto.password"
+    sudo chmod 600 "$STAGING_ROOT/secrets/mosquitto.password"
 
 Создать и проверить ACL:
 
     cp deploy/staging/mosquitto.acl.example "$STAGING_ROOT/secrets/mosquitto.acl"
-    chmod 600 "$STAGING_ROOT/secrets/mosquitto.acl"
+    sudo chown 1883:1883 "$STAGING_ROOT/secrets/mosquitto.acl"
+    sudo chmod 600 "$STAGING_ROOT/secrets/mosquitto.acl"
     grep -F 'topic senior-pomidor-staging/#' "$STAGING_ROOT/secrets/mosquitto.acl"
 
 Не выводить env/password/token в terminal log, issue или evidence.
+
+Загрузить env и проверить несекретные ограничения:
+
+    set -a
+    source "$STAGING_ROOT/secrets/staging.env"
+    set +a
+    export STAGING_GRAFANA_URL="http://127.0.0.1:$STAGING_GRAFANA_PUBLISHED_PORT"
+    test "$DEPLOYMENT_MODE" = staging
+    test "$GRAFANA_CLOUD_EXPORT_ENABLED" = false
+    test "$STAGING_INTEROP_NETWORK" = senior-pomidor-staging-interop
+    test "$STAGING_EDGE_CONTAINER_NAME" = senior-pomidor-edge-staging
+
+| Поле | Значение |
+| --- | --- |
+| Ожидаемый результат | Env загружается без `command not found`; password и ACL — regular files `600`, owner `1883:1883`; bind paths абсолютные |
+| Переход | Все `test` завершились с кодом `0`; password, ACL и config существуют по точным путям из env |
 
 ### Подготовить отдельный Edge staging container
 
@@ -316,8 +406,13 @@ interop network и безопасные software-only fault paths. Недост�
 непроверенные образы запрещены:
 
     ./manage.sh deploy \
-      ghcr.io/cracketus/senior-pomidor-edge@sha256:acaef9ffbfe32d9f4bd88dfce714026ea191d8271a5172b531861c6094bf4c43 \
-      553eb44ca7add9a99031f9a096683c1502c5a5a8
+      ghcr.io/cracketus/senior-pomidor-edge@sha256:0bfa9e67cce7d5b67190f041f71b91c38e284c7263c2b3c112f2ad2f4d75ae6c \
+      75d6dee136165baa810faf8c2a37206260bcd01c
+
+| Поле | Значение |
+| --- | --- |
+| Ожидаемый результат | Dedicated Edge bundle использует immutable Edge image, mock sensors и staging credentials |
+| Переход | `./manage.sh deploy` завершился с кодом `0`; image digest и revision совпадают с выбранной Edge RC |
 
 ## 6. Проверить Compose до запуска
 
@@ -347,7 +442,25 @@ interop network и безопасные software-only fault paths. Недост�
 
 Все ports должны быть `127.0.0.1:*`; export должен быть disabled.
 
+Проверить доступность host ports до `up`:
+
+    for port in \
+      "$STAGING_API_PUBLISHED_PORT" "$STAGING_MQTT_PUBLISHED_PORT" \
+      "$STAGING_POSTGRES_PUBLISHED_PORT" "$STAGING_GRAFANA_PUBLISHED_PORT"; do
+      ! ss -ltn "sport = :$port" | tail -n +2 | grep -q .
+    done
+
+| Поле | Значение |
+| --- | --- |
+| Ожидаемый результат | Compose config валиден; published ports — loopback; external export отключён; host ports свободны |
+| Переход | `config --quiet` и проверки портов завершились с кодом `0` |
+
 ## 7. Запустить локальный staging-like Core и подключить только dedicated Edge
+
+| Поле | Значение |
+| --- | --- |
+| Ожидаемый результат | Core и dedicated Edge запущены в isolated staging topology |
+| Переход | Выполнить bind-mount проверки до первого `up` |
 
 ### Обязательная проверка bind mounts перед запуском
 
@@ -364,16 +477,24 @@ Operation not permitted`.
 
 В WSL2/Linux shell:
 
-    test -d "$STAGING_ROOT/data/postgres"
-    test -f "$STAGING_ROOT/secrets/mosquitto.password"
-    test -f "$STAGING_ROOT/secrets/mosquitto.acl"
-    test -f "$SERVER_ROOT/deploy/staging/mosquitto.conf"
-    test ! -d "$STAGING_ROOT/secrets/mosquitto.password"
-    test ! -d "$STAGING_ROOT/secrets/mosquitto.acl"
-    test ! -d "$SERVER_ROOT/deploy/staging/mosquitto.conf"
-    chmod 700 "$STAGING_ROOT/data/postgres"
-    sudo chmod 600 "$STAGING_ROOT/secrets/mosquitto.password" \
-      "$STAGING_ROOT/secrets/mosquitto.acl"
+    test -d "$STAGING_POSTGRES_DATA_DIR"
+    test -d "$STAGING_GRAFANA_DATA_DIR"
+    test -f "$STAGING_MOSQUITTO_PASSWORD_FILE"
+    test -f "$STAGING_MOSQUITTO_ACL_FILE"
+    test -f "$STAGING_MOSQUITTO_CONFIG_FILE"
+    test ! -d "$STAGING_MOSQUITTO_PASSWORD_FILE"
+    test ! -d "$STAGING_MOSQUITTO_ACL_FILE"
+    test ! -d "$STAGING_MOSQUITTO_CONFIG_FILE"
+    sudo chown 1883:1883 "$STAGING_MOSQUITTO_PASSWORD_FILE" \
+      "$STAGING_MOSQUITTO_ACL_FILE"
+    sudo chmod 600 "$STAGING_MOSQUITTO_PASSWORD_FILE" \
+      "$STAGING_MOSQUITTO_ACL_FILE"
+    sudo chown -R 472:472 "$STAGING_GRAFANA_DATA_DIR"
+    sudo chmod -R u+rwX,go-rwx "$STAGING_GRAFANA_DATA_DIR"
+    chmod 700 "$STAGING_POSTGRES_DATA_DIR"
+    stat -c '%F %a %u:%g %n' \
+      "$STAGING_MOSQUITTO_PASSWORD_FILE" "$STAGING_MOSQUITTO_ACL_FILE" \
+      "$STAGING_MOSQUITTO_CONFIG_FILE" "$STAGING_GRAFANA_DATA_DIR"
 
 Если staging уже запускался и `postgres` или `mosquitto` находится в restart loop,
 остановите только этот staging project, исправьте пути, затем повторите запуск. Сначала
@@ -405,6 +526,23 @@ Operation not permitted`.
     curl --fail http://127.0.0.1:18000/health
     docker network inspect senior-pomidor-staging-interop
 
+`curl` выполнять после статуса API `healthy`. `connection reset` при `health: starting` не является
+результатом проверки. Дождаться bounded healthcheck; повторить `curl`.
+
+Если Docker Desktop возвращает `/forwards/expose ... status: 500` для нескольких свободных портов:
+
+1. Остановить только конфликтующий staging service.
+2. Проверить выбранный порт через `ss -ltn` и `docker ps`.
+3. Перезапустить Docker Desktop. `wsl --shutdown` выполнять только после остановки других WSL workloads.
+4. Повторить `config --quiet` и `up`. Не использовать `down -v`.
+
+| Симптом | Проверка | Исправление |
+| --- | --- | --- |
+| Mosquitto: `is not a file` | `stat` exact source из `docker inspect .Mounts` | Исправить env; создать regular file до `up` |
+| Mosquitto: `Unable to open pwfile` | owner/mode password и ACL | `chown 1883:1883`; `chmod 600` |
+| Grafana: `/var/lib/grafana is not writable` | source mount и owner data directory | `chown -R 472:472`; owner-only write permissions |
+| Host port: `/forwards/expose ... 500` | порт свободен в `ss` и `docker ps` | Перезапустить Docker Desktop forwarding |
+
 Запустить Edge bundle и подключить его к Core network:
 
     cd "$EDGE_STAGING_ROOT"
@@ -432,6 +570,11 @@ Operation not permitted`.
 Если `senior-pomidor-edge-staging` отсутствует, остановите qualification: Edge/Core
 scenarios должны иметь статус `NOT_RUN`, а не PASS.
 
+| Поле | Значение |
+| --- | --- |
+| Ожидаемый результат | `postgres`, `mosquitto`, `api`, `worker`, `state-estimator-worker`, `grafana` — healthy; `migrate` — `Exited (0)`; `/ready` и `/health` — HTTP 200; Edge подключён к interop network |
+| Переход | Нет restart loop; healthchecks завершены; Edge image, revision и network совпадают с выбранной RC |
+
 ## 8. Выполнить controller preflight
 
     cd "$SERVER_ROOT"
@@ -441,6 +584,14 @@ scenarios должны иметь статус `NOT_RUN`, а не PASS.
     python -m tools.staging_qualification preflight
 
 Ожидается `status=PASS`, `edge_connected=true`, fixed network и `external_export=disabled`.
+
+`command not found` во время `source` или ошибка `DEPLOYMENT_MODE=staging` при видимом значении
+`staging` означает CRLF/BOM. Повторить нормализацию из шага 5; загрузить env заново.
+
+| Поле | Значение |
+| --- | --- |
+| Ожидаемый результат | JSON содержит `status: PASS`, `edge_connected: true`, fixed network и `external_export: disabled` |
+| Переход | Только `status: PASS`; любой другой статус блокирует шаг 9 |
 
 ## 9. Выполнить десять сценариев
 
@@ -460,6 +611,16 @@ Controller output не является PASS evidence. Для каждого с�
 record_id, observation time, API/Grafana outcomes и отсутствие external export.
 
 Если сценарий нельзя выполнить через реальный Edge software path, отметить NOT_RUN.
+
+Текущий controller после boundary checks возвращает `status: NOT_RUN`. Для
+`core-outage-spool-growth` он останавливает API; для `core-recovery-full-drain` запускает API.
+`returncode: 0` означает успешный вызов controller, не успешный сценарий. После этой пары повторить
+`preflight`, `/ready` и `/health`.
+
+| Поле | Значение |
+| --- | --- |
+| Ожидаемый результат | Для каждого сценария есть реальный sanitized Edge/Core report с counts, timestamps, duplicate и alert outcomes; controller-only результат остаётся `NOT_RUN` |
+| Переход | Все 10 реальных сценариев имеют `PASS`; при любом `NOT_RUN` не запускать qualification workflow с `--require-pass` |
 
 ## 10. Провести 24-hour soak
 
@@ -502,7 +663,17 @@ Result-файл имеет status `RUNNING`, `PASS`, `FAIL`, `INTERRUPTED` ил�
 Прервать soak при crash, unrecovered unhealthy state, бесконечном spool/resource growth,
 count mismatch, duplicate rows, privacy leak или внешней отправке.
 
+| Поле | Значение |
+| --- | --- |
+| Ожидаемый результат | Monitor завершил непрерывные 24 часа со статусом `PASS`; Core/Edge health и telemetry freshness не прерывались |
+| Переход | Только финальный `PASS`; sleep/reboot, `FAIL`, `ERROR`, `INTERRUPTED` или `NOT_RUN` блокирует шаг 11 |
+
 ## 10.1. Проверить PostgreSQL и Grafana во время soak
+
+| Поле | Значение |
+| --- | --- |
+| Ожидаемый результат | Midpoint и final read-only snapshots подтверждают persistence, freshness, deduplication и Grafana reads |
+| Переход | Выполнить обе группы проверок ниже; каждая должна завершиться `PASS` |
 
 `staging_overnight_check.sh` проверяет состояние контейнеров, `/ready`, `/health`, Edge-связность и
 свежесть telemetry, но сам по себе не доказывает, что PostgreSQL продолжает принимать новые записи,
@@ -536,6 +707,11 @@ count mismatch, duplicate rows, privacy leak или внешней отправ�
 Зафиксируйте значения на середине soak и сравните их с финальным snapshot. Это доказывает реальную
 цепочку Edge -> MQTT/HTTP -> Core -> PostgreSQL, а не только healthcheck контейнера.
 
+| Поле | Значение |
+| --- | --- |
+| Ожидаемый результат | Primary доступен; telemetry свежая; duplicate `record_id` отсутствуют; финальные counts не меньше midpoint counts |
+| Переход | Все четыре database evidence отмечены `PASS` |
+
 ### Grafana
 
 Сначала загрузить credentials только из защищённого staging env-файла; не печатать файл и значения:
@@ -543,16 +719,17 @@ count mismatch, duplicate rows, privacy leak или внешней отправ�
     set -a
     source "$STAGING_ROOT/secrets/staging.env"
     set +a
+    export STAGING_GRAFANA_URL="http://127.0.0.1:$STAGING_GRAFANA_PUBLISHED_PORT"
 
 Проверить саму Grafana:
 
-    curl --fail --silent --show-error http://127.0.0.1:13000/api/health | jq .
+    curl --fail --silent --show-error "$STAGING_GRAFANA_URL/api/health" | jq .
 
 Проверить PostgreSQL datasource:
 
     curl --fail --silent --show-error \
       -u "$STAGING_GRAFANA_ADMIN_USER:$STAGING_GRAFANA_ADMIN_PASSWORD" \
-      http://127.0.0.1:13000/api/datasources/uid/senior-pomidor-postgres \
+      "$STAGING_GRAFANA_URL/api/datasources/uid/senior-pomidor-postgres" \
       | jq '{name, type, uid, url, database, readOnly}'
 
 Проверить оба dashboard и provisioned alert rules:
@@ -560,13 +737,13 @@ count mismatch, duplicate rows, privacy leak или внешней отправ�
     for uid in senior-pomidor-telemetry senior-pomidor-edge-reliability; do
       curl --fail --silent --show-error \
         -u "$STAGING_GRAFANA_ADMIN_USER:$STAGING_GRAFANA_ADMIN_PASSWORD" \
-        "http://127.0.0.1:13000/api/dashboards/uid/$uid" \
+        "$STAGING_GRAFANA_URL/api/dashboards/uid/$uid" \
         | jq --arg uid "$uid" '{expected_uid:$uid, actual_uid:.dashboard.uid, title:.dashboard.title, panels:(.dashboard.panels|length)}'
     done
 
     curl --fail --silent --show-error \
       -u "$STAGING_GRAFANA_ADMIN_USER:$STAGING_GRAFANA_ADMIN_PASSWORD" \
-      http://127.0.0.1:13000/api/v1/provisioning/alert-rules \
+      "$STAGING_GRAFANA_URL/api/v1/provisioning/alert-rules" \
       | jq '[.[] | {title, uid, state, health}]'
 
 Проверить не только конфигурацию datasource, но и реальный read query через Grafana. Используйте
@@ -577,7 +754,7 @@ count mismatch, duplicate rows, privacy leak или внешней отправ�
     curl --fail --silent --show-error \
       -u "$STAGING_GRAFANA_ADMIN_USER:$STAGING_GRAFANA_ADMIN_PASSWORD" \
       -H 'Content-Type: application/json' \
-      -X POST http://127.0.0.1:13000/api/ds/query \
+      -X POST "$STAGING_GRAFANA_URL/api/ds/query" \
       --data-binary "$payload" \
       | jq .
 
@@ -609,12 +786,17 @@ Grafana authentication, а `400` обычно означает malformed JSON; �
 Не выполняйте `UPDATE`, `DELETE`, `VACUUM FULL`, `docker compose down -v` или любые действия,
 изменяющие staging volumes.
 
+| Поле | Значение |
+| --- | --- |
+| Ожидаемый результат | PostgreSQL и все Grafana read-only проверки имеют `PASS`; telemetry свежая; alerts без unexpected error |
+| Переход | Все девять перечисленных evidence имеют `PASS`; иначе soak/rehearsal не завершён |
+
 ## 11. Exact-bundle rehearsal и rollback
 
     (
       set -euo pipefail
       cd "$SERVER_ROOT"
-      CORE_SHA=3bcbc15bc94b2eca1d45be8e3713c26d5b0b5c73
+      CORE_SHA=549dc4d21897203c167749611416355f820d6372
       read -r -p 'Published release version for this Core SHA (vX.Y.Z): ' RELEASE_VERSION
       [[ "$RELEASE_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
 
@@ -662,13 +844,31 @@ Rollback — только application-only: вернуть предыдущий 
 использует `down -v`. После rollback проверить readiness, health, ingestion, latest/history reads,
 старые durable rows и новый Edge payload.
 
+| Поле | Значение |
+| --- | --- |
+| Ожидаемый результат | Published bundle checksum, `VERSION`, `REVISION` и Core identity совпадают; application-only rollback сохраняет data и восстанавливает health/ingestion/read paths |
+| Переход | Exact-bundle rehearsal и rollback evidence имеют `PASS`; любой отсутствующий release asset или identity mismatch блокирует шаг 12 |
+
 ## 12. Создать и проверить sanitized evidence
 
     cd "$SERVER_ROOT"
-    read -r -p 'Qualification report ID (bounded lowercase): ' REPORT_ID
+    REPORT_ID="preprod-$(date -u +%Y%m%d-%H%M%S)-core${CORE_SHA:0:8}-edge${EDGE_SHA:0:8}"
     [[ "$REPORT_ID" =~ ^[a-z0-9][a-z0-9._-]{0,63}$ ]] || exit 1
+    test ! -e "docs/release-evidence/$REPORT_ID"
     export REPORT_ID
     mkdir -p "docs/release-evidence/$REPORT_ID"
+
+`REPORT_ID` идентифицирует одну immutable Core/Edge campaign. Не переиспользовать ID после identity drift.
+
+Создать структуру из `NOT_RUN` templates:
+
+    cp tests/fixtures/release_qualification/edge_core_compatibility_report_v1.json \
+      "docs/release-evidence/$REPORT_ID/edge-core-compatibility.json"
+    cp tests/fixtures/release_qualification/release_validation_v1.json \
+      "docs/release-evidence/$REPORT_ID/release-validation.json"
+
+Templates не являются evidence. Заполнять фактическими sanitized значениями только из завершённых
+шагов 1–11. Не менять `NOT_RUN` на `PASS` без соответствующего evidence.
 
 Разрешены только:
 
@@ -706,6 +906,26 @@ private paths, process IDs, database dumps или production secrets.
 
 Проверка `--mode full` до canary/production должна завершиться ошибкой из-за NOT_RUN.
 
+После успешной локальной проверки и независимого review закоммитить только два report-файла:
+
+    EVIDENCE_BRANCH="evidence/$REPORT_ID"
+    git switch -c "$EVIDENCE_BRANCH"
+    git add \
+      "docs/release-evidence/$REPORT_ID/edge-core-compatibility.json" \
+      "docs/release-evidence/$REPORT_ID/release-validation.json"
+    test "$(git diff --cached --name-only | wc -l)" -eq 2
+    git commit -m "docs: add $REPORT_ID release evidence"
+    git push -u origin "$EVIDENCE_BRANCH"
+    EVIDENCE_REF="$(git rev-parse HEAD)"
+    export EVIDENCE_REF
+
+Workflow принимает branch, tag или commit SHA. Этот runbook требует immutable commit SHA.
+
+| Поле | Значение |
+| --- | --- |
+| Ожидаемый результат | Оба validators завершились с кодом `0`; commit содержит только два sanitized report-файла; `EVIDENCE_REF` доступен в origin |
+| Переход | `REPORT_ID` совпадает с directory name; оба обязательных preproduction reports проходят `--require-pass`; commit SHA опубликован |
+
 ## 13. Запустить GitHub qualification workflow
 
 Откройте:
@@ -714,14 +934,14 @@ private paths, process IDs, database dumps или production secrets.
 
 Нажмите `Run workflow` и заполните:
 
-    core_sha:    3bcbc15bc94b2eca1d45be8e3713c26d5b0b5c73
-    core_image:  ghcr.io/cracketus/senior-pomidor-server@sha256:7b14b208bab3181fd5234581c5e851d44d4e78fa024f334b90d3611ff04864c0
-    core_digest: sha256:7b14b208bab3181fd5234581c5e851d44d4e78fa024f334b90d3611ff04864c0
-    edge_sha:    553eb44ca7add9a99031f9a096683c1502c5a5a8
-    edge_image:  ghcr.io/cracketus/senior-pomidor-edge@sha256:acaef9ffbfe32d9f4bd88dfce714026ea191d8271a5172b531861c6094bf4c43
-    edge_digest: sha256:acaef9ffbfe32d9f4bd88dfce714026ea191d8271a5172b531861c6094bf4c43
-    evidence_ref: ветка или tag с docs/release-evidence/<REPORT_ID>/
-    report_id:    <назначить при фактическом запуске; bounded lowercase id>
+    core_sha:    549dc4d21897203c167749611416355f820d6372
+    core_image:  ghcr.io/cracketus/senior-pomidor-server@sha256:5c9f82606bfd499e894fbd8e5a99dfaccb23843f6d9ca1477d5151e0ac194e3e
+    core_digest: sha256:5c9f82606bfd499e894fbd8e5a99dfaccb23843f6d9ca1477d5151e0ac194e3e
+    edge_sha:    75d6dee136165baa810faf8c2a37206260bcd01c
+    edge_image:  ghcr.io/cracketus/senior-pomidor-edge@sha256:0bfa9e67cce7d5b67190f041f71b91c38e284c7263c2b3c112f2ad2f4d75ae6c
+    edge_digest: sha256:0bfa9e67cce7d5b67190f041f71b91c38e284c7263c2b3c112f2ad2f4d75ae6c
+    evidence_ref: <EVIDENCE_REF — immutable commit SHA из шага 12>
+    report_id:    <REPORT_ID — directory name из шага 12>
     mode:         preproduction
 
 Ожидается:
@@ -731,6 +951,11 @@ private paths, process IDs, database dumps или production secrets.
 - `release-validation` — PASS.
 
 Это означает только pre-production qualification, не production readiness.
+
+| Поле | Значение |
+| --- | --- |
+| Ожидаемый результат | Jobs `system-invariants`, `edge-core-e2e`, `release-validation` имеют `PASS` для exact identities и evidence commit |
+| Переход | Pre-production gate завершён; production/canary остаются `NOT_RUN` до отдельного human approval |
 
 ## 14. Финальные ограничения
 
@@ -744,3 +969,16 @@ private paths, process IDs, database dumps или production secrets.
 - production 24-hour observation.
 
 Нельзя закрывать epic #225 только на основании software CI или synthetic fixtures.
+
+| Поле | Значение |
+| --- | --- |
+| Ожидаемый результат | Итоговый статус каждого gate записан как `PASS`, `FAIL` или `NOT_RUN`; production operations не выполнялись |
+| Переход | Следующего автоматического шага нет; canary начинается только по отдельному approved production plan |
+## v0.3.1 Core lifecycle and health qualification
+
+Before release-owner acceptance, verify in the isolated project that the API and MQTT worker share
+the project-scoped `worker-health` volume, with read-only API and read-write worker mounts. Exercise
+missing, malformed and stale health files and the guarded lifecycle CLI. Confirm a decommissioned
+device remains readable, its ingress is retained without reactivation, and it is absent from active-fleet
+operator, estimator and export aggregates. Cross-repository Edge discriminator/ACK scenarios remain
+`NOT_RUN` here until the accepted #248 report covers the exact Core/Edge pair.

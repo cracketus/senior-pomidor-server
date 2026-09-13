@@ -1,18 +1,52 @@
 # Установка нового Server/Core release на production server
 
+| Поле | Значение |
+| --- | --- |
+| Версия документа | `2026-09-13.1` |
+| Дата проверки | `2026-09-13` |
+| Целевой release | `v0.3.0` |
+| Rollback release | `v0.2.5` |
+| Текущий статус | `BLOCKED`: обязательные production gates и accepted release evidence не завершены |
+
+### Зафиксированные release identities
+
+| Artifact | Version / revision | SHA-256 / immutable digest |
+| --- | --- | --- |
+| Core Git | `549dc4d21897203c167749611416355f820d6372` | — |
+| Core image | `ghcr.io/cracketus/senior-pomidor-server@sha256:5c9f82606bfd499e894fbd8e5a99dfaccb23843f6d9ca1477d5151e0ac194e3e` | `sha256:5c9f82606bfd499e894fbd8e5a99dfaccb23843f6d9ca1477d5151e0ac194e3e` |
+| Core runtime bundle | `senior-pomidor-runtime-v0.3.0.tar.gz` | `7deb933e071924a01fae5006d89ef309b0df51c6a6973c4d5f12547be5b2c4e4` |
+| Edge Git | `75d6dee136165baa810faf8c2a37206260bcd01c` | — |
+| Edge image | `ghcr.io/cracketus/senior-pomidor-edge@sha256:0bfa9e67cce7d5b67190f041f71b91c38e284c7263c2b3c112f2ad2f4d75ae6c` | `sha256:0bfa9e67cce7d5b67190f041f71b91c38e284c7263c2b3c112f2ad2f4d75ae6c` |
+| Rollback Core Git | `3b91260579dd875c4075eb0cfb39538f1ea60e01` | — |
+| Rollback Core image | `ghcr.io/cracketus/senior-pomidor-server@sha256:6147b72b04146244b1ed15f7146ac1fee74c07342c875d465dcdcf2e8a101524` | `sha256:6147b72b04146244b1ed15f7146ac1fee74c07342c875d465dcdcf2e8a101524` |
+| Rollback runtime bundle | `senior-pomidor-runtime-v0.2.5.tar.gz` | `f55dd007df24b241108d577703dda21177e0d54d20b6af0c327e9090c4424ada` |
+| Accepted report ID | `NOT_AVAILABLE` | rollout blocked |
+| Immutable evidence ref | `NOT_AVAILABLE` | rollout blocked |
+
+**Ожидается:** оператор использует только identities из таблицы.
+
+**Переход:** начать шаг 0; любое другое значение открывает новую release campaign.
+
 > СДВГ-режим: выполняйте **только один пронумерованный шаг за раз**. После каждого шага остановитесь,
 > прочитайте блоки **Ожидается**, **STOP** и **GO**, поставьте галочку в журнале и только потом
 > переходите дальше. Не вставляйте в терминал сразу несколько следующих блоков.
 
 ## 0. Сначала прочитайте это
 
+**Ожидаемый результат:** оператор понимает scope, текущий `BLOCKED` и запреты.
+
+**Переход:** шаг 1 разрешён; production mutation запрещена до `GO` шага 2.
+
 Этот runbook предназначен для source-free Ubuntu production layout Senior Pomidor. Он описывает
 Core-first rollout одного заранее протестированного immutable release. Он не разрешает deployment:
 production change window и оператор должны быть отдельно одобрены человеком.
 
-На момент 2026-08-29 umbrella issue #189 и обязательные #77, #78, #84, #85, #86, #185 и #186 имеют
+На `2026-09-13` umbrella issue #189 и обязательные #77, #78, #84, #85, #86, #185 и #186 имеют
 состояние `OPEN`. Если для устанавливаемого кандидата нет принятых `PASS`-evidence по этим gate,
 остановитесь на шаге 2. Слова «тесты прошли» без точных SHA/digest и evidence references недостаточно.
+
+Для `v0.3.0` real Edge/Core scenarios, 24-hour staging soak, exact-bundle rollback rehearsal,
+`report_id` и `evidence_ref` не приняты. Текущий production rollout запрещён.
 
 ### Карта риска
 
@@ -24,6 +58,10 @@ production change window и оператор должны быть отдель�
 | `4 — критический` | Переключается release или перезапускается application | При failed acceptance выполнить раздел rollback |
 | `5 — запрет` | Нет recovery proof, identity расходится или требуется destructive action | Не выполнять; нужен отдельный human decision |
 
+**Ожидаемый результат:** каждому шагу назначен риск `1..5`.
+
+**Переход:** применять STOP/rollback, указанный для уровня риска.
+
 ### Никогда не делать
 
 - не использовать `docker compose down -v`;
@@ -34,6 +72,10 @@ production change window и оператор должны быть отдель�
 - не коммитить production logs, payloads, hostnames, addresses, paths или credentials;
 - не обновлять Edge до успешной установки и проверки Core;
 - не откатывать additive database migration и не удалять новую telemetry.
+
+**Ожидаемый результат:** запрещённые действия исключены из change plan.
+
+**Переход:** шаг 1 разрешён только после подтверждения запретов оператором.
 
 ## 1. Организуйте работу
 
@@ -101,13 +143,20 @@ Get-Command git, gh, python, tar.exe, ssh.exe, scp.exe
 Проверьте pre-production reports для точных identities в PowerShell:
 
 ```powershell
-$ReportId = '<accepted-report-id>'
-$CoreSha = '<40-lowercase-hex>'
-$CoreImage = 'ghcr.io/cracketus/senior-pomidor-server@sha256:<64-lowercase-hex>'
-$CoreDigest = 'sha256:<64-lowercase-hex>'
-$EdgeSha = '<40-lowercase-hex>'
-$EdgeImage = '<exact-immutable-edge-image-ref>'
-$EdgeDigest = 'sha256:<64-lowercase-hex>'
+$EvidenceRef = Read-Host 'Accepted immutable evidence commit SHA'
+if ($EvidenceRef -notmatch '^[0-9a-f]{40}$') { throw 'Missing or invalid immutable evidence commit SHA' }
+git fetch origin $EvidenceRef
+git checkout --detach $EvidenceRef
+if ((git rev-parse HEAD).Trim() -ne $EvidenceRef) { throw 'Evidence checkout mismatch' }
+
+$ReportId = Read-Host 'Accepted report_id'
+if ($ReportId -notmatch '^[a-z0-9][a-z0-9._-]{0,63}$') { throw 'Missing or invalid accepted report_id' }
+$CoreSha = '549dc4d21897203c167749611416355f820d6372'
+$CoreDigest = 'sha256:5c9f82606bfd499e894fbd8e5a99dfaccb23843f6d9ca1477d5151e0ac194e3e'
+$CoreImage = "ghcr.io/cracketus/senior-pomidor-server@$CoreDigest"
+$EdgeSha = '75d6dee136165baa810faf8c2a37206260bcd01c'
+$EdgeDigest = 'sha256:0bfa9e67cce7d5b67190f041f71b91c38e284c7263c2b3c112f2ad2f4d75ae6c'
+$EdgeImage = "ghcr.io/cracketus/senior-pomidor-edge@$EdgeDigest"
 
 python -m tools.release_qualification validate `
   --kind edge-core-compatibility `
@@ -130,6 +179,10 @@ gate. Не переходите к backup/install.
 
 ## 3. Скачать и проверить release assets
 
+**Ожидаемый результат:** new и rollback assets скачаны и проверены.
+
+**Переход:** выполнить 3.1, затем 3.2; шаг 4 разрешён только после `GO` 3.2.
+
 ### 3.1 Скачать assets
 
 **Где:** `L`.  
@@ -140,9 +193,11 @@ gate. Не переходите к backup/install.
 работоспособный и проверенный путь отката.
 
 ```powershell
-$NewVersion = 'vX.Y.Z'
-$OldVersion = 'vA.B.C'
-$ExpectedOldRevision = '<accepted-40-lowercase-previous-core-sha>'
+$NewVersion = 'v0.3.0'
+$OldVersion = 'v0.2.5'
+$ExpectedOldRevision = '3b91260579dd875c4075eb0cfb39538f1ea60e01'
+$ExpectedNewBundleSha256 = '7deb933e071924a01fae5006d89ef309b0df51c6a6973c4d5f12547be5b2c4e4'
+$ExpectedOldBundleSha256 = 'f55dd007df24b241108d577703dda21177e0d54d20b6af0c327e9090c4424ada'
 $AssetRoot = Join-Path (Get-Location) 'senior-pomidor-release-assets'
 $NewAssetDir = Join-Path $AssetRoot $NewVersion
 $OldAssetDir = Join-Path $AssetRoot $OldVersion
@@ -161,6 +216,12 @@ gh release download $OldVersion `
   --pattern "senior-pomidor-runtime-$OldVersion.tar.gz*" `
   --dir $OldAssetDir
 ```
+
+**Ожидаемый результат:** четыре файла существуют: два bundles и два `.sha256`.
+
+**STOP:** download non-zero или отсутствует файл.
+
+**GO:** перейти к 3.2.
 
 ### 3.2 Проверить checksums и metadata
 
@@ -184,6 +245,8 @@ function Test-ReleaseChecksum {
 
 Test-ReleaseChecksum -AssetDir $NewAssetDir -Version $NewVersion
 $NewArchive = Join-Path $NewAssetDir "senior-pomidor-runtime-$NewVersion.tar.gz"
+$NewArchiveSha256 = (Get-FileHash -LiteralPath $NewArchive -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($NewArchiveSha256 -ne $ExpectedNewBundleSha256) { throw 'Unexpected v0.3.0 bundle SHA-256' }
 $BundleVersion = (tar.exe -xOf $NewArchive ./VERSION).Trim()
 $BundleRevision = (tar.exe -xOf $NewArchive ./REVISION).Trim()
 $TagRevision = (git rev-parse "${NewVersion}^{commit}").Trim()
@@ -200,6 +263,8 @@ $BundleRevision
 
 Test-ReleaseChecksum -AssetDir $OldAssetDir -Version $OldVersion
 $OldArchive = Join-Path $OldAssetDir "senior-pomidor-runtime-$OldVersion.tar.gz"
+$OldArchiveSha256 = (Get-FileHash -LiteralPath $OldArchive -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($OldArchiveSha256 -ne $ExpectedOldBundleSha256) { throw 'Unexpected v0.2.5 bundle SHA-256' }
 $OldBundleVersion = (tar.exe -xOf $OldArchive ./VERSION).Trim()
 $OldBundleRevision = (tar.exe -xOf $OldArchive ./REVISION).Trim()
 if ($LASTEXITCODE -ne 0) { throw 'Cannot read previous runtime bundle' }
@@ -217,13 +282,18 @@ $OldBundleRevision
 
 ## 4. Передать assets на server без установки
 
+**Ожидаемый результат:** проверенные new/rollback assets находятся в root-owned incoming directory.
+
+**Переход:** выполнить 4.1, затем 4.2; application state не менять.
+
 ### 4.1 Передать во временный каталог
 
 **Где:** `L`.  
 **Риск:** `2 — умеренный`.
 
 ```powershell
-$AdminTarget = '<admin-user>@<approved-server>'
+$AdminTarget = Read-Host 'Approved SSH target (user@host)'
+if ($AdminTarget -notmatch '^[^@\s]+@[^@\s]+$') { throw 'Missing or invalid approved SSH target' }
 $TransferFiles = @(
   (Join-Path $NewAssetDir "senior-pomidor-runtime-$NewVersion.tar.gz"),
   (Join-Path $NewAssetDir "senior-pomidor-runtime-$NewVersion.tar.gz.sha256"),
@@ -235,14 +305,20 @@ $TransferFiles = @(
 if ($LASTEXITCODE -ne 0) { throw 'SCP transfer failed' }
 ```
 
+**Ожидаемый результат:** четыре файла переданы в `/tmp` approved server.
+
+**STOP:** `scp` non-zero.
+
+**GO:** перейти к 4.2.
+
 ### 4.2 Установить ownership/mode для incoming assets
 
 **Где:** `S1`.  
 **Риск:** `2 — умеренный`. Это пишет только release assets, application ещё не меняется.
 
 ```bash
-export NEW_VERSION='vX.Y.Z'
-export OLD_VERSION='vA.B.C'
+export NEW_VERSION='v0.3.0'
+export OLD_VERSION='v0.2.5'
 export INCOMING='/srv/apps/senior-pomidor/releases/.incoming'
 
 sudo install -d -o root -g root -m 0755 "${INCOMING}"
@@ -285,11 +361,17 @@ sudo install -o root -g root -m 0644 \
 вычисляется из Git SHA.
 
 ```bash
-export NEW_REVISION='<accepted-40-lowercase-core-sha>'
-export EXPECTED_OLD_REVISION='<accepted-40-lowercase-previous-core-sha>'
-export NEW_APP_IMAGE='ghcr.io/cracketus/senior-pomidor-server@sha256:<accepted-64-hex-digest>'
-export API_URL='http://<approved-server-address>:8000'
-export CANARY_EDGE_ID='' # оставьте пустым, если approved Edge ещё нет
+export NEW_VERSION='v0.3.0'
+export OLD_VERSION='v0.2.5'
+export NEW_REVISION='549dc4d21897203c167749611416355f820d6372'
+export EXPECTED_OLD_REVISION='3b91260579dd875c4075eb0cfb39538f1ea60e01'
+export NEW_APP_IMAGE='ghcr.io/cracketus/senior-pomidor-server@sha256:5c9f82606bfd499e894fbd8e5a99dfaccb23843f6d9ca1477d5151e0ac194e3e'
+export EXPECTED_OLD_APP_IMAGE='ghcr.io/cracketus/senior-pomidor-server@sha256:6147b72b04146244b1ed15f7146ac1fee74c07342c875d465dcdcf2e8a101524'
+export EXPECTED_NEW_BUNDLE_SHA256='7deb933e071924a01fae5006d89ef309b0df51c6a6973c4d5f12547be5b2c4e4'
+export EXPECTED_OLD_BUNDLE_SHA256='f55dd007df24b241108d577703dda21177e0d54d20b6af0c327e9090c4424ada'
+read -r -p 'Approved production API URL: ' API_URL
+export API_URL
+export CANARY_EDGE_ID=''
 
 export APP_ROOT='/srv/apps/senior-pomidor'
 export ACTIVE_LINK="${APP_ROOT}/app"
@@ -319,17 +401,21 @@ printf 'active=%s\nold_version=%s\nold_revision=%s\nold_image=%s\n' \
 [[ "${OLD_REVISION}" == "${EXPECTED_OLD_REVISION}" ]]
 [[ "${NEW_APP_IMAGE}" =~ ^ghcr\.io/cracketus/senior-pomidor-server@sha256:[0-9a-f]{64}$ ]]
 [[ "${OLD_APP_IMAGE}" =~ ^ghcr\.io/cracketus/senior-pomidor-server@sha256:[0-9a-f]{64}$ ]]
+[[ "${OLD_APP_IMAGE}" == "${EXPECTED_OLD_APP_IMAGE}" ]]
+[[ -n "${API_URL}" ]]
 [[ "$(sudo cat "${ACTIVE_LINK}/VERSION")" == "${OLD_VERSION}" ]]
 [[ "${OLD_RELEASE_PATH}" == "${APP_ROOT}/releases/${OLD_VERSION}" ]]
+
+test "$(sudo sha256sum "${NEW_ARCHIVE}" | awk '{print $1}')" = "${EXPECTED_NEW_BUNDLE_SHA256}"
+test "$(sudo sha256sum "${OLD_ARCHIVE}" | awk '{print $1}')" = "${EXPECTED_OLD_BUNDLE_SHA256}"
 ```
 
 `API_URL` должен содержать реальный published address из `LAN_BIND_ADDRESS`. Если API опубликован
 только на LAN interface, `http://127.0.0.1:8000` на server не сработает. Не выводите весь `runtime.env`;
 проверьте только фактическую публикацию в Compose `ps` на шаге 6.
 
-Если current `runtime.env` содержит version tag вместо digest, не продолжайте с tag. Возьмите точный
-предыдущий digest из принятого release/change evidence, вручную присвойте его `OLD_APP_IMAGE` и повторите
-regex-проверку. Rollback image должен быть immutable.
+Если current `runtime.env` содержит tag или digest не равен `EXPECTED_OLD_APP_IMAGE`, остановиться.
+Не подменять фактическое значение вручную. Production baseline должен подтвердить `v0.2.5` и exact digest.
 
 **Ожидается:** все `[[ ... ]]` возвращают `0`; current release — ожидаемый rollback release.  
 **STOP:** пустая переменная, regex/версия не совпадает, active symlink ведёт вне canonical releases
@@ -337,6 +423,10 @@ layout. Не редактируйте `runtime.env`.
 **GO:** сохраните четыре выведенных non-secret значения в приватной change record.
 
 ## 6. Preflight production host
+
+**Ожидаемый результат:** current production baseline healthy; install paths свободны.
+
+**Переход:** выполнить 6.1 и 6.2; шаг 7 разрешён после двух `GO`.
 
 ### 6.1 Service, Docker, clock и filesystem
 
@@ -415,6 +505,10 @@ release в `/srv/apps/archive/senior-pomidor`. Конфликт archive path м�
 **GO:** installation и rollback paths свободны.
 
 ## 7. Создать свежий backup
+
+**Ожидаемый результат:** обязательный recovery gate имеет accepted `PASS`; local snapshot дополняет его.
+
+**Переход:** выполнить 7.1; затем 7.2. Любой обязательный `NOT_RUN` блокирует rollout.
 
 ### 7.1 Обязательный #77/#78 gate
 
@@ -571,7 +665,7 @@ sudo "${INSTALLER}" "${NEW_ARCHIVE}" "${NEW_CHECKSUM}"
 **Ожидается:** последняя строка:
 
 ```text
-Installed vX.Y.Z. Run: systemctl reload-or-restart senior-pomidor
+Installed v0.3.0. Run: systemctl reload-or-restart senior-pomidor
 ```
 
 До restart проверьте symlink и metadata:
@@ -585,9 +679,9 @@ sudo cat "${ACTIVE_LINK}/REVISION"
 Ожидается:
 
 ```text
-/srv/apps/senior-pomidor/releases/vX.Y.Z
-vX.Y.Z
-<NEW_REVISION>
+/srv/apps/senior-pomidor/releases/v0.3.0
+v0.3.0
+549dc4d21897203c167749611416355f820d6372
 ```
 
 **STOP:** installer вернул non-zero, metadata не совпала или active link неожиданен. Не запускайте
@@ -640,6 +734,10 @@ Grafana и Ollama не перезапускались этим действие�
 **GO:** application запущено на новом release.
 
 ## 12. Быстрая проверка после rollout
+
+**Ожидаемый результат:** Core identity, health, persistence и approved canary path подтверждены.
+
+**Переход:** выполнить 12.1–12.3; любой required failure запускает шаг 13.
 
 ### 12.1 Первые 5 минут
 
@@ -713,7 +811,9 @@ Core устанавливается первым. Не обновляйте ос
 
 ```bash
 curl --fail --silent --show-error "${API_URL}/api/v1/devices"
-export CANARY_EDGE_ID='<confirmed-device-id-from-response>'
+read -r -p 'Confirmed canary device_id: ' CANARY_EDGE_ID
+test -n "${CANARY_EDGE_ID}"
+export CANARY_EDGE_ID
 ```
 
 После новой observation повторите:
@@ -739,6 +839,10 @@ stale-to-healthy promotion, `ALERT/UNKNOWN` без объяснения или E
 
 **Где:** `S1` для read-only API; `L` и UI общей Grafana для dashboard.
 **Риск:** `1 — низкий` для проверок; импорт в shared Grafana требует platform-admin approval.
+
+**Ожидаемый результат:** reliability API и Grafana показывают согласованный fresh canary state.
+
+**Переход:** `GO` ниже разрешает шаг 14; required `STOP` запускает rollback.
 
 Проверьте bounded reliability view нового Edge:
 
@@ -790,6 +894,10 @@ platform approval.
 Используйте этот раздел при любом stop-condition после шага 10. Rollback возвращает application
 bundle/image, но сохраняет PostgreSQL, Grafana, Ollama, volumes и additive migration.
 
+**Ожидаемый результат:** previous immutable application release восстановлен без изменения shared data/services.
+
+**Переход:** выбрать ровно один путь 13.1–13.3 по фактическому active release.
+
 ### 13.1 Проверить, какой release активен
 
 **Где:** `S1` или `S2`.  
@@ -809,6 +917,10 @@ test "$(sudo sed -n 's/^APP_IMAGE=//p' "${ENV_FILE}")" = "${OLD_APP_IMAGE}"
 ```
 
 После этого остановитесь и диагностируйте installer; повторный install не нужен.
+
+**Ожидаемый результат:** active release однозначно определён.
+
+**Переход:** active old — восстановить только old `APP_IMAGE` и остановиться; active new — перейти к 13.2; другое состояние — 13.3.
 
 ### 13.2 Переустановить предыдущий immutable bundle
 
@@ -870,10 +982,18 @@ telemetry читаются; shared services/data сохранены.
 Если application недоступно, recovery owner выбирает между повторным получением verified old bundle и
 отдельно одобренным emergency recovery. Не делайте database restore и не удаляйте release/archive paths.
 
+**Ожидаемый результат:** текущее состояние сохранено; bounded diagnostics переданы recovery owner.
+
+**Переход:** автоматического перехода нет; только отдельное approved emergency decision.
+
 ## 14. Наблюдение 60 минут
 
 **Где:** `S1`, Grafana/operator read surfaces.  
 **Риск:** `1 — низкий`, но ошибка означает `4 — rollback`.
+
+**Ожидаемый результат:** четыре checkpoints и минимум два freshness windows завершены без regression.
+
+**Переход:** `GO` ниже разрешает шаг 15; `STOP` запускает rollback.
 
 Не закрывайте окно сразу после первого зелёного `/ready`. Проверяйте минимум в моменты `T+0`, `T+20`,
 `T+40`, `T+60` минут и не менее двух freshness windows.
@@ -967,6 +1087,10 @@ paths, service/process/boot IDs, credentials или dumps.
 
 ## Короткая аварийная карточка
 
+**Ожидаемый результат:** оператор сохраняет data и выбирает проверенный rollback/recovery path.
+
+**Переход:** после пункта 8 остановиться; новая deployment attempt требует отдельного решения.
+
 ```text
 1. НЕ ПАНИКОВАТЬ И НЕ ПОВТОРЯТЬ FAILED COMMAND.
 2. НЕ ЗАПУСКАТЬ down -v И НЕ ТРОГАТЬ PostgreSQL/Grafana/Ollama.
@@ -979,6 +1103,10 @@ paths, service/process/boot IDs, credentials или dumps.
 ```
 
 ## Журнал выполнения
+
+**Ожидаемый результат:** каждый шаг имеет `PASS`, `FAIL` или `NOT_RUN`, UTC и bounded evidence reference.
+
+**Переход:** закрыть журнал только после шага 16 или завершённого rollback.
 
 | Шаг | Status | UTC | Evidence/note |
 | --- | --- | --- | --- |
@@ -1004,9 +1132,21 @@ paths, service/process/boot IDs, credentials или dumps.
 
 ## Связанные документы
 
-- [`ISSUE_189_PRODUCTION_PROMOTION_VERIFICATION.md`](ISSUE_189_PRODUCTION_PROMOTION_VERIFICATION.md)
-- [`UBUNTU_HOST.md`](UBUNTU_HOST.md)
-- [`OPERATIONS.md`](OPERATIONS.md)
-- [`CONTRACTS.md`](CONTRACTS.md)
+**Ожидаемый результат:** оператор использует canonical contracts, host, operations и evidence policies.
+
+**Переход:** при конфликте остановиться; применить более строгую safety/data-preservation границу.
+
+- [`ISSUE_189_PRODUCTION_PROMOTION_VERIFICATION.md`](../ISSUE_189_PRODUCTION_PROMOTION_VERIFICATION.md)
+- [`UBUNTU_HOST.md`](../UBUNTU_HOST.md)
+- [`OPERATIONS.md`](../OPERATIONS.md)
+- [`CONTRACTS.md`](../CONTRACTS.md)
 - [`POST_MERGE_PREPRODUCTION_QUALIFICATION.md`](POST_MERGE_PREPRODUCTION_QUALIFICATION.md)
-- [`release-evidence/README.md`](release-evidence/README.md)
+- [`release-evidence/README.md`](../release-evidence/README.md)
+## v0.3.1 lifecycle and health rollout gate
+
+Use the human-operated lifecycle CLI only against the approved application database and always provide
+`--expected-state` and `--apply`. The additive migration defaults existing devices to `ACTIVE`, retains
+history on rollback, and must not be downgraded destructively. Render the exact Compose overlays before
+promotion and confirm the API/worker `worker-health` volume is project-scoped and isolated; API is
+read-only while worker is read-write. Edge application-discriminator and ACK metadata behavior require
+the coordinated Edge release and accepted #248 evidence before canary.
