@@ -12,6 +12,11 @@ x-app-environment: &app-environment
   DEPLOYMENT_MODE: ${DEPLOYMENT_MODE:-development}
   STAGING_DEVICE_PREFIX: ${STAGING_DEVICE_PREFIX:-edge-staging-}
 
+volumes:
+  worker-health:
+    # Compose prefixes this volume with the active project name. Do not set a
+    # global explicit name: staging and production must remain isolated.
+
 services:
   migrate:
     image: ${APP_IMAGE:?APP_IMAGE must reference an immutable release image}
@@ -36,6 +41,7 @@ services:
       PHOTO_UPLOAD_TOKEN: ${PHOTO_UPLOAD_TOKEN:-}
       TELEMETRY_UPLOAD_TOKEN: ${TELEMETRY_UPLOAD_TOKEN:-}
       API_DOCS_ENABLED: ${API_DOCS_ENABLED:-true}
+      WORKER_HEALTH_FILE: /run/senior-pomidor/worker-health.json
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -45,6 +51,7 @@ services:
       - "${LAN_BIND_ADDRESS:-127.0.0.1}:${API_PUBLISHED_PORT:-8000}:8000"
     volumes:
       - ${PHOTO_DATA_DIR:-/srv/apps/senior-pomidor/data/public/photos}:/app/data/photos
+      - worker-health:/run/senior-pomidor:ro
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=5).read()\""]
       interval: 30s
@@ -68,7 +75,7 @@ services:
       PHOTO_MAX_BYTES: ${PHOTO_MAX_BYTES:-26214400}
       PHOTO_UPLOAD_TOKEN: ${PHOTO_UPLOAD_TOKEN:-}
       TELEMETRY_UPLOAD_TOKEN: ${TELEMETRY_UPLOAD_TOKEN:-}
-      WORKER_HEALTH_FILE: /tmp/senior-pomidor-worker-health.json
+      WORKER_HEALTH_FILE: /run/senior-pomidor/worker-health.json
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -76,6 +83,7 @@ services:
         condition: service_healthy
     volumes:
       - ${PHOTO_DATA_DIR:-/srv/apps/senior-pomidor/data/public/photos}:/app/data/photos
+      - worker-health:/run/senior-pomidor:rw
     healthcheck:
       test: ["CMD", "python", "-m", "app.worker_healthcheck"]
       interval: 30s

@@ -91,7 +91,7 @@ Promotion нельзя начинать, пока каждый обязател�
 | Один production Edge | Canary только после Core rollout и отдельного approval |
 
 Pre-production порядок и команды описаны в
-[`POST_MERGE_PREPRODUCTION_QUALIFICATION.md`](POST_MERGE_PREPRODUCTION_QUALIFICATION.md), граница
+[`POST_MERGE_PREPRODUCTION_QUALIFICATION.md`](ru/POST_MERGE_PREPRODUCTION_QUALIFICATION.md), граница
 staging — в [`STAGING.md`](STAGING.md), production host — в [`UBUNTU_HOST.md`](UBUNTU_HOST.md).
 
 ## 1. Открыть запись проверки
@@ -434,7 +434,7 @@ python -m tools.release_qualification validate \
 
 - [`OPERATIONS.md`](OPERATIONS.md) — release, backup и operational checks;
 - [`CONTRACTS.md`](CONTRACTS.md) — telemetry, read APIs и release evidence contracts;
-- [`POST_MERGE_PREPRODUCTION_QUALIFICATION.md`](POST_MERGE_PREPRODUCTION_QUALIFICATION.md) — подробная
+- [`POST_MERGE_PREPRODUCTION_QUALIFICATION.md`](ru/POST_MERGE_PREPRODUCTION_QUALIFICATION.md) — подробная
   pre-production процедура;
 - [`STAGING.md`](STAGING.md) — изоляция persistent staging;
 - [`UBUNTU_HOST.md`](UBUNTU_HOST.md) — production topology и shared-service boundary;

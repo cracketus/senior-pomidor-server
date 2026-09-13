@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.models import (
     ActionSimulation,
     AnomalyRecord,
+    Device,
     EstimatorDiagnostic,
     SensorHealthSnapshot,
     StateSnapshot,
@@ -207,6 +208,9 @@ def estimate_latest_from_telemetry(
     config_path: str = "config/state_estimator_v1.yaml",
 ) -> EstimatorResult | None:
     node_id = validate_device_id(node_id)
+    device = db.get(Device, node_id)
+    if device is not None and device.lifecycle_state != "ACTIVE":
+        return None
     latest = db.scalar(
         select(TelemetryEvent)
         .options(selectinload(TelemetryEvent.readings), selectinload(TelemetryEvent.errors))
@@ -253,6 +257,9 @@ def latest_state_or_estimate(
     snapshot = db.scalar(
         select(StateSnapshot).where(StateSnapshot.node_id == node_id).order_by(desc(StateSnapshot.ts)).limit(1)
     )
+    device = db.get(Device, node_id)
+    if device is not None and device.lifecycle_state == "DECOMMISSIONED":
+        return snapshot.payload_jsonb if snapshot is not None else None
     latest_event_ts = db.scalar(
         select(TelemetryEvent.timestamp_utc)
         .where(TelemetryEvent.device_id == node_id)

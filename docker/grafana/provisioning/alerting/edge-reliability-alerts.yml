@@ -30,13 +30,14 @@ groups:
                 LEFT JOIN LATERAL (
                   SELECT te.timestamp_utc
                   FROM telemetry_events te
-                  WHERE te.device_id = d.device_id
+                  WHERE device_id IN (SELECT device_id FROM devices WHERE lifecycle_state = 'ACTIVE') AND te.device_id = d.device_id
                   ORDER BY te.timestamp_utc DESC, te.id DESC
                   LIMIT 1
                 ) e ON true
-                WHERE e.timestamp_utc IS NULL
+                WHERE d.lifecycle_state = 'ACTIVE'
+                  AND (e.timestamp_utc IS NULL
                    OR e.timestamp_utc > now()
-                   OR e.timestamp_utc < now() - interval '20 minutes'
+                   OR e.timestamp_utc < now() - interval '20 minutes')
           - refId: B
             datasourceUid: __expr__
             relativeTimeRange: {from: 0, to: 0}
@@ -90,7 +91,7 @@ groups:
                 LEFT JOIN LATERAL (
                   SELECT te.timestamp_utc, te.system_health_jsonb
                   FROM telemetry_events te
-                  WHERE te.device_id = d.device_id
+                  WHERE device_id IN (SELECT device_id FROM devices WHERE lifecycle_state = 'ACTIVE') AND te.device_id = d.device_id
                   ORDER BY te.timestamp_utc DESC, te.id DESC
                   LIMIT 1
                 ) e ON true
@@ -142,7 +143,7 @@ groups:
                 LEFT JOIN LATERAL (
                   SELECT te.timestamp_utc, te.system_health_jsonb
                   FROM telemetry_events te
-                  WHERE te.device_id = d.device_id
+                  WHERE device_id IN (SELECT device_id FROM devices WHERE lifecycle_state = 'ACTIVE') AND te.device_id = d.device_id
                   ORDER BY te.timestamp_utc DESC, te.id DESC
                   LIMIT 1
                 ) e ON true
@@ -189,7 +190,7 @@ groups:
                 LEFT JOIN LATERAL (
                   SELECT te.timestamp_utc, te.system_health_jsonb
                   FROM telemetry_events te
-                  WHERE te.device_id = d.device_id
+                  WHERE device_id IN (SELECT device_id FROM devices WHERE lifecycle_state = 'ACTIVE') AND te.device_id = d.device_id
                   ORDER BY te.timestamp_utc DESC, te.id DESC
                   LIMIT 1
                 ) e ON true
@@ -233,7 +234,7 @@ groups:
                 LEFT JOIN LATERAL (
                   SELECT te.timestamp_utc, te.system_health_jsonb
                   FROM telemetry_events te
-                  WHERE te.device_id = d.device_id
+                  WHERE device_id IN (SELECT device_id FROM devices WHERE lifecycle_state = 'ACTIVE') AND te.device_id = d.device_id
                   ORDER BY te.timestamp_utc DESC, te.id DESC
                   LIMIT 1
                 ) e ON true

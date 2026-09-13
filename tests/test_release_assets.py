@@ -1,3 +1,4 @@
+import re
 import tomllib
 from pathlib import Path
 
@@ -120,20 +121,20 @@ def test_operations_preserves_packaged_backup_retention_and_configured_restore_i
 
 
 def test_production_installation_requires_verified_rollback_bundle() -> None:
-    runbook = (ROOT / "docs/PRODUCTION_RELEASE_INSTALLATION_RUNBOOK.md").read_text(encoding="utf-8")
+    runbook = (ROOT / "docs/ru/PRODUCTION_RELEASE_INSTALLATION_RUNBOOK.md").read_text(encoding="utf-8")
 
     assert "Проверенный bundle предыдущего release обязателен для rollback" in runbook
     assert "old image или проверенный old bundle недоступны" in runbook
     assert "HAVE_OLD_BUNDLE" not in runbook
     assert "HaveOldBundle" not in runbook
-    assert "$ExpectedOldRevision = '<accepted-40-lowercase-previous-core-sha>'" in runbook
+    assert re.search(r"\$ExpectedOldRevision = '[0-9a-f]{40}'", runbook)
     assert "$OldBundleRevision -ne $ExpectedOldRevision" in runbook
     assert '[[ "${OLD_REVISION}" == "${EXPECTED_OLD_REVISION}" ]]' in runbook
     assert 'sudo tar -xOf "${OLD_ARCHIVE}" ./REVISION' in runbook
 
 
 def test_production_runbook_skips_reliability_checks_without_canary() -> None:
-    runbook = (ROOT / "docs/PRODUCTION_RELEASE_INSTALLATION_RUNBOOK.md").read_text(encoding="utf-8")
+    runbook = (ROOT / "docs/ru/PRODUCTION_RELEASE_INSTALLATION_RUNBOOK.md").read_text(encoding="utf-8")
     section = runbook.split("### 12.3 Edge reliability и Grafana", 1)[1].split("## 13. Rollback", 1)[0]
 
     guard = 'if [[ -n "${CANARY_EDGE_ID}" ]]; then'

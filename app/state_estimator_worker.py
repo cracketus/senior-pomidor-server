@@ -26,7 +26,7 @@ HEALTH_HEARTBEAT_SECONDS = 30
 
 def run_once() -> int:
     with SessionLocal() as db:
-        devices = db.scalars(select(Device).order_by(Device.device_id)).all()
+        devices = db.scalars(select(Device).where(Device.lifecycle_state == "ACTIVE").order_by(Device.device_id)).all()
         for device in devices:
             estimate_latest_from_telemetry(
                 db,

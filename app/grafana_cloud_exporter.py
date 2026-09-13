@@ -503,11 +503,13 @@ def fetch_export_rows(db: Session, since: datetime, until: datetime, last_readin
     statement = (
         select(PodReading, TelemetryEvent.timestamp_utc)
         .join(TelemetryEvent, PodReading.telemetry_event_id == TelemetryEvent.id)
+        .join(Device, Device.device_id == TelemetryEvent.device_id)
         .where(
+            Device.lifecycle_state == "ACTIVE",
             or_(
                 TelemetryEvent.timestamp_utc > since_utc,
                 (TelemetryEvent.timestamp_utc == since_utc) & (PodReading.id > last_reading_id),
-            )
+            ),
         )
         .where(TelemetryEvent.timestamp_utc <= as_utc(until))
         .order_by(TelemetryEvent.timestamp_utc, PodReading.id)
@@ -519,7 +521,8 @@ def fetch_latest_rows_by_pod(db: Session, until: datetime) -> list[ExportRow]:
     statement = (
         select(PodReading, TelemetryEvent.timestamp_utc)
         .join(TelemetryEvent, PodReading.telemetry_event_id == TelemetryEvent.id)
-        .where(TelemetryEvent.timestamp_utc <= as_utc(until))
+        .join(Device, Device.device_id == TelemetryEvent.device_id)
+        .where(Device.lifecycle_state == "ACTIVE", TelemetryEvent.timestamp_utc <= as_utc(until))
         .order_by(TelemetryEvent.timestamp_utc.desc(), PodReading.id.desc())
     )
     latest: dict[tuple[str, str], ExportRow] = {}
@@ -534,6 +537,7 @@ def fetch_latest_reliability_events(db: Session) -> list[TelemetryEvent]:
     statement = (
         select(TelemetryEvent)
         .join(Device, Device.device_id == TelemetryEvent.device_id)
+        .where(Device.lifecycle_state == "ACTIVE")
         .order_by(TelemetryEvent.device_id, TelemetryEvent.timestamp_utc.desc(), TelemetryEvent.id.desc())
     )
     latest: dict[str, TelemetryEvent] = {}

@@ -245,6 +245,11 @@ def test_edge_reliability_dashboard_has_safe_current_and_history_views():
     aggregate_case = current.split("END AS application_status,", 1)[1].split("END AS aggregate_status", 1)[0]
     overall_case = current.split("SELECT device_id,CASE", 1)[1].split("END AS overall_status", 1)[0]
     assert "FROM devices d" in current
+    assert (
+        "WHERE d.lifecycle_state = 'ACTIVE' AND ('${device_id:csv}'='All' OR d.device_id IN (${device_id:sqlstring}))"
+        in current
+    )
+    assert "WHERE (d.lifecycle_state = 'ACTIVE' AND" not in queries
     assert "LEFT JOIN LATERAL" in current
     assert "ORDER BY te.timestamp_utc DESC, te.id DESC" in current
     assert "THEN 'UNKNOWN'" in current
@@ -329,6 +334,8 @@ def test_edge_reliability_alerts_cover_five_failure_classes_without_hiding_missi
     )[0]
     assert "FROM devices d" in unavailable_query
     assert "LEFT JOIN LATERAL" in unavailable_query
+    assert "WHERE d.lifecycle_state = 'ACTIVE'" in unavailable_query
+    assert "WHERE d.lifecycle_state = 'ACTIVE'\n                  AND (e.timestamp_utc IS NULL" in unavailable_query
     assert "e.timestamp_utc IS NULL" in unavailable_query
     assert "interval '20 minutes'" in unavailable_query
     assert "system_health_jsonb #>> '{watchdog,suppression}' = 'true'" in alerts

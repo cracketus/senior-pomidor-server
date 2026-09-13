@@ -34,7 +34,7 @@ Applicable `SP-FAIL-*` IDs: `SP-FAIL-001`--`004`, `SP-FAIL-009`, `SP-FAIL-011`, 
   bounded alert and display semantics.
 - HTTP, MQTT, reliability, operator, schema, Grafana, Docker E2E, and release-asset tests: boundary and regression
   evidence.
-- `docs/CONTRACTS.md`, `docs/PRODUCTION_RELEASE_INSTALLATION_RUNBOOK.md`: rollout, compatibility, canary, and
+- `docs/CONTRACTS.md`, `docs/ru/PRODUCTION_RELEASE_INSTALLATION_RUNBOOK.md`: rollout, compatibility, canary, and
   rollback guidance.
 - `.ai/agent-runs/20260830-*.json`, `.ai/agent-runs/20260831-*.json`: bounded implementation/review-fix audit.
 
@@ -96,7 +96,7 @@ Applicable `SP-FAIL-*` IDs: `SP-FAIL-001`--`004`, `SP-FAIL-009`, `SP-FAIL-011`, 
 
 - Contract semantics and rollout order are documented in `docs/CONTRACTS.md`.
 - Production preflight, canary, Grafana verification, rollback identity, and execution log are documented in
-  `docs/PRODUCTION_RELEASE_INSTALLATION_RUNBOOK.md`.
+  `docs/ru/PRODUCTION_RELEASE_INSTALLATION_RUNBOOK.md`.
 - Core RC evidence records Edge #142 as an explicit blocker in `docs/implementation-reports/ISSUE-260.md`.
 
 ## Manual verification steps

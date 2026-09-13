@@ -77,7 +77,7 @@
           },
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT DISTINCT ON (device_id, pod_key)\n  timestamp_utc,\n  received_at,\n  device_id,\n  pod_key,\n  enabled,\n  soil_moisture_percent,\n  soil_temperature_c,\n  air_temperature_c,\n  air_humidity_percent,\n  air_pressure_hpa,\n  air_actual_vapor_pressure_kpa,\n  air_saturation_vapor_pressure_kpa,\n  air_vpd_kpa,\n  light_lux,\n  leaf_temp_c,\n  leaf_saturation_vapor_pressure_kpa,\n  leaf_vpd_kpa\nFROM telemetry_pod_readings_flat\nWHERE $__timeFilter(timestamp_utc)\n  AND ('${device_id:csv}' = 'All' OR device_id IN (${device_id:sqlstring}))\n  AND ('${pod_key:csv}' = 'All' OR pod_key IN (${pod_key:sqlstring}))\nORDER BY device_id, pod_key, timestamp_utc DESC",
+          "rawSql": "SELECT DISTINCT ON (device_id, pod_key)\n  timestamp_utc,\n  received_at,\n  device_id,\n  pod_key,\n  enabled,\n  soil_moisture_percent,\n  soil_temperature_c,\n  air_temperature_c,\n  air_humidity_percent,\n  air_pressure_hpa,\n  air_actual_vapor_pressure_kpa,\n  air_saturation_vapor_pressure_kpa,\n  air_vpd_kpa,\n  light_lux,\n  leaf_temp_c,\n  leaf_saturation_vapor_pressure_kpa,\n  leaf_vpd_kpa\nFROM telemetry_pod_readings_flat\nWHERE $__timeFilter(timestamp_utc)\n  AND device_id IN (SELECT device_id FROM devices WHERE lifecycle_state = 'ACTIVE')\n  AND ('${device_id:csv}' = 'All' OR device_id IN (${device_id:sqlstring}))\n  AND ('${pod_key:csv}' = 'All' OR pod_key IN (${pod_key:sqlstring}))\nORDER BY device_id, pod_key, timestamp_utc DESC",
           "refId": "A"
         }
       ],
@@ -139,7 +139,7 @@
           },
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT\n  timestamp_utc,\n  received_at,\n  device_id,\n  system_health_jsonb #>> '{rpi_core,cpu_temp_c}' AS cpu_temp_c,\n  system_health_jsonb #>> '{rpi_core,wifi_rssi_dbm}' AS wifi_rssi_dbm,\n  system_health_jsonb #>> '{rpi_core,disk_usage_percent}' AS disk_usage_percent,\n  system_health_jsonb #>> '{rpi_core,io_wait_percent}' AS io_wait_percent,\n  system_health_jsonb #>> '{pod_1_hardware,bus_voltage_v}' AS bus_voltage_v,\n  system_health_jsonb #>> '{pod_1_hardware,bus_current_ma}' AS bus_current_ma,\n  system_health_jsonb #>> '{network,wifi_connected}' AS wifi_connected,\n  system_health_jsonb #>> '{network,wifi_profile_count}' AS wifi_profile_count,\n  system_health_jsonb #>> '{network,active_profile_present}' AS active_profile_present,\n  system_health_jsonb #>> '{network,preferred_profile_present}' AS preferred_profile_present,\n  system_health_jsonb #>> '{network,default_gateway_reachable}' AS default_gateway_reachable,\n  system_health_jsonb #>> '{network,dns_resolution_ok}' AS dns_resolution_ok,\n  system_health_jsonb #>> '{network,internet_reachable}' AS internet_reachable,\n  system_health_jsonb #>> '{network,last_recovery_result}' AS last_recovery_result,\n  system_health_jsonb #>> '{network,last_recovery_exit_code}' AS last_recovery_exit_code,\n  system_health_jsonb #> '{errors}' AS health_errors\nFROM telemetry_events\nWHERE $__timeFilter(timestamp_utc)\n  AND system_health_jsonb IS NOT NULL\n  AND ('${device_id:csv}' = 'All' OR device_id IN (${device_id:sqlstring}))\nORDER BY timestamp_utc DESC\nLIMIT 25",
+          "rawSql": "SELECT\n  timestamp_utc,\n  received_at,\n  device_id,\n  system_health_jsonb #>> '{rpi_core,cpu_temp_c}' AS cpu_temp_c,\n  system_health_jsonb #>> '{rpi_core,wifi_rssi_dbm}' AS wifi_rssi_dbm,\n  system_health_jsonb #>> '{rpi_core,disk_usage_percent}' AS disk_usage_percent,\n  system_health_jsonb #>> '{rpi_core,io_wait_percent}' AS io_wait_percent,\n  system_health_jsonb #>> '{pod_1_hardware,bus_voltage_v}' AS bus_voltage_v,\n  system_health_jsonb #>> '{pod_1_hardware,bus_current_ma}' AS bus_current_ma,\n  system_health_jsonb #>> '{network,wifi_connected}' AS wifi_connected,\n  system_health_jsonb #>> '{network,wifi_profile_count}' AS wifi_profile_count,\n  system_health_jsonb #>> '{network,active_profile_present}' AS active_profile_present,\n  system_health_jsonb #>> '{network,preferred_profile_present}' AS preferred_profile_present,\n  system_health_jsonb #>> '{network,default_gateway_reachable}' AS default_gateway_reachable,\n  system_health_jsonb #>> '{network,dns_resolution_ok}' AS dns_resolution_ok,\n  system_health_jsonb #>> '{network,internet_reachable}' AS internet_reachable,\n  system_health_jsonb #>> '{network,last_recovery_result}' AS last_recovery_result,\n  system_health_jsonb #>> '{network,last_recovery_exit_code}' AS last_recovery_exit_code,\n  system_health_jsonb #> '{errors}' AS health_errors\nFROM telemetry_events\nWHERE $__timeFilter(timestamp_utc)\n  AND system_health_jsonb IS NOT NULL\n  AND device_id IN (SELECT device_id FROM devices WHERE lifecycle_state = 'ACTIVE')\n  AND ('${device_id:csv}' = 'All' OR device_id IN (${device_id:sqlstring}))\nORDER BY timestamp_utc DESC\nLIMIT 25",
           "refId": "A"
         }
       ],
@@ -220,7 +220,7 @@
           },
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT\n  captured_at_utc,\n  device_id,\n  photo_id,\n  sharpness_score,\n  content_type,\n  file_size_bytes,\n  received_at,\n  concat('/api/v1/photos/', photo_id) AS photo_api_path\nFROM photos\nWHERE $__timeFilter(captured_at_utc)\n  AND ('${device_id:csv}' = 'All' OR device_id IN (${device_id:sqlstring}))\nORDER BY captured_at_utc DESC\nLIMIT 50",
+          "rawSql": "SELECT\n  captured_at_utc,\n  device_id,\n  photo_id,\n  sharpness_score,\n  content_type,\n  file_size_bytes,\n  received_at,\n  concat('/api/v1/photos/', photo_id) AS photo_api_path\nFROM photos\nWHERE $__timeFilter(captured_at_utc)\n  AND device_id IN (SELECT device_id FROM devices WHERE lifecycle_state = 'ACTIVE')\n  AND ('${device_id:csv}' = 'All' OR device_id IN (${device_id:sqlstring}))\nORDER BY captured_at_utc DESC\nLIMIT 50",
           "refId": "A"
         }
       ],
@@ -313,7 +313,7 @@
           "format": "time_series",
           "metricColumn": "metric",
           "rawQuery": true,
-          "rawSql": "SELECT\n  timestamp_utc AS \"time\",\n  concat(device_id, ' / ', pod_key) AS metric,\n  soil_moisture_percent AS value\nFROM telemetry_pod_readings_flat\nWHERE $__timeFilter(timestamp_utc)\n  AND soil_moisture_percent IS NOT NULL\n  AND ('${device_id:csv}' = 'All' OR device_id IN (${device_id:sqlstring}))\n  AND ('${pod_key:csv}' = 'All' OR pod_key IN (${pod_key:sqlstring}))\nORDER BY 1",
+          "rawSql": "SELECT\n  timestamp_utc AS \"time\",\n  concat(device_id, ' / ', pod_key) AS metric,\n  soil_moisture_percent AS value\nFROM telemetry_pod_readings_flat\nWHERE $__timeFilter(timestamp_utc)\n  AND soil_moisture_percent IS NOT NULL\n  AND device_id IN (SELECT device_id FROM devices WHERE lifecycle_state = 'ACTIVE')\n  AND ('${device_id:csv}' = 'All' OR device_id IN (${device_id:sqlstring}))\n  AND ('${pod_key:csv}' = 'All' OR pod_key IN (${pod_key:sqlstring}))\nORDER BY 1",
           "refId": "A",
           "timeColumn": "time",
           "valueColumn": "value"
@@ -408,7 +408,7 @@
           "format": "time_series",
           "metricColumn": "metric",
           "rawQuery": true,
-          "rawSql": "SELECT\n  timestamp_utc AS \"time\",\n  concat(device_id, ' / ', pod_key) AS metric,\n  soil_temperature_c AS value\nFROM telemetry_pod_readings_flat\nWHERE $__timeFilter(timestamp_utc)\n  AND soil_temperature_c IS NOT NULL\n  AND ('${device_id:csv}' = 'All' OR device_id IN (${device_id:sqlstring}))\n  AND ('${pod_key:csv}' = 'All' OR pod_key IN (${pod_key:sqlstring}))\nORDER BY 1",
+          "rawSql": "SELECT\n  timestamp_utc AS \"time\",\n  concat(device_id, ' / ', pod_key) AS metric,\n  soil_temperature_c AS value\nFROM telemetry_pod_readings_flat\nWHERE $__timeFilter(timestamp_utc)\n  AND soil_temperature_c IS NOT NULL\n  AND device_id IN (SELECT device_id FROM devices WHERE lifecycle_state = 'ACTIVE')\n  AND ('${device_id:csv}' = 'All' OR device_id IN (${device_id:sqlstring}))\n  AND ('${pod_key:csv}' = 'All' OR pod_key IN (${pod_key:sqlstring}))\nORDER BY 1",
           "refId": "A",
           "timeColumn": "time",
           "valueColumn": "value"
@@ -503,7 +503,7 @@
           "format": "time_series",
           "metricColumn": "metric",
           "rawQuery": true,
-          "rawSql": "SELECT\n  timestamp_utc AS \"time\",\n  concat(device_id, ' / ', pod_key) AS metric,\n  air_temperature_c AS value\nFROM telemetry_pod_readings_flat\nWHERE $__timeFilter(timestamp_utc)\n  AND air_temperature_c IS NOT NULL\n  AND ('${device_id:csv}' = 'All' OR device_id IN (${device_id:sqlstring}))\n  AND ('${pod_key:csv}' = 'All' OR pod_key IN (${pod_key:sqlstring}))\nORDER BY 1",
+          "rawSql": "SELECT\n  timestamp_utc AS \"time\",\n  concat(device_id, ' / ', pod_key) AS metric,\n  air_temperature_c AS value\nFROM telemetry_pod_readings_flat\nWHERE $__timeFilter(timestamp_utc)\n  AND air_temperature_c IS NOT NULL\n  AND device_id IN (SELECT device_id FROM devices WHERE lifecycle_state = 'ACTIVE')\n  AND ('${device_id:csv}' = 'All' OR device_id IN (${device_id:sqlstring}))\n  AND ('${pod_key:csv}' = 'All' OR pod_key IN (${pod_key:sqlstring}))\nORDER BY 1",
           "refId": "A",
           "timeColumn": "time",
           "valueColumn": "value"
@@ -598,7 +598,7 @@
           "format": "time_series",
           "metricColumn": "metric",
           "rawQuery": true,
-          "rawSql": "SELECT\n  timestamp_utc AS \"time\",\n  concat(device_id, ' / ', pod_key) AS metric,\n  air_humidity_percent AS value\nFROM telemetry_pod_readings_flat\nWHERE $__timeFilter(timestamp_utc)\n  AND air_humidity_percent IS NOT NULL\n  AND ('${device_id:csv}' = 'All' OR device_id IN (${device_id:sqlstring}))\n  AND ('${pod_key:csv}' = 'All' OR pod_key IN (${pod_key:sqlstring}))\nORDER BY 1",
+          "rawSql": "SELECT\n  timestamp_utc AS \"time\",\n  concat(device_id, ' / ', pod_key) AS metric,\n  air_humidity_percent AS value\nFROM telemetry_pod_readings_flat\nWHERE $__timeFilter(timestamp_utc)\n  AND air_humidity_percent IS NOT NULL\n  AND device_id IN (SELECT device_id FROM devices WHERE lifecycle_state = 'ACTIVE')\n  AND ('${device_id:csv}' = 'All' OR device_id IN (${device_id:sqlstring}))\n  AND ('${pod_key:csv}' = 'All' OR pod_key IN (${pod_key:sqlstring}))\nORDER BY 1",
           "refId": "A",
           "timeColumn": "time",
           "valueColumn": "value"
@@ -693,7 +693,7 @@
           "format": "time_series",
           "metricColumn": "metric",
           "rawQuery": true,
-          "rawSql": "SELECT\n  timestamp_utc AS \"time\",\n  concat(device_id, ' / ', pod_key) AS metric,\n  air_pressure_hpa AS value\nFROM telemetry_pod_readings_flat\nWHERE $__timeFilter(timestamp_utc)\n  AND air_pressure_hpa IS NOT NULL\n  AND ('${device_id:csv}' = 'All' OR device_id IN (${device_id:sqlstring}))\n  AND ('${pod_key:csv}' = 'All' OR pod_key IN (${pod_key:sqlstring}))\nORDER BY 1",
+          "rawSql": "SELECT\n  timestamp_utc AS \"time\",\n  concat(device_id, ' / ', pod_key) AS metric,\n  air_pressure_hpa AS value\nFROM telemetry_pod_readings_flat\nWHERE $__timeFilter(timestamp_utc)\n  AND air_pressure_hpa IS NOT NULL\n  AND device_id IN (SELECT device_id FROM devices WHERE lifecycle_state = 'ACTIVE')\n  AND ('${device_id:csv}' = 'All' OR device_id IN (${device_id:sqlstring}))\n  AND ('${pod_key:csv}' = 'All' OR pod_key IN (${pod_key:sqlstring}))\nORDER BY 1",
           "refId": "A",
           "timeColumn": "time",
           "valueColumn": "value"
@@ -788,7 +788,7 @@
           "format": "time_series",
           "metricColumn": "metric",
           "rawQuery": true,
-          "rawSql": "SELECT\n  timestamp_utc AS \"time\",\n  concat(device_id, ' / ', pod_key) AS metric,\n  light_lux AS value\nFROM telemetry_pod_readings_flat\nWHERE $__timeFilter(timestamp_utc)\n  AND light_lux IS NOT NULL\n  AND ('${device_id:csv}' = 'All' OR device_id IN (${device_id:sqlstring}))\n  AND ('${pod_key:csv}' = 'All' OR pod_key IN (${pod_key:sqlstring}))\nORDER BY 1",
+          "rawSql": "SELECT\n  timestamp_utc AS \"time\",\n  concat(device_id, ' / ', pod_key) AS metric,\n  light_lux AS value\nFROM telemetry_pod_readings_flat\nWHERE $__timeFilter(timestamp_utc)\n  AND light_lux IS NOT NULL\n  AND device_id IN (SELECT device_id FROM devices WHERE lifecycle_state = 'ACTIVE')\n  AND ('${device_id:csv}' = 'All' OR device_id IN (${device_id:sqlstring}))\n  AND ('${pod_key:csv}' = 'All' OR pod_key IN (${pod_key:sqlstring}))\nORDER BY 1",
           "refId": "A",
           "timeColumn": "time",
           "valueColumn": "value"
@@ -883,7 +883,7 @@
           "format": "time_series",
           "metricColumn": "metric",
           "rawQuery": true,
-          "rawSql": "SELECT\n  timestamp_utc AS \"time\",\n  concat(device_id, ' / ', pod_key) AS metric,\n  leaf_temp_c AS value\nFROM telemetry_pod_readings_flat\nWHERE $__timeFilter(timestamp_utc)\n  AND leaf_temp_c IS NOT NULL\n  AND ('${device_id:csv}' = 'All' OR device_id IN (${device_id:sqlstring}))\n  AND ('${pod_key:csv}' = 'All' OR pod_key IN (${pod_key:sqlstring}))\nORDER BY 1",
+          "rawSql": "SELECT\n  timestamp_utc AS \"time\",\n  concat(device_id, ' / ', pod_key) AS metric,\n  leaf_temp_c AS value\nFROM telemetry_pod_readings_flat\nWHERE $__timeFilter(timestamp_utc)\n  AND leaf_temp_c IS NOT NULL\n  AND device_id IN (SELECT device_id FROM devices WHERE lifecycle_state = 'ACTIVE')\n  AND ('${device_id:csv}' = 'All' OR device_id IN (${device_id:sqlstring}))\n  AND ('${pod_key:csv}' = 'All' OR pod_key IN (${pod_key:sqlstring}))\nORDER BY 1",
           "refId": "A",
           "timeColumn": "time",
           "valueColumn": "value"
@@ -1006,7 +1006,7 @@
           "format": "time_series",
           "metricColumn": "metric",
           "rawQuery": true,
-          "rawSql": "SELECT\n  timestamp_utc AS \"time\",\n  concat(device_id, ' / ', pod_key) AS metric,\n  air_vpd_kpa AS value\nFROM telemetry_pod_readings_flat\nWHERE $__timeFilter(timestamp_utc)\n  AND air_vpd_kpa IS NOT NULL\n  AND ('${device_id:csv}' = 'All' OR device_id IN (${device_id:sqlstring}))\n  AND ('${pod_key:csv}' = 'All' OR pod_key IN (${pod_key:sqlstring}))\nORDER BY 1",
+          "rawSql": "SELECT\n  timestamp_utc AS \"time\",\n  concat(device_id, ' / ', pod_key) AS metric,\n  air_vpd_kpa AS value\nFROM telemetry_pod_readings_flat\nWHERE $__timeFilter(timestamp_utc)\n  AND air_vpd_kpa IS NOT NULL\n  AND device_id IN (SELECT device_id FROM devices WHERE lifecycle_state = 'ACTIVE')\n  AND ('${device_id:csv}' = 'All' OR device_id IN (${device_id:sqlstring}))\n  AND ('${pod_key:csv}' = 'All' OR pod_key IN (${pod_key:sqlstring}))\nORDER BY 1",
           "refId": "A",
           "timeColumn": "time",
           "valueColumn": "value"
@@ -1101,7 +1101,7 @@
           "format": "time_series",
           "metricColumn": "metric",
           "rawQuery": true,
-          "rawSql": "SELECT\n  timestamp_utc AS \"time\",\n  concat(device_id, ' / ', pod_key) AS metric,\n  leaf_vpd_kpa AS value\nFROM telemetry_pod_readings_flat\nWHERE $__timeFilter(timestamp_utc)\n  AND leaf_vpd_kpa IS NOT NULL\n  AND ('${device_id:csv}' = 'All' OR device_id IN (${device_id:sqlstring}))\n  AND ('${pod_key:csv}' = 'All' OR pod_key IN (${pod_key:sqlstring}))\nORDER BY 1",
+          "rawSql": "SELECT\n  timestamp_utc AS \"time\",\n  concat(device_id, ' / ', pod_key) AS metric,\n  leaf_vpd_kpa AS value\nFROM telemetry_pod_readings_flat\nWHERE $__timeFilter(timestamp_utc)\n  AND leaf_vpd_kpa IS NOT NULL\n  AND device_id IN (SELECT device_id FROM devices WHERE lifecycle_state = 'ACTIVE')\n  AND ('${device_id:csv}' = 'All' OR device_id IN (${device_id:sqlstring}))\n  AND ('${pod_key:csv}' = 'All' OR pod_key IN (${pod_key:sqlstring}))\nORDER BY 1",
           "refId": "A",
           "timeColumn": "time",
           "valueColumn": "value"
@@ -1165,7 +1165,7 @@
           },
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT\n  ts AS time,\n  node_id,\n  payload_jsonb ->> 'schema_version' AS schema_version,\n  payload_jsonb #>> '{quality,level}' AS quality_level,\n  nullif(payload_jsonb #>> '{quality,state_confidence}', '')::double precision AS state_confidence,\n  nullif(payload_jsonb #>> '{env,vpd_kpa}', '')::double precision AS vpd_kpa,\n  nullif(payload_jsonb #>> '{soil,avg_moisture_pct}', '')::double precision AS avg_moisture_pct,\n  payload_jsonb #>> '{refs,source_event_ids,0}' AS source_event_id\nFROM (\n  SELECT DISTINCT ON (node_id)\n    node_id,\n    ts,\n    payload_jsonb\n  FROM state_snapshots\n  WHERE $__timeFilter(ts)\n    AND ('${device_id:csv}' = 'All' OR node_id IN (${device_id:sqlstring}))\n    AND payload_jsonb ->> 'schema_version' = 'state_v1'\n  ORDER BY node_id, ts DESC\n) latest\nORDER BY node_id",
+          "rawSql": "SELECT\n  ts AS time,\n  node_id,\n  payload_jsonb ->> 'schema_version' AS schema_version,\n  payload_jsonb #>> '{quality,level}' AS quality_level,\n  nullif(payload_jsonb #>> '{quality,state_confidence}', '')::double precision AS state_confidence,\n  nullif(payload_jsonb #>> '{env,vpd_kpa}', '')::double precision AS vpd_kpa,\n  nullif(payload_jsonb #>> '{soil,avg_moisture_pct}', '')::double precision AS avg_moisture_pct,\n  payload_jsonb #>> '{refs,source_event_ids,0}' AS source_event_id\nFROM (\n  SELECT DISTINCT ON (node_id)\n    node_id,\n    ts,\n    payload_jsonb\n  FROM state_snapshots\n  WHERE $__timeFilter(ts)\n    AND node_id IN (SELECT device_id FROM devices WHERE lifecycle_state = 'ACTIVE')\n    AND ('${device_id:csv}' = 'All' OR node_id IN (${device_id:sqlstring}))\n    AND payload_jsonb ->> 'schema_version' = 'state_v1'\n  ORDER BY node_id, ts DESC\n) latest\nORDER BY node_id",
           "refId": "A"
         }
       ],
@@ -1253,7 +1253,7 @@
           },
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT\n  ts AS time,\n  node_id AS metric,\n  nullif(payload_jsonb #>> '{env,vpd_kpa}', '')::double precision AS value\nFROM state_snapshots\nWHERE $__timeFilter(ts)\n  AND ('${device_id:csv}' = 'All' OR node_id IN (${device_id:sqlstring}))\n  AND payload_jsonb #>> '{env,vpd_kpa}' IS NOT NULL\nORDER BY ts",
+          "rawSql": "SELECT\n  ts AS time,\n  node_id AS metric,\n  nullif(payload_jsonb #>> '{env,vpd_kpa}', '')::double precision AS value\nFROM state_snapshots\nWHERE $__timeFilter(ts)\n  AND node_id IN (SELECT device_id FROM devices WHERE lifecycle_state = 'ACTIVE')\n    AND ('${device_id:csv}' = 'All' OR node_id IN (${device_id:sqlstring}))\n  AND payload_jsonb #>> '{env,vpd_kpa}' IS NOT NULL\nORDER BY ts",
           "refId": "A"
         }
       ],
@@ -1341,7 +1341,7 @@
           },
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT\n  ts AS time,\n  node_id AS metric,\n  nullif(payload_jsonb #>> '{quality,state_confidence}', '')::double precision AS value\nFROM state_snapshots\nWHERE $__timeFilter(ts)\n  AND ('${device_id:csv}' = 'All' OR node_id IN (${device_id:sqlstring}))\n  AND payload_jsonb #>> '{quality,state_confidence}' IS NOT NULL\nORDER BY ts",
+          "rawSql": "SELECT\n  ts AS time,\n  node_id AS metric,\n  nullif(payload_jsonb #>> '{quality,state_confidence}', '')::double precision AS value\nFROM state_snapshots\nWHERE $__timeFilter(ts)\n  AND node_id IN (SELECT device_id FROM devices WHERE lifecycle_state = 'ACTIVE')\n    AND ('${device_id:csv}' = 'All' OR node_id IN (${device_id:sqlstring}))\n  AND payload_jsonb #>> '{quality,state_confidence}' IS NOT NULL\nORDER BY ts",
           "refId": "A"
         }
       ],
@@ -1429,7 +1429,7 @@
           },
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT\n  ts AS time,\n  node_id AS metric,\n  nullif(payload_jsonb #>> '{soil,avg_moisture_pct}', '')::double precision AS value\nFROM state_snapshots\nWHERE $__timeFilter(ts)\n  AND ('${device_id:csv}' = 'All' OR node_id IN (${device_id:sqlstring}))\n  AND payload_jsonb #>> '{soil,avg_moisture_pct}' IS NOT NULL\nORDER BY ts",
+          "rawSql": "SELECT\n  ts AS time,\n  node_id AS metric,\n  nullif(payload_jsonb #>> '{soil,avg_moisture_pct}', '')::double precision AS value\nFROM state_snapshots\nWHERE $__timeFilter(ts)\n  AND node_id IN (SELECT device_id FROM devices WHERE lifecycle_state = 'ACTIVE')\n    AND ('${device_id:csv}' = 'All' OR node_id IN (${device_id:sqlstring}))\n  AND payload_jsonb #>> '{soil,avg_moisture_pct}' IS NOT NULL\nORDER BY ts",
           "refId": "A"
         }
       ],
@@ -1491,7 +1491,7 @@
           },
           "format": "table",
           "rawQuery": true,
-          "rawSql": "WITH latest AS (\n  SELECT DISTINCT ON (node_id)\n    node_id,\n    ts,\n    payload_jsonb\n  FROM sensor_health_snapshots\n  WHERE $__timeFilter(ts)\n    AND ('${device_id:csv}' = 'All' OR node_id IN (${device_id:sqlstring}))\n  ORDER BY node_id, ts DESC\n)\nSELECT\n  latest.ts AS time,\n  latest.node_id,\n  latest.payload_jsonb ->> 'overall_status' AS overall_status,\n  sensor ->> 'sensor_id' AS sensor_id,\n  sensor ->> 'sensor_type' AS sensor_type,\n  sensor ->> 'status' AS status,\n  nullif(sensor ->> 'confidence', '')::double precision AS confidence,\n  sensor ->> 'reason' AS reason\nFROM latest\nCROSS JOIN LATERAL jsonb_array_elements(coalesce(latest.payload_jsonb -> 'sensors', '[]'::jsonb)) AS sensor\nORDER BY latest.node_id, sensor_id",
+          "rawSql": "WITH latest AS (\n  SELECT DISTINCT ON (node_id)\n    node_id,\n    ts,\n    payload_jsonb\n  FROM sensor_health_snapshots\n  WHERE $__timeFilter(ts)\n    AND node_id IN (SELECT device_id FROM devices WHERE lifecycle_state = 'ACTIVE')\n    AND ('${device_id:csv}' = 'All' OR node_id IN (${device_id:sqlstring}))\n  ORDER BY node_id, ts DESC\n)\nSELECT\n  latest.ts AS time,\n  latest.node_id,\n  latest.payload_jsonb ->> 'overall_status' AS overall_status,\n  sensor ->> 'sensor_id' AS sensor_id,\n  sensor ->> 'sensor_type' AS sensor_type,\n  sensor ->> 'status' AS status,\n  nullif(sensor ->> 'confidence', '')::double precision AS confidence,\n  sensor ->> 'reason' AS reason\nFROM latest\nCROSS JOIN LATERAL jsonb_array_elements(coalesce(latest.payload_jsonb -> 'sensors', '[]'::jsonb)) AS sensor\nORDER BY latest.node_id, sensor_id",
           "refId": "A"
         }
       ],
@@ -1553,7 +1553,7 @@
           },
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT\n  ts AS time,\n  node_id,\n  type,\n  severity,\n  status,\n  payload_jsonb #>> '{signals,env.vpd_kpa}' AS vpd_kpa,\n  payload_jsonb #>> '{signals,quality.state_confidence}' AS state_confidence,\n  payload_jsonb ->> 'last_seen_ts' AS last_seen_ts\nFROM anomaly_records\nWHERE $__timeFilter(ts)\n  AND ('${device_id:csv}' = 'All' OR node_id IN (${device_id:sqlstring}))\n  AND status = 'ACTIVE'\nORDER BY ts DESC",
+          "rawSql": "SELECT\n  ts AS time,\n  node_id,\n  type,\n  severity,\n  status,\n  payload_jsonb #>> '{signals,env.vpd_kpa}' AS vpd_kpa,\n  payload_jsonb #>> '{signals,quality.state_confidence}' AS state_confidence,\n  payload_jsonb ->> 'last_seen_ts' AS last_seen_ts\nFROM anomaly_records\nWHERE $__timeFilter(ts)\n  AND node_id IN (SELECT device_id FROM devices WHERE lifecycle_state = 'ACTIVE')\n    AND ('${device_id:csv}' = 'All' OR node_id IN (${device_id:sqlstring}))\n  AND status = 'ACTIVE'\nORDER BY ts DESC",
           "refId": "A"
         }
       ],
@@ -1617,7 +1617,7 @@
           },
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT\n  ts AS time,\n  node_id,\n  payload_jsonb #>> '{guardrails,level}' AS guardrail_level,\n  payload_jsonb #>> '{guardrails,allowed}' AS allowed,\n  payload_jsonb #> '{guardrails,blocking_reasons}' AS blocking_reasons,\n  payload_jsonb #> '{guardrails,caution_reasons}' AS caution_reasons,\n  decision\nFROM (\n  SELECT DISTINCT ON (node_id)\n    node_id,\n    ts,\n    decision,\n    payload_jsonb\n  FROM action_simulations\n  WHERE $__timeFilter(ts)\n    AND ('${device_id:csv}' = 'All' OR node_id IN (${device_id:sqlstring}))\n  ORDER BY node_id, ts DESC\n) latest\nORDER BY node_id",
+          "rawSql": "SELECT\n  ts AS time,\n  node_id,\n  payload_jsonb #>> '{guardrails,level}' AS guardrail_level,\n  payload_jsonb #>> '{guardrails,allowed}' AS allowed,\n  payload_jsonb #> '{guardrails,blocking_reasons}' AS blocking_reasons,\n  payload_jsonb #> '{guardrails,caution_reasons}' AS caution_reasons,\n  decision\nFROM (\n  SELECT DISTINCT ON (node_id)\n    node_id,\n    ts,\n    decision,\n    payload_jsonb\n  FROM action_simulations\n  WHERE $__timeFilter(ts)\n    AND node_id IN (SELECT device_id FROM devices WHERE lifecycle_state = 'ACTIVE')\n    AND ('${device_id:csv}' = 'All' OR node_id IN (${device_id:sqlstring}))\n  ORDER BY node_id, ts DESC\n) latest\nORDER BY node_id",
           "refId": "A"
         }
       ]
@@ -1679,7 +1679,7 @@
           },
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT\n  ts AS time,\n  node_id,\n  decision,\n  state_id,\n  payload_jsonb #> '{reasons}' AS reasons\nFROM action_simulations\nWHERE $__timeFilter(ts)\n  AND ('${device_id:csv}' = 'All' OR node_id IN (${device_id:sqlstring}))\nORDER BY ts DESC",
+          "rawSql": "SELECT\n  ts AS time,\n  node_id,\n  decision,\n  state_id,\n  payload_jsonb #> '{reasons}' AS reasons\nFROM action_simulations\nWHERE $__timeFilter(ts)\n  AND node_id IN (SELECT device_id FROM devices WHERE lifecycle_state = 'ACTIVE')\n    AND ('${device_id:csv}' = 'All' OR node_id IN (${device_id:sqlstring}))\nORDER BY ts DESC",
           "refId": "A"
         }
       ]
@@ -1741,7 +1741,7 @@
           },
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT\n  ts AS time,\n  node_id,\n  reason #>> '{}' AS blocking_reason,\n  count(*)::double precision AS value\nFROM action_simulations\nCROSS JOIN LATERAL jsonb_array_elements(coalesce(payload_jsonb #> '{guardrails,blocking_reasons}', '[]'::jsonb)) AS reason\nWHERE $__timeFilter(ts)\n  AND decision = 'BLOCKED_BY_GUARDRAIL'\n  AND ('${device_id:csv}' = 'All' OR node_id IN (${device_id:sqlstring}))\nGROUP BY ts, node_id, blocking_reason\nORDER BY ts DESC",
+          "rawSql": "SELECT\n  ts AS time,\n  node_id,\n  reason #>> '{}' AS blocking_reason,\n  count(*)::double precision AS value\nFROM action_simulations\nCROSS JOIN LATERAL jsonb_array_elements(coalesce(payload_jsonb #> '{guardrails,blocking_reasons}', '[]'::jsonb)) AS reason\nWHERE $__timeFilter(ts)\n  AND decision = 'BLOCKED_BY_GUARDRAIL'\n  AND node_id IN (SELECT device_id FROM devices WHERE lifecycle_state = 'ACTIVE')\n    AND ('${device_id:csv}' = 'All' OR node_id IN (${device_id:sqlstring}))\nGROUP BY ts, node_id, blocking_reason\nORDER BY ts DESC",
           "refId": "A"
         }
       ]
@@ -1803,7 +1803,7 @@
           },
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT\n  ts AS time,\n  node_id,\n  decision,\n  nullif(payload_jsonb #>> '{sampling_recommendation,recommended_poll_seconds}', '')::double precision AS recommended_poll_seconds,\n  payload_jsonb #>> '{sampling_recommendation,until_ts}' AS until_ts,\n  payload_jsonb #>> '{sampling_recommendation,advisory_only}' AS advisory_only\nFROM action_simulations\nWHERE $__timeFilter(ts)\n  AND ('${device_id:csv}' = 'All' OR node_id IN (${device_id:sqlstring}))\nORDER BY ts DESC",
+          "rawSql": "SELECT\n  ts AS time,\n  node_id,\n  decision,\n  nullif(payload_jsonb #>> '{sampling_recommendation,recommended_poll_seconds}', '')::double precision AS recommended_poll_seconds,\n  payload_jsonb #>> '{sampling_recommendation,until_ts}' AS until_ts,\n  payload_jsonb #>> '{sampling_recommendation,advisory_only}' AS advisory_only\nFROM action_simulations\nWHERE $__timeFilter(ts)\n  AND node_id IN (SELECT device_id FROM devices WHERE lifecycle_state = 'ACTIVE')\n    AND ('${device_id:csv}' = 'All' OR node_id IN (${device_id:sqlstring}))\nORDER BY ts DESC",
           "refId": "A"
         }
       ]
@@ -1827,14 +1827,14 @@
           "type": "postgres",
           "uid": "senior-pomidor-postgres"
         },
-        "definition": "SELECT device_id AS __text, device_id AS __value FROM devices ORDER BY device_id",
+        "definition": "SELECT device_id AS __text, device_id AS __value FROM devices WHERE lifecycle_state = 'ACTIVE' ORDER BY device_id",
         "hide": 0,
         "includeAll": true,
         "label": "Device",
         "multi": true,
         "name": "device_id",
         "options": [],
-        "query": "SELECT device_id AS __text, device_id AS __value FROM devices ORDER BY device_id",
+        "query": "SELECT device_id AS __text, device_id AS __value FROM devices WHERE lifecycle_state = 'ACTIVE' ORDER BY device_id",
         "refresh": 1,
         "sort": 1,
         "type": "query"

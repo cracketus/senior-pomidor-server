@@ -330,6 +330,11 @@ def list_devices(db: Session = Depends(get_db)) -> list[dict[str, Any]]:
             "first_seen_at": format_utc(device.first_seen_at),
             "last_seen_at": format_utc(device.last_seen_at),
             "last_payload_at": format_utc(device.last_payload_at),
+            "lifecycle_state": device.lifecycle_state,
+            "lifecycle_changed_at": format_utc(device.lifecycle_changed_at)
+            if device.lifecycle_changed_at is not None
+            else None,
+            "lifecycle_reason_code": device.lifecycle_reason_code,
         }
         for device in devices
     ]
@@ -337,7 +342,7 @@ def list_devices(db: Session = Depends(get_db)) -> list[dict[str, Any]]:
 
 @router.get("/devices/latest")
 def latest_telemetry_by_device(db: Session = Depends(get_db)) -> list[dict[str, Any]]:
-    devices = db.scalars(select(Device).order_by(Device.device_id)).all()
+    devices = db.scalars(select(Device).where(Device.lifecycle_state == "ACTIVE").order_by(Device.device_id)).all()
     latest_events: list[dict[str, Any]] = []
     for device in devices:
         event = db.scalar(

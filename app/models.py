@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from enum import StrEnum
 
 from sqlalchemy import (
     JSON,
@@ -23,13 +24,44 @@ class Base(DeclarativeBase):
     pass
 
 
+class DeviceLifecycleState(StrEnum):
+    ACTIVE = "ACTIVE"
+    DECOMMISSIONED = "DECOMMISSIONED"
+
+
 class Device(Base):
     __tablename__ = "devices"
+    __table_args__ = (
+        CheckConstraint(
+            "lifecycle_state IN ('ACTIVE', 'DECOMMISSIONED')",
+            name="ck_devices_lifecycle_state",
+        ),
+    )
 
     device_id: Mapped[str] = mapped_column(String(128), primary_key=True)
     first_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     last_payload_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    lifecycle_state: Mapped[str] = mapped_column(String(32), nullable=False, default=DeviceLifecycleState.ACTIVE)
+    lifecycle_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    lifecycle_reason_code: Mapped[str | None] = mapped_column(String(64))
+
+
+class DeviceLifecycleEvent(Base):
+    __tablename__ = "device_lifecycle_events"
+    __table_args__ = (
+        CheckConstraint(
+            "from_state IN ('ACTIVE', 'DECOMMISSIONED') AND to_state IN ('ACTIVE', 'DECOMMISSIONED')",
+            name="ck_device_lifecycle_event_states",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    device_id: Mapped[str] = mapped_column(String(128), ForeignKey("devices.device_id"), index=True)
+    from_state: Mapped[str] = mapped_column(String(32), nullable=False)
+    to_state: Mapped[str] = mapped_column(String(32), nullable=False)
+    changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    reason_code: Mapped[str] = mapped_column(String(64), nullable=False)
 
 
 class TelemetryEvent(Base):
