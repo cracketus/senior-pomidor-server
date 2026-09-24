@@ -138,16 +138,21 @@ def render_overview(snapshot: OperatorSnapshot) -> str:
         lines.append(f"Edges: {edge_statuses}")
     else:
         lines.append("Edges: UNAVAILABLE")
-    anomalies = _items(_data(snapshot.result("anomalies")).get("items"))
+    anomaly_result = snapshot.result("anomalies")
+    lines.extend(f"Anomalies: {notice}" for notice in _transport_notice(anomaly_result))
+    anomalies = _items(_data(anomaly_result).get("items"))
     alert_count = sum(1 for item in anomalies if _mapping(item).get("severity") == "ALERT")
     warn_count = sum(1 for item in anomalies if _mapping(item).get("severity") == "WARN")
     lines.append(f"Recent anomalies: {len(anomalies)} (ALERT {alert_count}, WARN {warn_count})")
     decision_result = snapshot.result("decisions")
+    lines.extend(f"Decisions: {notice}" for notice in _transport_notice(decision_result))
     decision_items = _items(_data(decision_result).get("items"))
     lines.append(
         f"Decisions: availability={_text(_envelope(decision_result).get('availability'))} items={len(decision_items)}"
     )
-    photos = _items(_data(snapshot.result("photos")).get("items"))
+    photo_result = snapshot.result("photos")
+    lines.extend(f"Camera: {notice}" for notice in _transport_notice(photo_result))
+    photos = _items(_data(photo_result).get("items"))
     if photos:
         latest = _mapping(photos[0])
         lines.append(f"Latest photo: {_text(latest.get('photo_id'))} @ {_timestamp(latest.get('captured_at_utc'))}")
@@ -181,7 +186,9 @@ def render_plants(snapshot: OperatorSnapshot) -> str:
                 f"air {air} / RH {rh} | VPD {vpd} | light {light}"
             )
     lines.extend(["", "Canonical current state"])
-    lines.extend(_state_lines(_mapping(_data(snapshot.result("status")).get("state"))))
+    state_result = snapshot.result("status")
+    lines.extend(_transport_notice(state_result))
+    lines.extend(_state_lines(_mapping(_data(state_result).get("state"))))
     lines.extend(
         [
             "",

@@ -981,6 +981,10 @@ def test_docker_compose_stack_ingests_and_serves_data():
         assert_container_healthy("api")
         assert_container_healthy("worker")
         assert_container_healthy("state-estimator-worker")
+        # The source-free runtime must carry the lifecycle admin command, not
+        # merely pass imports from the developer checkout.
+        lifecycle_help = compose("exec", "-T", "api", "python", "-m", "tools.lifecycle", "show", "--help")
+        assert "device_id" in lifecycle_help.stdout
         assert_mosquitto_bind_mount()
         assert compose("ps", "-q", "grafana-cloud-exporter").stdout.strip() == ""
 

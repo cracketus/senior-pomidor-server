@@ -102,3 +102,64 @@ def test_tui_gracefully_runs_in_small_terminal() -> None:
             assert app.query_one("#views", ContentSwitcher).current == "edge"
 
     run(scenario())
+
+
+def test_repeated_refresh_does_not_cancel_or_overlap_slow_fetch() -> None:
+    async def scenario() -> None:
+        started = asyncio.Event()
+        release = asyncio.Event()
+
+        class SlowSource(DemoOperatorSource):
+            calls = 0
+            cancelled = False
+
+            async def fetch_all(self) -> OperatorSnapshot:
+                self.calls += 1
+                started.set()
+                try:
+                    await release.wait()
+                except asyncio.CancelledError:
+                    self.cancelled = True
+                    raise
+                return await super().fetch_all()
+
+        source = SlowSource()
+        app = OperatorConsole(source, refresh_seconds=3600)
+        async with app.run_test() as pilot:
+            await started.wait()
+            for _ in range(4):
+                app.refresh_data()
+            await pilot.pause()
+            assert source.calls == 1
+            assert not source.cancelled
+            release.set()
+            await app.workers.wait_for_complete()
+            assert app.snapshot.result("status") is not None
+            app.refresh_data()
+            await app.workers.wait_for_complete()
+            assert source.calls == 2
+
+    run(scenario())
+
+
+def test_composite_views_mark_failed_dependencies_as_stale() -> None:
+    from app.operator_tui.client import ViewResult
+
+    first = run(DemoOperatorSource().fetch_all())
+    failed = OperatorSnapshot.failed("synthetic outage")
+    healthy_status = first.result("status")
+    assert healthy_status is not None
+    mixed = first.merge(OperatorSnapshot({**failed.views, "status": healthy_status}))
+    overview = render_overview(mixed)
+    for label in ("Anomalies", "Decisions", "Camera"):
+        assert f"{label}: TRANSPORT: STALE LAST-KNOWN DATA" in overview
+    failed_status = ViewResult("status", None, "synthetic outage", healthy_status.fetched_at_utc)
+    plants = first.merge(OperatorSnapshot({"status": failed_status}))
+    assert "Canonical current state\nTRANSPORT: STALE LAST-KNOWN DATA" in render_plants(plants)
+
+
+def test_module_entrypoint_validates_refresh_interval(capsys) -> None:
+    from app.operator_tui.__main__ import main
+
+    assert main(["--demo", "--refresh-seconds", "nan"]) == 4
+    assert "refresh_seconds must be between" in capsys.readouterr().err

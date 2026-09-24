@@ -15,11 +15,12 @@ class ConfigError(ValueError):
 
 
 def _one_line(value: str, label: str) -> str:
-    if not value or not value.strip() or "\n" in value or "\r" in value:
+    value = value.removesuffix("\n").removesuffix("\r").strip(" ")
+    if not value or any(ord(char) < 33 or ord(char) > 126 for char in value):
         raise ConfigError(f"invalid {label}")
     if len(value.encode("utf-8")) > MAX_TOKEN_BYTES:
         raise ConfigError(f"{label} is too large")
-    return value.strip()
+    return value
 
 
 def validate_url(value: str) -> str:
@@ -42,7 +43,8 @@ def validate_url(value: str) -> str:
 
 def read_token_file(path_value: str) -> str:
     try:
-        raw = Path(path_value).read_bytes()
+        with Path(path_value).open("rb") as stream:
+            raw = stream.read(MAX_TOKEN_BYTES + 1)
     except (OSError, ValueError) as exc:
         raise ConfigError("cannot read token file") from exc
     if len(raw) > MAX_TOKEN_BYTES:

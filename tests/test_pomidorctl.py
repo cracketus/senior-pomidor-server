@@ -161,3 +161,27 @@ def test_fastapi_operator_boundary_round_trips_through_client(client_factory) ->
 
     assert isinstance(response, DecisionsResponse)
     assert response.model_dump(mode="json")["schema_version"] == "senior-pomidor.operator.v1"
+
+
+@pytest.mark.parametrize("ending", ["\n", "\r\n", ""])
+def test_token_file_accepts_conventional_line_ending(tmp_path, ending) -> None:
+    token_file = tmp_path / "token"
+    token_file.write_bytes(("synthetic-token" + ending).encode())
+    config = build_config(server_url=None, timeout_seconds=None, token_file=str(token_file), environ={})
+    assert config.token == "synthetic-token"
+
+
+@pytest.mark.parametrize("token", ["secret\x00tail", "secret\ttail", "secret\ntail", "секрет", "secret\x7f"])
+def test_invalid_header_token_is_a_bounded_cli_error(tmp_path, capsys, token) -> None:
+    token_file = tmp_path / "token"
+    token_file.write_text(token, encoding="utf-8")
+    assert main(["--json", "--token-file", str(token_file), "status"]) == 4
+    captured = capsys.readouterr()
+    assert captured.err == ""
+    assert json.loads(captured.out)["error_code"] == "configuration_error"
+    assert token not in captured.out
+
+
+def test_tui_rejects_json_instead_of_launching_interactive_ui(capsys) -> None:
+    assert main(["--json", "tui", "--demo"]) == 4
+    assert json.loads(capsys.readouterr().out)["error_code"] == "configuration_error"

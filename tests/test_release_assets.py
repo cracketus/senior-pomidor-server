@@ -148,3 +148,16 @@ def test_production_runbook_skips_reliability_checks_without_canary() -> None:
     assert not_run in section
     assert section.index(guard) < section.index(operator_endpoint) < section.index(not_run)
     assert section.index(guard) < section.index(summary_endpoint) < section.index(not_run)
+
+
+def test_runtime_image_copies_lifecycle_admin_module() -> None:
+    dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+    tool_sources = [
+        source
+        for line in dockerfile.splitlines()
+        if line.startswith("COPY ") and line.split()[-1] == "./tools/"
+        for source in line.split()[1:-1]
+    ]
+    assert "tools/__init__.py" in tool_sources
+    assert "tools/lifecycle.py" in tool_sources
+    assert all((ROOT / source).is_file() for source in tool_sources)
