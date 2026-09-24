@@ -1,31 +1,23 @@
 # Установка нового Server/Core release на production server
 
-| Поле | Значение |
+Проверка команд и ссылок: 2026-09-24; production execution не выполнялся. Это шаблон новой immutable campaign, включая v0.3.1.
+Версия релиза сама по себе не подтверждает готовность. Начальный статус новой кампании — `BLOCKED`.
+
+### Входные данные кампании
+
+До выполнения команд заполните приватную change record принятыми evidence:
+
+| Artifact | Обязательное значение |
 | --- | --- |
-| Версия документа | `2026-09-13.1` |
-| Дата проверки | `2026-09-13` |
-| Целевой release | `v0.3.0` |
-| Rollback release | `v0.2.5` |
-| Текущий статус | `BLOCKED`: обязательные production gates и accepted release evidence не завершены |
+| New Core | version, полный Git SHA, image `@sha256`, SHA-256 runtime bundle |
+| Selected Edge | полный Git SHA, image `@sha256`, exact RC workflow URL |
+| Rollback Core | фактически установленная версия, Git SHA, image `@sha256`, SHA-256 bundle |
+| Qualification | accepted report ID и immutable evidence commit SHA |
+| Approval | оператор, окно, разрешение на rollout и владелец rollback |
 
-### Зафиксированные release identities
-
-| Artifact | Version / revision | SHA-256 / immutable digest |
-| --- | --- | --- |
-| Core Git | `549dc4d21897203c167749611416355f820d6372` | — |
-| Core image | `ghcr.io/cracketus/senior-pomidor-server@sha256:5c9f82606bfd499e894fbd8e5a99dfaccb23843f6d9ca1477d5151e0ac194e3e` | `sha256:5c9f82606bfd499e894fbd8e5a99dfaccb23843f6d9ca1477d5151e0ac194e3e` |
-| Core runtime bundle | `senior-pomidor-runtime-v0.3.0.tar.gz` | `7deb933e071924a01fae5006d89ef309b0df51c6a6973c4d5f12547be5b2c4e4` |
-| Edge Git | `75d6dee136165baa810faf8c2a37206260bcd01c` | — |
-| Edge image | `ghcr.io/cracketus/senior-pomidor-edge@sha256:0bfa9e67cce7d5b67190f041f71b91c38e284c7263c2b3c112f2ad2f4d75ae6c` | `sha256:0bfa9e67cce7d5b67190f041f71b91c38e284c7263c2b3c112f2ad2f4d75ae6c` |
-| Rollback Core Git | `3b91260579dd875c4075eb0cfb39538f1ea60e01` | — |
-| Rollback Core image | `ghcr.io/cracketus/senior-pomidor-server@sha256:6147b72b04146244b1ed15f7146ac1fee74c07342c875d465dcdcf2e8a101524` | `sha256:6147b72b04146244b1ed15f7146ac1fee74c07342c875d465dcdcf2e8a101524` |
-| Rollback runtime bundle | `senior-pomidor-runtime-v0.2.5.tar.gz` | `f55dd007df24b241108d577703dda21177e0d54d20b6af0c327e9090c4424ada` |
-| Accepted report ID | `NOT_AVAILABLE` | rollout blocked |
-| Immutable evidence ref | `NOT_AVAILABLE` | rollout blocked |
-
-**Ожидается:** оператор использует только identities из таблицы.
-
-**Переход:** начать шаг 0; любое другое значение открывает новую release campaign.
+Значения вводятся из одной записи; старые identities v0.3.0 не являются defaults для v0.3.1.
+Не выбирайте rollback по номеру последнего GitHub Release: он должен совпадать с проверенным
+production baseline. Исторические pins доступны в истории Git этого документа.
 
 > СДВГ-режим: выполняйте **только один пронумерованный шаг за раз**. После каждого шага остановитесь,
 > прочитайте блоки **Ожидается**, **STOP** и **GO**, поставьте галочку в журнале и только потом
@@ -41,12 +33,12 @@
 Core-first rollout одного заранее протестированного immutable release. Он не разрешает deployment:
 production change window и оператор должны быть отдельно одобрены человеком.
 
-На `2026-09-13` umbrella issue #189 и обязательные #77, #78, #84, #85, #86, #185 и #186 имеют
-состояние `OPEN`. Если для устанавливаемого кандидата нет принятых `PASS`-evidence по этим gate,
+Проверьте актуальные статусы promotion #189 и обязательных gates #77, #78, #84, #85, #86, #185 и #186
+в репозитории-владельце; исторический статус issue не является evidence. Если для устанавливаемого кандидата нет принятых `PASS`-evidence по этим gate,
 остановитесь на шаге 2. Слова «тесты прошли» без точных SHA/digest и evidence references недостаточно.
 
-Для `v0.3.0` real Edge/Core scenarios, 24-hour staging soak, exact-bundle rollback rehearsal,
-`report_id` и `evidence_ref` не приняты. Текущий production rollout запрещён.
+Пока real Edge/Core scenarios, 24-hour staging soak, exact-bundle rollback rehearsal,
+`report_id` и `evidence_ref` новой кампании не приняты, production rollout запрещён.
 
 ### Карта риска
 
@@ -84,7 +76,7 @@ production change window и оператор должны быть отдель�
 
 Откройте:
 
-- `L` — PowerShell 7 на рабочем ноутбуке Windows, из корня Git checkout;
+- `L` — PowerShell 7.3+ на рабочем ноутбуке Windows, из корня Git checkout;
 - `S1` — основной SSH-терминал на production server;
 - `S2` — резервный SSH-терминал, который остаётся открытым для диагностики/rollback;
 - приватную change record, не находящуюся в Git.
@@ -94,9 +86,22 @@ production change window и оператор должны быть отдель�
 `S1`/`S2` — на Bash в Ubuntu:
 
 ```powershell
+if ($PSVersionTable.PSVersion -lt [version]'7.3') { throw 'PowerShell 7.3+ required' }
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+$PSNativeCommandUseErrorActionPreference = $true
 $PSVersionTable.PSVersion
 Get-Command git, gh, python, tar.exe, ssh.exe, scp.exe
 ```
+
+В `S1` и `S2` перед Bash-блоками включите остановку при ошибке:
+
+```bash
+set -euo pipefail
+```
+
+После разрыва SSH восстановите переменные из проверенной change record и повторите read-only
+preflight. Не продолжайте с частично заполненным окружением.
 
 В change record запишите:
 
@@ -151,11 +156,11 @@ if ((git rev-parse HEAD).Trim() -ne $EvidenceRef) { throw 'Evidence checkout mis
 
 $ReportId = Read-Host 'Accepted report_id'
 if ($ReportId -notmatch '^[a-z0-9][a-z0-9._-]{0,63}$') { throw 'Missing or invalid accepted report_id' }
-$CoreSha = '549dc4d21897203c167749611416355f820d6372'
-$CoreDigest = 'sha256:5c9f82606bfd499e894fbd8e5a99dfaccb23843f6d9ca1477d5151e0ac194e3e'
+$CoreSha = Read-Host 'Accepted new Core Git SHA'
+$CoreDigest = Read-Host 'Accepted new Core digest (sha256:...)'
 $CoreImage = "ghcr.io/cracketus/senior-pomidor-server@$CoreDigest"
-$EdgeSha = '75d6dee136165baa810faf8c2a37206260bcd01c'
-$EdgeDigest = 'sha256:0bfa9e67cce7d5b67190f041f71b91c38e284c7263c2b3c112f2ad2f4d75ae6c'
+$EdgeSha = Read-Host 'Accepted Edge Git SHA'
+$EdgeDigest = Read-Host 'Accepted Edge digest (sha256:...)'
 $EdgeImage = "ghcr.io/cracketus/senior-pomidor-edge@$EdgeDigest"
 
 python -m tools.release_qualification validate `
@@ -193,11 +198,19 @@ gate. Не переходите к backup/install.
 работоспособный и проверенный путь отката.
 
 ```powershell
-$NewVersion = 'v0.3.0'
-$OldVersion = 'v0.2.5'
-$ExpectedOldRevision = '3b91260579dd875c4075eb0cfb39538f1ea60e01'
-$ExpectedNewBundleSha256 = '7deb933e071924a01fae5006d89ef309b0df51c6a6973c4d5f12547be5b2c4e4'
-$ExpectedOldBundleSha256 = 'f55dd007df24b241108d577703dda21177e0d54d20b6af0c327e9090c4424ada'
+$NewVersion = Read-Host 'Accepted new release version (vX.Y.Z)'
+$OldVersion = Read-Host 'Verified installed rollback version (vX.Y.Z)'
+$ExpectedOldRevision = Read-Host 'Verified installed rollback Git SHA'
+$ExpectedNewBundleSha256 = Read-Host 'Accepted new bundle SHA-256'
+$ExpectedOldBundleSha256 = Read-Host 'Verified rollback bundle SHA-256'
+if ($NewVersion -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+$' -or
+    $OldVersion -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+$' -or $NewVersion -eq $OldVersion) {
+  throw 'Invalid or identical new/rollback versions'
+}
+foreach ($Digest in @($ExpectedNewBundleSha256, $ExpectedOldBundleSha256)) {
+  if ($Digest -notmatch '^[0-9a-f]{64}$') { throw 'Invalid accepted bundle SHA-256' }
+}
+if ($ExpectedOldRevision -notmatch '^[0-9a-f]{40}$') { throw 'Invalid rollback Git SHA' }
 $AssetRoot = Join-Path (Get-Location) 'senior-pomidor-release-assets'
 $NewAssetDir = Join-Path $AssetRoot $NewVersion
 $OldAssetDir = Join-Path $AssetRoot $OldVersion
@@ -246,7 +259,7 @@ function Test-ReleaseChecksum {
 Test-ReleaseChecksum -AssetDir $NewAssetDir -Version $NewVersion
 $NewArchive = Join-Path $NewAssetDir "senior-pomidor-runtime-$NewVersion.tar.gz"
 $NewArchiveSha256 = (Get-FileHash -LiteralPath $NewArchive -Algorithm SHA256).Hash.ToLowerInvariant()
-if ($NewArchiveSha256 -ne $ExpectedNewBundleSha256) { throw 'Unexpected v0.3.0 bundle SHA-256' }
+if ($NewArchiveSha256 -ne $ExpectedNewBundleSha256) { throw 'Unexpected new release bundle SHA-256' }
 $BundleVersion = (tar.exe -xOf $NewArchive ./VERSION).Trim()
 $BundleRevision = (tar.exe -xOf $NewArchive ./REVISION).Trim()
 $TagRevision = (git rev-parse "${NewVersion}^{commit}").Trim()
@@ -264,7 +277,7 @@ $BundleRevision
 Test-ReleaseChecksum -AssetDir $OldAssetDir -Version $OldVersion
 $OldArchive = Join-Path $OldAssetDir "senior-pomidor-runtime-$OldVersion.tar.gz"
 $OldArchiveSha256 = (Get-FileHash -LiteralPath $OldArchive -Algorithm SHA256).Hash.ToLowerInvariant()
-if ($OldArchiveSha256 -ne $ExpectedOldBundleSha256) { throw 'Unexpected v0.2.5 bundle SHA-256' }
+if ($OldArchiveSha256 -ne $ExpectedOldBundleSha256) { throw 'Unexpected rollback bundle SHA-256' }
 $OldBundleVersion = (tar.exe -xOf $OldArchive ./VERSION).Trim()
 $OldBundleRevision = (tar.exe -xOf $OldArchive ./REVISION).Trim()
 if ($LASTEXITCODE -ne 0) { throw 'Cannot read previous runtime bundle' }
@@ -317,8 +330,12 @@ if ($LASTEXITCODE -ne 0) { throw 'SCP transfer failed' }
 **Риск:** `2 — умеренный`. Это пишет только release assets, application ещё не меняется.
 
 ```bash
-export NEW_VERSION='v0.3.0'
-export OLD_VERSION='v0.2.5'
+read -r -p 'Accepted new version from change record: ' NEW_VERSION
+read -r -p 'Verified rollback version from change record: ' OLD_VERSION
+[[ "$NEW_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+[[ "$OLD_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+[[ "$NEW_VERSION" != "$OLD_VERSION" ]]
+export NEW_VERSION OLD_VERSION
 export INCOMING='/srv/apps/senior-pomidor/releases/.incoming'
 
 sudo install -d -o root -g root -m 0755 "${INCOMING}"
@@ -361,14 +378,20 @@ sudo install -o root -g root -m 0644 \
 вычисляется из Git SHA.
 
 ```bash
-export NEW_VERSION='v0.3.0'
-export OLD_VERSION='v0.2.5'
-export NEW_REVISION='549dc4d21897203c167749611416355f820d6372'
-export EXPECTED_OLD_REVISION='3b91260579dd875c4075eb0cfb39538f1ea60e01'
-export NEW_APP_IMAGE='ghcr.io/cracketus/senior-pomidor-server@sha256:5c9f82606bfd499e894fbd8e5a99dfaccb23843f6d9ca1477d5151e0ac194e3e'
-export EXPECTED_OLD_APP_IMAGE='ghcr.io/cracketus/senior-pomidor-server@sha256:6147b72b04146244b1ed15f7146ac1fee74c07342c875d465dcdcf2e8a101524'
-export EXPECTED_NEW_BUNDLE_SHA256='7deb933e071924a01fae5006d89ef309b0df51c6a6973c4d5f12547be5b2c4e4'
-export EXPECTED_OLD_BUNDLE_SHA256='f55dd007df24b241108d577703dda21177e0d54d20b6af0c327e9090c4424ada'
+: "${NEW_VERSION:?Complete step 4 first}"
+: "${OLD_VERSION:?Complete step 4 first}"
+read -r -p 'Accepted NEW_REVISION from change record: ' NEW_REVISION
+export NEW_REVISION
+read -r -p 'Accepted EXPECTED_OLD_REVISION from change record: ' EXPECTED_OLD_REVISION
+export EXPECTED_OLD_REVISION
+read -r -p 'Accepted NEW_APP_IMAGE from change record: ' NEW_APP_IMAGE
+export NEW_APP_IMAGE
+read -r -p 'Accepted EXPECTED_OLD_APP_IMAGE from change record: ' EXPECTED_OLD_APP_IMAGE
+export EXPECTED_OLD_APP_IMAGE
+read -r -p 'Accepted EXPECTED_NEW_BUNDLE_SHA256 from change record: ' EXPECTED_NEW_BUNDLE_SHA256
+export EXPECTED_NEW_BUNDLE_SHA256
+read -r -p 'Accepted EXPECTED_OLD_BUNDLE_SHA256 from change record: ' EXPECTED_OLD_BUNDLE_SHA256
+export EXPECTED_OLD_BUNDLE_SHA256
 read -r -p 'Approved production API URL: ' API_URL
 export API_URL
 export CANARY_EDGE_ID=''
@@ -415,7 +438,7 @@ test "$(sudo sha256sum "${OLD_ARCHIVE}" | awk '{print $1}')" = "${EXPECTED_OLD_B
 проверьте только фактическую публикацию в Compose `ps` на шаге 6.
 
 Если current `runtime.env` содержит tag или digest не равен `EXPECTED_OLD_APP_IMAGE`, остановиться.
-Не подменять фактическое значение вручную. Production baseline должен подтвердить `v0.2.5` и exact digest.
+Не подменять фактическое значение вручную. Production baseline должен подтвердить `OLD_VERSION`, Git SHA и exact digest.
 
 **Ожидается:** все `[[ ... ]]` возвращают `0`; current release — ожидаемый rollback release.  
 **STOP:** пустая переменная, regex/версия не совпадает, active symlink ведёт вне canonical releases
@@ -665,7 +688,7 @@ sudo "${INSTALLER}" "${NEW_ARCHIVE}" "${NEW_CHECKSUM}"
 **Ожидается:** последняя строка:
 
 ```text
-Installed v0.3.0. Run: systemctl reload-or-restart senior-pomidor
+Installed <NEW_VERSION>. Run: systemctl reload-or-restart senior-pomidor
 ```
 
 До restart проверьте symlink и metadata:
@@ -679,9 +702,9 @@ sudo cat "${ACTIVE_LINK}/REVISION"
 Ожидается:
 
 ```text
-/srv/apps/senior-pomidor/releases/v0.3.0
-v0.3.0
-549dc4d21897203c167749611416355f820d6372
+/srv/apps/senior-pomidor/releases/<NEW_VERSION>
+<NEW_VERSION>
+<NEW_REVISION>
 ```
 
 **STOP:** installer вернул non-zero, metadata не совпала или active link неожиданен. Не запускайте
@@ -1144,8 +1167,9 @@ paths, service/process/boot IDs, credentials или dumps.
 - [`release-evidence/README.md`](../release-evidence/README.md)
 ## v0.3.1 lifecycle and health rollout gate
 
-Use the human-operated lifecycle CLI only against the approved application database and always provide
-`--expected-state` and `--apply`. The additive migration defaults existing devices to `ACTIVE`, retains
+Use the human-operated lifecycle CLI only against the approved application database. Mutations (`set`)
+require `--expected-state` and `--apply`; read-only `show` does not. Verify `python -m tools.lifecycle show --help`
+in the exact candidate image before rollout: older images omit this module. The additive migration defaults existing devices to `ACTIVE`, retains
 history on rollback, and must not be downgraded destructively. Render the exact Compose overlays before
 promotion and confirm the API/worker `worker-health` volume is project-scoped and isolated; API is
 read-only while worker is read-write. Edge application-discriminator and ACK metadata behavior require

@@ -1,0 +1,75 @@
+{
+  "schema": "agent_run_v1",
+  "run_id": "v031-release-docs",
+  "issue_ref": null,
+  "pr_ref": null,
+  "role": "coder",
+  "agent_id": "codex",
+  "prompt_version": "coding-agent-1.1",
+  "started_at_utc": "2026-09-24T07:45:00Z",
+  "finished_at_utc": "2026-09-24T13:23:42.541187Z",
+  "input_refs": [
+    ".ai/CURRENT_STATE.md",
+    "README.md",
+    "docs/OPERATIONS.md",
+    "docs/OPERATOR_TUI.md",
+    "docs/ru/POST_MERGE_PREPRODUCTION_QUALIFICATION.md",
+    "docs/ru/PRODUCTION_RELEASE_INSTALLATION_RUNBOOK.md",
+    "docs/ru/RELEASE_TO_E2E_RUNBOOK.md"
+  ],
+  "output_refs": [
+    "docs/implementation-reports/V031-release-docs-report.md"
+  ],
+  "status": "completed",
+  "commands": [
+    {
+      "command": "git diff --check"
+    },
+    {
+      "command": "python -m tools.ai_context_docs"
+    }
+  ],
+  "validation_results": [
+    {
+      "check": "markdown_links",
+      "status": "PASS"
+    },
+    {
+      "check": "bash_syntax",
+      "status": "PASS"
+    },
+    {
+      "check": "deployment",
+      "status": "NOT_RUN"
+    },
+    {
+      "check": "post_merge_doc_tests",
+      "status": "PASS",
+      "result": "24 passed"
+    },
+    {
+      "check": "core_main_ci",
+      "status": "PASS",
+      "result": "run 35981229306"
+    },
+    {
+      "check": "edge_main_quality",
+      "status": "PASS",
+      "result": "run 35980949385"
+    }
+  ],
+  "human_edits": [],
+  "findings": [
+    {
+      "category": "documentation_drift",
+      "outcome": "confirmed"
+    }
+  ],
+  "errors": [],
+  "usage": {
+    "file_count": 7,
+    "input_characters": 224009,
+    "tool_output_bytes": 0,
+    "elapsed_seconds": 0
+  }
+}

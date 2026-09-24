@@ -1,6 +1,6 @@
 # Current state
 
-Owner: maintainer performing a release or operational change. Update after every deployed subsystem, contract, topology, season, or rehearsal change and review at least monthly during the active season. Snapshot date: 2026-09-09. Do not add addresses, credentials, hostnames, or other private infrastructure values.
+Owner: maintainer performing a release or operational change. Update after every deployed subsystem, contract, topology, season, or rehearsal change and review at least monthly during the active season. Snapshot date: 2026-09-24 (repository capabilities; not deployment evidence). Do not add addresses, credentials, hostnames, or other private infrastructure values.
 
 ## Running/deployable services
 
@@ -16,7 +16,8 @@ Owner: maintainer performing a release or operational change. Update after every
 
 ## Active contracts and storage
 
-- Edge telemetry: `senior-pomidor.edge.telemetry.v1` and `.v2` over MQTT and HTTP fallback.
+- Edge telemetry: `senior-pomidor.edge.telemetry.v1` and `.v2` over MQTT and HTTP. The current durable-spool Edge uses HTTP ACK as the authoritative
+  delivery result and MQTT as a best-effort mirror; legacy senders may use HTTP fallback.
 - Telemetry v2 supports globally unique edge `record_id` values shared by MQTT and HTTP for durable
   idempotency. Payloads without `record_id` retain legacy observation-identity deduplication for one release cycle.
 - Private latest/history reads derive stable watchdog, spool, and application reliability alerts.
@@ -29,8 +30,9 @@ Owner: maintainer performing a release or operational change. Update after every
   photos, and decisions views. They query persisted snapshots only; host health and Control decisions
   are explicit `NOT_IMPLEMENTED`, and pod `plant_id` remains nullable until canonical identity mapping exists.
 - The additive read-only `pomidorctl` package consumes only those six operator GET views, validates the
-  full response contract, and exposes stable JSON/human output and exit codes. TUI, local fallback, and
-  production rollout are not implemented.
+  full response contract, and exposes stable JSON/human output and exit codes. The optional Textual TUI
+  is implemented with six read-only views and a synthetic demo; it requires the `tui` extra. Local fallback
+  and verified production rollout are not implemented.
 - Canonical Docker Edge application health uses the explicit `service_manager=none` discriminator and
   process liveness without inventing systemd state. A complete discriminator-absent legacy systemd payload
   remains supported for one release cycle; ambiguous or contradictory application evidence is `UNKNOWN`.
@@ -43,8 +45,10 @@ Owner: maintainer performing a release or operational change. Update after every
   `senior-pomidor.edge-core-compatibility-report.v1`, and `senior-pomidor.release-validation.v1`.
 - The runtime image contains sanitized `senior-pomidor.map.v1` topology history. The isolated read-only
   `app/map` provider validates and atomically resolves that synthetic history. The packaged Map raw-evidence
-  reader can extract bounded historical telemetry through an explicit PostgreSQL read-only transaction; neither
-  component is wired into startup, an API route, the State Estimator, control, or real hardware/data.
+  reader can extract bounded historical telemetry through an explicit PostgreSQL read-only transaction.
+  The provider, reader and evaluator are exposed through the bounded Map API only in explicitly enabled
+  development mode with authentication and a target allowlist; staging/production fail closed. They are
+  not integrated into State Estimator or physical control.
 
 See [`docs/CONTRACTS.md`](../docs/CONTRACTS.md), schemas in [`docs/schemas/`](../docs/schemas/), and fixtures in [`tests/fixtures/contracts/`](../tests/fixtures/contracts/).
 
@@ -52,17 +56,22 @@ See [`docs/CONTRACTS.md`](../docs/CONTRACTS.md), schemas in [`docs/schemas/`](..
 
 Implemented: telemetry/photo ingestion and reads, deterministic edge reliability evaluation and its versioned current operator read models, MQTT reconnect behavior, readiness/migrations, State Estimator and deterministic replay, separate telemetry and edge-reliability Grafana dashboards/alerts, bounded plant and reliability public metrics export, backup/restore tooling, offline vision analysis, and local daily story. Provider-neutral assistant utilities remain under `app/assistant/`, but no assistant service is active in the current Compose topology.
 
-The first three Tomato Brain Map R1 slices are implemented: immutable topology contracts, bounded strict YAML
+Tomato Brain Map R1 implements: immutable topology contracts, bounded strict YAML
 loading, digest verification, historical mode/cutoff selection, binding resolution, atomic reload of the
 sanitized catalog, a deterministic bounded PostgreSQL raw-evidence reader, and a pure deterministic capability
-evaluator. The evaluator preserves observation and ingest-proxy semantics and remains inactive: it is not wired
-into startup, an API route, the State Estimator, control, or real hardware/data. The private API, operator UI,
-and any real-data activation remain unimplemented.
+evaluator. The evaluator preserves observation and ingest-proxy semantics. The bounded Map API under
+`app/map/api.py` is registered in FastAPI but disabled unless explicitly configured in development mode.
+Map-specific operator UI and verified real-data activation remain unimplemented.
+
+Device lifecycle administration is implemented through `tools.lifecycle` and packaged in the runtime
+image. Explicit `set` operations require expected state, reason and apply; they preserve history.
+Core PR #363 and Edge PR #154 are merged and their main CI passed on 2026-09-24; see
+[the v0.3.1 audit](../docs/ru/V031_RELEASE_READINESS.md) for exact revisions and remaining qualification.
 
 The repository also implements fail-closed system-invariant, Edge/Core compatibility, and release-validation
 artifact contracts; immutable Core RC and bounded staging qualification tooling; and production-promotion
 gates. The coordinated Core and Edge Docker application-health fixes are present on each repository's main
-branch. One post-fix immutable RC pair is now pinned: Core
+branch. Historical reference only (not the v0.3.1 candidate): one post-fix immutable RC pair was pinned: Core
 `3bcbc15bc94b2eca1d45be8e3713c26d5b0b5c73` at
 `ghcr.io/cracketus/senior-pomidor-server@sha256:7b14b208bab3181fd5234581c5e851d44d4e78fa024f334b90d3611ff04864c0`
 and Edge `553eb44ca7add9a99031f9a096683c1502c5a5a8` at
@@ -82,7 +91,7 @@ Not implemented as active physical-control contracts: World Model forecasts, Wea
 - PR CI includes a separately named Docker E2E job; RC qualification separately requires fail-closed system
   invariant, real Edge/Core compatibility, and release-validation reports. Repository branch protection must be
   configured by a maintainer to require the Docker job.
-- The immutable Core/Edge pair has been built and pinned, but the Server release-qualification workflow has
+- The historical Core/Edge pair was built and pinned, but the Server release-qualification workflow has
   not yet produced a real qualification run. Synthetic fixtures and repository-local CI remain insufficient
   for real compatibility, staging, soak, rollback, canary, or production evidence. Identity drift requires a
   new qualification campaign.
@@ -103,7 +112,7 @@ only the application and preserve shared services/data.
 ## Known gaps requiring follow-up
 
 - Keep this snapshot synchronized with releases and season status; updates are manual.
-- Qualify the pinned immutable post-fix Core/Edge candidate pair by recording real compatibility, isolated
+- Select and qualify the final immutable Core/Edge candidate pair after all release fixes merge by recording real compatibility, isolated
   staging, 24-hour soak, application-only rollback, and separately approved canary evidence before production
   promotion. Rollback changes only the application image and preserves PostgreSQL, Grafana, Ollama, volumes,
   and release evidence.
@@ -113,6 +122,6 @@ only the application and preserve shared services/data.
   changes the comparison baseline.
 - Expand restore rehearsal evidence on a regular cadence.
 - Add separate approved designs before implementing World Model, Weather Adapter, Control, Guardrails, Executor, or real hardware paths.
-- Complete Tomato Brain Map R1 through the separately approved evaluator, private API, and operator UI slices;
+- Complete the remaining Tomato Brain Map R1 operator UI and acceptance work;
   do not activate real topology or calibration without verified owner evidence.
 - Track unresolved incidents in [`KNOWN_FAILURES.md`](KNOWN_FAILURES.md) without embedding sensitive incident data.

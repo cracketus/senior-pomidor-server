@@ -3,6 +3,9 @@
 > Выполняйте **только один пронумерованный шаг за раз**. После каждого шага прочитайте
 > **Ожидается**, **STOP** и **GO**. Не вставляйте в PowerShell команды из нескольких шагов сразу.
 
+Для v0.3.1 сначала проверьте [release audit checklist](V031_RELEASE_READINESS.md), особенно
+наличие lifecycle CLI в image и отдельную установку TUI.
+
 ## 0. Границы и обозначения
 
 Этот runbook доводит Server/Core release от чистого `main` до проверенного GitHub Release,
@@ -697,7 +700,7 @@ image и не изменяет PostgreSQL, Grafana, Ollama, volumes или relea
 
 - [`POST_MERGE_PREPRODUCTION_QUALIFICATION.md`](POST_MERGE_PREPRODUCTION_QUALIFICATION.md) — реальная
   Edge/Core compatibility, isolated staging, soak и exact-bundle rollback rehearsal;
-- [`ISSUE_189_PRODUCTION_PROMOTION_VERIFICATION.md`](ISSUE_189_PRODUCTION_PROMOTION_VERIFICATION.md) —
+- [`ISSUE_189_PRODUCTION_PROMOTION_VERIFICATION.md`](../ISSUE_189_PRODUCTION_PROMOTION_VERIFICATION.md) —
   полный promotion gate и fail-closed статус;
 - [`PRODUCTION_RELEASE_INSTALLATION_RUNBOOK.md`](PRODUCTION_RELEASE_INSTALLATION_RUNBOOK.md) — только
   после принятых pre-production evidence и отдельного production approval.
