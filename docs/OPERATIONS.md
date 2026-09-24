@@ -18,6 +18,9 @@ The API, MQTT broker, PostgreSQL port, dashboard, and Grafana UI are intended fo
 
 ## Release Checklist
 
+For v0.3.1, complete [the candidate-specific acceptance checklist](ru/V031_RELEASE_READINESS.md)
+before carrying evidence into the release campaign.
+
 Before tagging or publishing a server release:
 
 - Follow the step-by-step [Server/Core release-to-E2E runbook](ru/RELEASE_TO_E2E_RUNBOOK.md) to bind the
@@ -77,8 +80,7 @@ non-destructive stop rules are defined in [STAGING.md](STAGING.md).
 
 For exact-bundle rehearsal, record the Core candidate SHA, runtime-bundle SHA-256, and Edge image digest, deploy
 those immutable artifacts without rebuilding, and compare rendered production overlays to candidate inputs
-without connecting production paths or enabling external export. Rehearse application-only rollback to
-`v0.2.4`; preserve PostgreSQL, Grafana, Ollama, and all volumes, then verify ingestion and reads and that additive
+without connecting production paths or enabling external export. Rehearse application-only rollback to the verified currently installed release recorded in the campaign; preserve PostgreSQL, Grafana, Ollama, and all volumes, then verify ingestion and reads and that additive
 Edge fields remain safely ignored.
 
 Production rollout still requires separate human authorization. Record pre-change version, `/health`, `/ready`,
@@ -229,7 +231,10 @@ PHOTO_UPLOAD_TOKEN=<same value as server PHOTO_UPLOAD_TOKEN, if configured>
 TELEMETRY_UPLOAD_TOKEN=<same value as server TELEMETRY_UPLOAD_TOKEN, if configured>
 ```
 
-MQTT should be treated as the primary path. HTTP telemetry is the compatibility fallback and is open by default for trusted-LAN compatibility unless `TELEMETRY_UPLOAD_TOKEN` is configured.
+For the current durable-spool Edge, HTTP acknowledgement is the authoritative delivery result; MQTT is a
+best-effort mirror. Keep HTTP enabled for queue drain even when MQTT delivery succeeds. Legacy Edge senders
+may still use MQTT-first/fallback behavior. HTTP ingestion is open by default on the trusted LAN unless
+`TELEMETRY_UPLOAD_TOKEN` is configured.
 
 ## Backup And Restore
 
@@ -468,7 +473,8 @@ Optional file-tree inspection for Grafana data can be included when a host path 
 python -m tools.lifecycle --grafana-data-dir <grafana-data-path> --grafana-retention-days 180
 ```
 
-The lifecycle tool is intentionally dry-run only. Create a fresh backup before any future destructive cleanup command is added or used.
+The retention inspection mode above is dry-run only. The separately documented device-lifecycle `set`
+subcommand performs an audited write and requires explicit approval, `--expected-state`, and `--apply`. Create a fresh backup before any future destructive cleanup command is added or used.
 
 ## Host Startup And Docker Recovery
 
@@ -746,7 +752,8 @@ pomidorctl --json anomalies --since-hours 24 --limit 25
 The client is read-only and accepts only the six `/api/v1/operator/*` GET views. Use a loopback or
 approved operator URL, and provide exactly one token source when the server requires authentication:
 `--token-file`, `POMIDORCTL_TOKEN_FILE`, or `POMIDORCTL_TOKEN`. Token files are UTF-8, one non-empty
-line, and at most 8 KiB. TLS verification is enabled; redirects and retries are disabled.
+line containing a visible ASCII bearer token, and at most 8 KiB. The v0.3.1 operator fix accepts
+a final LF/CRLF; embedded newlines and control characters remain invalid. TLS verification is enabled; redirects and retries are disabled.
 
 Exit codes: `0` OK, `1` WARN, `2` ALERT, `3` UNKNOWN/NOT_IMPLEMENTED, `4` usage or configuration,
 `5` authentication failure, `6` timeout/connectivity/HTTP 5xx, and `7` protocol or contract failure.

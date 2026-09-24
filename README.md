@@ -20,6 +20,8 @@ Server implementation for the Senior Pomidor project.
 
 **Roadmap:** [Server/Core roadmap through the 2027 growing season](docs/ROADMAP_2027.md)
 
+See the [v0.3.1 release audit and acceptance checklist](docs/ru/V031_RELEASE_READINESS.md).
+
 ## Current Status
 
 Server/Core provides the production-oriented observation foundation: versioned HTTP/MQTT telemetry
@@ -28,7 +30,7 @@ operator reads, Grafana observability, and immutable release/staging tooling. Th
 supports canonical Docker Edge application health through `service_manager=none` while retaining the
 documented one-release compatibility path for legacy systemd telemetry.
 
-The first post-fix immutable candidate pair is now pinned: Core
+Historical reference (not a v0.3.1 candidate): the first post-fix immutable pair was pinned: Core
 `3bcbc15bc94b2eca1d45be8e3713c26d5b0b5c73` at
 `ghcr.io/cracketus/senior-pomidor-server@sha256:7b14b208bab3181fd5234581c5e851d44d4e78fa024f334b90d3611ff04864c0`
 and Edge `553eb44ca7add9a99031f9a096683c1502c5a5a8` at

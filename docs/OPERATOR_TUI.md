@@ -10,7 +10,10 @@ The operator TUI is a read-only, SSH-friendly view over the versioned `senior-po
 python -m pip install -e ".[tui]"
 ```
 
-Development installs (`.[dev]`) include Textual as well.
+Development installs (`.[dev]`) include Textual as well. Run this command only from a source checkout.
+The source-free runtime bundle is not a pip project; the API image installs the base package without
+Textual. Install the operator client on a workstation/SSH host in a separate virtual environment, pinned
+to the accepted release tag or full SHA. Do not install packages into a running production container.
 
 ## Run
 
@@ -52,6 +55,10 @@ The server remains the owner of operator status/freshness/availability/completen
 - API failure never becomes apparent `OK`;
 - contract validation is owned by the shared `pomidorctl` client;
 - fields not exposed by the operator contract remain `UNAVAILABLE`/`NOT_IMPLEMENTED` rather than inferred.
+
+In the v0.3.1 operator fix, a refresh already in flight is allowed to complete; timer ticks and repeated
+`r` presses do not cancel it or start overlapping request batches. Composite views show transport
+warnings for their dependent sections independently.
 
 The synchronous shared client runs via `asyncio.to_thread`, keeping Textual keyboard interaction responsive while avoiding a second HTTP/contract implementation.
 

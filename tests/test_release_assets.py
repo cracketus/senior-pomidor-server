@@ -1,4 +1,3 @@
-import re
 import tomllib
 from pathlib import Path
 
@@ -127,7 +126,9 @@ def test_production_installation_requires_verified_rollback_bundle() -> None:
     assert "old image или проверенный old bundle недоступны" in runbook
     assert "HAVE_OLD_BUNDLE" not in runbook
     assert "HaveOldBundle" not in runbook
-    assert re.search(r"\$ExpectedOldRevision = '[0-9a-f]{40}'", runbook)
+    assert "$ExpectedOldRevision = Read-Host 'Verified installed rollback Git SHA'" in runbook
+    assert "$ExpectedOldRevision -notmatch '^[0-9a-f]{40}$'" in runbook
+    assert "$PSNativeCommandUseErrorActionPreference = $true" in runbook
     assert "$OldBundleRevision -ne $ExpectedOldRevision" in runbook
     assert '[[ "${OLD_REVISION}" == "${EXPECTED_OLD_REVISION}" ]]' in runbook
     assert 'sudo tar -xOf "${OLD_ARCHIVE}" ./REVISION' in runbook

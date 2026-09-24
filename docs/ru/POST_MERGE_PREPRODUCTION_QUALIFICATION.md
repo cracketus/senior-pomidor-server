@@ -1,4 +1,7 @@
-# Post-merge pre-production qualification — v0.3.0 campaign
+# Post-merge pre-production qualification — новая immutable campaign
+
+Проверка процедуры: 2026-09-24. Для v0.3.1 заново фиксируются Core/Edge SHA, digest, CI и evidence.
+Ни одна отметка старой кампании не переносится автоматически.
 
 ## Цель и мотивация
 
@@ -32,7 +35,7 @@
 | #225 foundation | telemetry, persistence, reads, reliability contracts | server CI + local tests | реализовано |
 | #247 / PR #268 | Docker E2E, evidence schemas, invariant checks, fail-closed workflow | laptop + GitHub CI | реализовано |
 | #260 / PR #270 | Core SHA-only RC, staging boundary, preproduction/full validator | laptop + GitHub CI | реализовано |
-| Immutable Core/Edge RC pair | exact Git SHAs, image digests and green publishing CI | Core and Edge repositories | PASS: pair pinned 2026-09-12 |
+| Immutable Core/Edge RC pair | exact Git SHAs, image digests and green publishing CI | Core and Edge repositories | NOT_RUN для новой campaign |
 | Pre-production qualification | real compatibility, isolated staging, 24h soak, exact bundle, rollback | isolated laptop rehearsal или отдельный staging host | NOT_RUN; следующий этап |
 | Canary | один production Edge после Core rollout | production server + production Edge | NOT_RUN, human approval |
 | Production observation | стабильность после canary и rollback | production | NOT_RUN, human approval |
@@ -98,53 +101,28 @@ observation остаются отдельными этапами.
 | Ожидаемый результат | Выбрана одна immutable Core/Edge pair; текущие `PASS` и `NOT_RUN` перечислены ниже |
 | Переход | Не заменять identity во время campaign |
 
-### Server repository
+### Выбрать identities до выполнения команд
 
-| Предусловие | Статус |
-| --- | --- |
-| PR #270 влит в main | PASS |
-| Selected Core SHA | `549dc4d21897203c167749611416355f820d6372` |
-| Immutable Core image | `ghcr.io/cracketus/senior-pomidor-server@sha256:5c9f82606bfd499e894fbd8e5a99dfaccb23843f6d9ca1477d5151e0ac194e3e` |
-| Approved brief #260 | PASS |
-| Core RC workflow и staging controller | PASS |
-| Server tests | PASS: `483 passed, 3 skipped` |
-| Bandit и pip-audit | PASS |
-| Staging Compose rendering | PASS |
-| GitHub CI и GHCR artifact | PASS: [CI run 34682810857](https://github.com/cracketus/senior-pomidor-server/actions/runs/34682810857) |
-| Docker на локальной Windows машине | PASS для release image inspection; staging daemon evidence остаётся отдельным gate |
+После [release-to-E2E runbook](RELEASE_TO_E2E_RUNBOOK.md) перенесите только non-secret identities
+из приватной записи новой кампании. В Bash/WSL:
 
-| Поле | Значение |
-| --- | --- |
-| Ожидаемый результат | Core SHA, image digest и CI run зафиксированы |
-| Переход | Использовать эти значения в шагах 1–13 |
+```bash
+set -euo pipefail
+read -r -p 'Accepted Core Git SHA: ' EXPECTED_CORE_SHA
+read -r -p 'Accepted Core digest (sha256:...): ' EXPECTED_CORE_DIGEST
+read -r -p 'Accepted Edge Git SHA: ' EDGE_SHA
+read -r -p 'Accepted Edge digest (sha256:...): ' EDGE_DIGEST
+[[ "$EXPECTED_CORE_SHA" =~ ^[0-9a-f]{40}$ ]]
+[[ "$EDGE_SHA" =~ ^[0-9a-f]{40}$ ]]
+[[ "$EXPECTED_CORE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+[[ "$EDGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+export EXPECTED_CORE_SHA EXPECTED_CORE_DIGEST EDGE_SHA EDGE_DIGEST
+export EDGE_IMAGE="ghcr.io/cracketus/senior-pomidor-edge@$EDGE_DIGEST"
+```
 
-### Edge repository
-
-Для первой qualification явно выбрана и зафиксирована следующая Edge RC identity:
-
-- Edge SHA `75d6dee136165baa810faf8c2a37206260bcd01c`;
-- immutable image `ghcr.io/cracketus/senior-pomidor-edge@sha256:0bfa9e67cce7d5b67190f041f71b91c38e284c7263c2b3c112f2ad2f4d75ae6c`;
-- [green Edge RC workflow run 34317752297](https://github.com/cracketus/senior-pomidor-plant-v2/actions/runs/34317752297).
-
-Эта выбранная RC не должна автоматически заменяться более новым кандидатом. Ещё не подтверждены реальные
-qualification prerequisites:
-
-- staging identity `edge-staging-*`;
-- container `senior-pomidor-edge-staging`;
-- безопасный fault injection для watchdog/spool/replay.
-
-Не считать эти пункты PASS без реального Edge artifact или CI evidence.
-
-Для этой пары текущий общий статус — `BLOCKED`: real Edge/Core compatibility, isolated staging,
-24-hour soak, application-only rollback rehearsal и canary имеют статус `NOT_RUN`. Pin/build и
-required CI завершены, но это не означает, что qualification началась. Synthetic или server-only
-evidence не переводит ни один из этих gate в `PASS`; canary требует отдельного production approval.
-Любой identity drift открывает новую qualification campaign и требует повторить все gate.
-
-| Поле | Значение |
-| --- | --- |
-| Ожидаемый результат | Core/Edge RC pair зафиксирована; незавершённые gates имеют `NOT_RUN` |
-| Переход | Шаг 1 использует только указанные SHA и digests; другое значение открывает новую campaign |
+Зафиксируйте exact-SHA Core CI и Edge RC run URLs отдельно. Green build не подтверждает
+real Edge/Core compatibility, staging, soak или rollback. Эти gates начинают с `NOT_RUN`.
+Core и Edge checkout должны быть чистыми; новую identity нельзя подставлять посреди qualification.
 
 ## 1. Проверить server merge и CI
 
@@ -152,8 +130,7 @@ evidence не переводит ни один из этих gate в `PASS`; can
 
     https://github.com/cracketus/senior-pomidor-server/actions
 
-Для Core SHA `549dc4d21897203c167749611416355f820d6372` jobs должны быть PASS в
-[CI run 34682810857](https://github.com/cracketus/senior-pomidor-server/actions/runs/34682810857):
+Для `EXPECTED_CORE_SHA` jobs должны быть `PASS` в exact-SHA CI run, записанном в этой кампании:
 
 - `test`
 - `quality`
@@ -164,8 +141,10 @@ evidence не переводит ни один из этих gate в `PASS`; can
 На server checkout:
 
     cd /path/to/senior-pomidor-server
-    git checkout main
-    git pull --ff-only origin main
+    test -z "$(git status --porcelain)"
+    git fetch origin
+    git checkout --detach "$EXPECTED_CORE_SHA"
+    test "$(git rev-parse HEAD)" = "$EXPECTED_CORE_SHA"
     git rev-parse HEAD
     git status --short --branch
 
@@ -184,9 +163,9 @@ evidence не переводит ни один из этих gate в `PASS`; can
     export CORE_SHA="$(jq -r '.git_sha' senior-pomidor.core.release-candidate.v1.json)"
     export CORE_IMAGE="$(jq -r '.image_ref' senior-pomidor.core.release-candidate.v1.json)"
     export CORE_DIGEST="$(jq -r '.image_digest' senior-pomidor.core.release-candidate.v1.json)"
-    test "$CORE_SHA" = "549dc4d21897203c167749611416355f820d6372"
-    test "$CORE_IMAGE" = "ghcr.io/cracketus/senior-pomidor-server@sha256:5c9f82606bfd499e894fbd8e5a99dfaccb23843f6d9ca1477d5151e0ac194e3e"
-    test "$CORE_DIGEST" = "sha256:5c9f82606bfd499e894fbd8e5a99dfaccb23843f6d9ca1477d5151e0ac194e3e"
+    test "$CORE_SHA" = "$EXPECTED_CORE_SHA"
+    test "$CORE_IMAGE" = "ghcr.io/cracketus/senior-pomidor-server@$EXPECTED_CORE_DIGEST"
+    test "$CORE_DIGEST" = "$EXPECTED_CORE_DIGEST"
     [[ "$CORE_IMAGE" == *"@$CORE_DIGEST" ]]
     [[ "$CORE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
     jq -e '.platforms == ["linux/amd64", "linux/arm64"]' \
@@ -213,27 +192,25 @@ evidence не переводит ни один из этих gate в `PASS`; can
 
     cd /path/to/senior-pomidor-plant-v2
     git fetch --all --tags
-    git checkout 75d6dee136165baa810faf8c2a37206260bcd01c
+    test -z "$(git status --porcelain)"
+    git checkout --detach "$EDGE_SHA"
     git rev-parse HEAD
     git status --short
 
-Должен быть SHA:
+Проверьте выбранный SHA:
 
-    75d6dee136165baa810faf8c2a37206260bcd01c
+    test "$(git rev-parse HEAD)" = "$EDGE_SHA"
 
 Проверьте Edge CI для этого SHA и получите Edge RC artifact. Digest нельзя вычислять из Git SHA.
 
-    export EDGE_SHA=75d6dee136165baa810faf8c2a37206260bcd01c
-    export EDGE_IMAGE='ghcr.io/cracketus/senior-pomidor-edge@sha256:0bfa9e67cce7d5b67190f041f71b91c38e284c7263c2b3c112f2ad2f4d75ae6c'
-    export EDGE_DIGEST='sha256:0bfa9e67cce7d5b67190f041f71b91c38e284c7263c2b3c112f2ad2f4d75ae6c'
     [[ "$EDGE_IMAGE" == *"@$EDGE_DIGEST" ]]
     [[ "$EDGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
     docker pull "$EDGE_IMAGE"
     docker image inspect "$EDGE_IMAGE" \
       --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}'
 
-Ожидается OCI revision `75d6dee136165baa810faf8c2a37206260bcd01c`. Required Edge RC CI для этой
-identity подтверждён [workflow run 34317752297](https://github.com/cracketus/senior-pomidor-plant-v2/actions/runs/34317752297).
+Ожидается OCI revision, равный `EDGE_SHA`. Независимо проверьте успешный Edge RC run для этой identity;
+его artifact должен совпасть с `EDGE_IMAGE` и `EDGE_DIGEST`.
 
 Edge maintainer дополнительно подтверждает staging identity, MQTT topic prefix, container name,
 interop network и безопасные software-only fault paths. Недоступный Edge path остаётся NOT_RUN.
@@ -277,8 +254,8 @@ interop network и безопасные software-only fault paths. Недост�
     test -d "$SERVER_ROOT" -a -d "$EDGE_ROOT"
     cd "$SERVER_ROOT"
     git fetch origin
-    git checkout --detach 549dc4d21897203c167749611416355f820d6372
-    test "$(git rev-parse HEAD)" = "549dc4d21897203c167749611416355f820d6372"
+    git checkout --detach "$CORE_SHA"
+    test "$(git rev-parse HEAD)" = "$CORE_SHA"
 
 Создать staging data directories:
 
@@ -309,7 +286,7 @@ interop network и безопасные software-only fault paths. Недост�
 
 Обязательные значения:
 
-    APP_IMAGE=ghcr.io/cracketus/senior-pomidor-server@sha256:5c9f82606bfd499e894fbd8e5a99dfaccb23843f6d9ca1477d5151e0ac194e3e
+    APP_IMAGE=<paste the exact value of CORE_IMAGE, not a literal variable>
     COMPOSE_PROFILES=observability
     DEPLOYMENT_MODE=staging
     STAGING_DEVICE_PREFIX=edge-staging-
@@ -406,8 +383,8 @@ interop network и безопасные software-only fault paths. Недост�
 непроверенные образы запрещены:
 
     ./manage.sh deploy \
-      ghcr.io/cracketus/senior-pomidor-edge@sha256:0bfa9e67cce7d5b67190f041f71b91c38e284c7263c2b3c112f2ad2f4d75ae6c \
-      75d6dee136165baa810faf8c2a37206260bcd01c
+      "$EDGE_IMAGE" \
+      "$EDGE_SHA"
 
 | Поле | Значение |
 | --- | --- |
@@ -796,7 +773,7 @@ Grafana authentication, а `400` обычно означает malformed JSON; �
     (
       set -euo pipefail
       cd "$SERVER_ROOT"
-      CORE_SHA=549dc4d21897203c167749611416355f820d6372
+      : "${CORE_SHA:?Complete candidate checks first}"
       read -r -p 'Published release version for this Core SHA (vX.Y.Z): ' RELEASE_VERSION
       [[ "$RELEASE_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
 
@@ -934,12 +911,12 @@ Workflow принимает branch, tag или commit SHA. Этот runbook тр
 
 Нажмите `Run workflow` и заполните:
 
-    core_sha:    549dc4d21897203c167749611416355f820d6372
-    core_image:  ghcr.io/cracketus/senior-pomidor-server@sha256:5c9f82606bfd499e894fbd8e5a99dfaccb23843f6d9ca1477d5151e0ac194e3e
-    core_digest: sha256:5c9f82606bfd499e894fbd8e5a99dfaccb23843f6d9ca1477d5151e0ac194e3e
-    edge_sha:    75d6dee136165baa810faf8c2a37206260bcd01c
-    edge_image:  ghcr.io/cracketus/senior-pomidor-edge@sha256:0bfa9e67cce7d5b67190f041f71b91c38e284c7263c2b3c112f2ad2f4d75ae6c
-    edge_digest: sha256:0bfa9e67cce7d5b67190f041f71b91c38e284c7263c2b3c112f2ad2f4d75ae6c
+    core_sha:    <CORE_SHA>
+    core_image:  <CORE_IMAGE>
+    core_digest: <CORE_DIGEST>
+    edge_sha:    <EDGE_SHA>
+    edge_image:  <EDGE_IMAGE>
+    edge_digest: <EDGE_DIGEST>
     evidence_ref: <EVIDENCE_REF — immutable commit SHA из шага 12>
     report_id:    <REPORT_ID — directory name из шага 12>
     mode:         preproduction
