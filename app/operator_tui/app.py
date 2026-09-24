@@ -52,6 +52,7 @@ class OperatorConsole(App[None]):
         self.source = source
         self.refresh_seconds = max(5.0, refresh_seconds)
         self.snapshot = OperatorSnapshot()
+        self._refreshing = False
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -69,16 +70,24 @@ class OperatorConsole(App[None]):
     async def on_unmount(self) -> None:
         await self.source.aclose()
 
-    @work(group="operator-refresh", exclusive=True, exit_on_error=False)
+    @work(group="operator-refresh", exit_on_error=False)
     async def refresh_data(self) -> None:
+        # Cancelling a to_thread await does not stop its HTTP requests. Let the
+        # current refresh finish rather than spawning overlapping request batches.
+        if self._refreshing:
+            return
+        self._refreshing = True
         banner = self.query_one("#connection-banner", Static)
         banner.update("REFRESHING — current screen remains read-only")
         try:
-            incoming = await self.source.fetch_all()
-        except Exception:
-            incoming = OperatorSnapshot.failed("unexpected client failure")
-        self.snapshot = self.snapshot.merge(incoming)
-        self._render_snapshot()
+            try:
+                incoming = await self.source.fetch_all()
+            except Exception:
+                incoming = OperatorSnapshot.failed("unexpected client failure")
+            self.snapshot = self.snapshot.merge(incoming)
+            self._render_snapshot()
+        finally:
+            self._refreshing = False
 
     def _render_snapshot(self) -> None:
         self.query_one("#connection-banner", Static).update(connection_summary(self.snapshot))

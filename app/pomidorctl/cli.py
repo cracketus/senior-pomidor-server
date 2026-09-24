@@ -54,6 +54,8 @@ def main(argv: list[str] | None = None) -> int:
         command = str(args["command"])
         if args.get("json") and args.get("verbose"):
             raise ConfigError("--json and --verbose cannot be used together")
+        if command == "tui" and (args.get("json") or args.get("verbose")):
+            raise ConfigError("--json and --verbose are not supported by tui")
         for key, low, high in (("limit", 1, 100), ("since_hours", 0, 168)):
             if key in args and args[key] is not None and not low <= args[key] <= high:
                 raise ConfigError(f"{key} is out of range")

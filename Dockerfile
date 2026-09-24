@@ -22,6 +22,7 @@ COPY migrations ./migrations
 COPY config/state_estimator_v1.yaml ./config/state_estimator_v1.yaml
 COPY config/topology ./config/topology
 COPY tools/__init__.py tools/demo_state_estimator.py ./tools/
+COPY tools/lifecycle.py ./tools/
 COPY tests/state_estimator/fixtures ./tests/state_estimator/fixtures
 COPY config/map ./config/map
 
