@@ -1,0 +1,77 @@
+name: Cross-repository verification
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '17 3 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  edge-core:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - pair: current-current
+            core_ref: ''
+            edge_ref: d14b9367b359ab260bdb62c6364ccd542fbbbd26
+            core_image: ''
+          - pair: previous-edge
+            core_ref: ''
+            edge_ref: 14d297ef1b18567d101876c143240d9354ddc860
+            core_image: ''
+          - pair: rollback-core
+            core_ref: 549dc4d21897203c167749611416355f820d6372
+            edge_ref: d14b9367b359ab260bdb62c6364ccd542fbbbd26
+            core_image: ghcr.io/cracketus/senior-pomidor-server:v0.3.0
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: harness
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ matrix.core_ref }}
+          path: core
+      - uses: actions/checkout@v7
+        with:
+          repository: cracketus/senior-pomidor-edge
+          ref: ${{ matrix.edge_ref }}
+          path: edge
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Install harness dependencies
+        run: python -m pip install -e './harness[dev]'
+      - name: Run real Edge/Core scenarios
+        working-directory: harness
+        env:
+          HISTORICAL_CORE_IMAGE: ${{ matrix.core_image }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          args=()
+          if [[ -n "$HISTORICAL_CORE_IMAGE" ]]; then
+            docker pull "$HISTORICAL_CORE_IMAGE"
+            digest=$(docker image inspect --format '{{index .RepoDigests 0}}' "$HISTORICAL_CORE_IMAGE")
+            args+=(--core-image "$digest")
+          fi
+          python -m tools.cross_repo --core-source ../core --edge-source ../edge --output ../evidence "${args[@]}"
+          python -m tools.cross_repo.evidence --report ../evidence/report.json \
+            --core-sha "$(git -C ../core rev-parse HEAD)" --edge-sha "$(git -C ../edge rev-parse HEAD)"
+      - name: Keep bounded report and synthetic service logs on failure
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: cross-repo-${{ matrix.pair }}-${{ github.run_id }}
+          path: |
+            evidence/report.json
+            evidence/services.log
+          if-no-files-found: warn
+          retention-days: 30

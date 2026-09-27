@@ -125,6 +125,30 @@ jobs:
       - name: Install dependencies
         run: python -m pip install -e ".[dev]"
 
+      - name: Check out the executing qualification tools revision
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: _qualification_tools
+
+      - name: Validate actual cross-repository software evidence for the candidate
+        working-directory: _qualification_tools
+        env:
+          REPORT_ID: ${{ inputs.report_id }}
+          CORE_SHA: ${{ inputs.core_sha }}
+          EDGE_SHA: ${{ inputs.edge_sha }}
+          CORE_IMAGE: ${{ inputs.core_image }}
+          EDGE_IMAGE: ${{ inputs.edge_image }}
+        run: |
+          if [[ ! "$REPORT_ID" =~ ^[a-z0-9][a-z0-9._-]{0,63}$ ]]; then
+            echo "invalid bounded report_id"
+            exit 1
+          fi
+          python -m tools.cross_repo.evidence \
+            --report "../_qualification_evidence/docs/release-evidence/$REPORT_ID/cross-repo-e2e.json" \
+            --core-sha "$CORE_SHA" --edge-sha "$EDGE_SHA" \
+            --core-image "$CORE_IMAGE" --edge-image "$EDGE_IMAGE"
+
       - name: Validate real Edge/Core staging evidence
         env:
           REPORT_ID: ${{ inputs.report_id }}
