@@ -18,3 +18,12 @@ Local targeted tests PASS; no production access, extraction or publication perfo
 Real Season1 dataset acceptance is NOT_RUN pending an owner-approved snapshot under
 #302. This PR deliberately does not close that manual/data acceptance by synthetic CI.
 No migration. Revert code to roll back; input snapshots are read-only.
+
+## Final source review and CI evidence
+
+Independent review APPROVE for bounded software scope. Unhashable schema and large-integer issues fixed; 17 focused tests independently passed. Initial CI runtime PASS; final mypy annotation correction awaiting CI.
+
+- https://github.com/cracketus/senior-pomidor-server/actions/runs/36440141403
+- https://github.com/cracketus/senior-pomidor-server/actions/runs/36440141559
+
+Final PR checks remain authoritative for the latest commit; no operational PASS is inferred.

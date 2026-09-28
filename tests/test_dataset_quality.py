@@ -132,7 +132,8 @@ def test_malformed_schema_and_huge_numeric_values_are_bounded(client):
 
 def test_malformed_values_through_cli_do_not_leak(client, tmp_path, capsys):
     row = persisted_row(client)
-    for bad_schema in ([], {}):
+    bad_schemas: list[object] = [[], {}]
+    for bad_schema in bad_schemas:
         row["schema_version"] = bad_schema
         source = tmp_path / "malformed.jsonl"
         source.write_text(json.dumps(row) + "\n", encoding="utf-8")
