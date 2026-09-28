@@ -942,6 +942,153 @@ def upload_photo(client: httpx.Client) -> httpx.Response:
     )
 
 
+def assert_performance_guardrails(client: httpx.Client) -> None:
+    """Small fixed workload: correctness gates plus broad shared-runner smoke budgets."""
+    import math
+    from concurrent.futures import ThreadPoolExecutor
+
+    import paho.mqtt.client as mqtt
+    from sqlalchemy import event, func, select
+    from sqlalchemy.exc import OperationalError
+    from sqlalchemy.orm import Session
+
+    from app.api import latest_telemetry, latest_telemetry_by_device, telemetry_history
+    from app.models import Device, PodError, PodReading, TelemetryEvent
+    from app.services import persist_telemetry_result
+
+    engine = create_engine(
+        f"postgresql+psycopg://{COMPOSE_ENV['POSTGRES_USER']}:{COMPOSE_ENV['POSTGRES_PASSWORD']}"
+        f"@127.0.0.1:{COMPOSE_ENV['POSTGRES_PUBLISHED_PORT']}/{COMPOSE_ENV['POSTGRES_DB']}"
+    )
+    report: dict = {"schema_version": "senior-pomidor.performance-smoke.v1", "status": "FAIL", "samples": 40}
+    try:
+        # Inject after the device/event flush, while the production unit of work
+        # writes readings; a real PostgreSQL transaction must roll everything back.
+        failed = telemetry_payload(100)
+        failed.update(device_id="perf-rollback", record_id="perf:rollback")
+
+        def fail_reading(_conn, _cursor, statement, _parameters, _context, _many):
+            if statement.lower().startswith("insert into pod_readings"):
+                raise OperationalError("synthetic storage failure", {}, RuntimeError("injected"))
+
+        event.listen(engine, "before_cursor_execute", fail_reading)
+        try:
+            with Session(engine) as db, pytest.raises(OperationalError):
+                persist_telemetry_result(db, failed, "http")
+        finally:
+            event.remove(engine, "before_cursor_execute", fail_reading)
+        with Session(engine) as db:
+            for model in (Device, TelemetryEvent, PodReading, PodError):
+                assert db.scalar(select(func.count()).select_from(model).where(model.device_id == "perf-rollback")) == 0
+            assert persist_telemetry_result(db, failed, "http").outcome == "accepted"
+        report["transaction_rollback"] = "PASS"
+
+        samples = []
+        for index in range(40):
+            value = telemetry_payload(200 + index)
+            value.update(device_id="perf-http", record_id=f"perf:http:{index}")
+            samples.append(value)
+
+        def send(value):
+            started = time.monotonic()
+            post_telemetry(client, value)
+            return time.monotonic() - started
+
+        # Register the device before measuring concurrent steady-state ingestion.
+        warmup = telemetry_payload(199)
+        warmup.update(device_id="perf-http", record_id="perf:http:warmup")
+        post_telemetry(client, warmup)
+        start = time.monotonic()
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            durations = list(pool.map(send, samples))
+        elapsed = time.monotonic() - start
+        p95 = sorted(durations)[math.ceil(len(durations) * 0.95) - 1]
+        report["http"] = {"seconds": elapsed, "p95_seconds": p95, "records_per_second": len(samples) / elapsed}
+        assert elapsed < 60, report["http"]
+        assert p95 < 5, report["http"]
+        history = client.get("/api/v1/devices/perf-http/telemetry?limit=100")
+        assert history.status_code == 200
+        expected = {value["record_id"]: value["timestamp_utc"] for value in [warmup, *samples]}
+        assert {r["record_id"]: r["timestamp_utc"] for r in history.json()} == expected
+
+        publisher = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
+        publisher.connect("127.0.0.1", int(COMPOSE_ENV["MQTT_PUBLISHED_PORT"]), 30)
+        publisher.loop_start()
+        mqtt_samples = []
+        start = time.monotonic()
+        try:
+            for index in range(40):
+                value = telemetry_payload(300 + index)
+                value.update(device_id="perf-mqtt", record_id=f"perf:mqtt:{index}")
+                mqtt_samples.append(value)
+                for _ in range(2):
+                    info = publisher.publish(
+                        f"{COMPOSE_ENV['MQTT_TOPIC_PREFIX']}/perf-mqtt/telemetry", json.dumps(value), qos=1
+                    )
+                    info.wait_for_publish(timeout=5)
+                    assert info.is_published()
+            deadline = start + 60
+            while True:
+                response = client.get("/api/v1/devices/perf-mqtt/telemetry?limit=100")
+                assert response.status_code == 200
+                rows = response.json()
+                if len(rows) == 40:
+                    break
+                assert time.monotonic() < deadline, "MQTT burst did not drain within 60s"
+                time.sleep(0.2)
+            assert {r["record_id"]: r["timestamp_utc"] for r in rows} == {
+                value["record_id"]: value["timestamp_utc"] for value in mqtt_samples
+            }
+            report["mqtt"] = {"unique_records": 40, "deliveries": 80, "seconds": time.monotonic() - start}
+        finally:
+            publisher.disconnect()
+            publisher.loop_stop()
+
+        # Seed enough data to make selective plan expectations meaningful. This
+        # transaction is rolled back; ANALYZE/plans never touch a production DB.
+        with engine.connect() as conn:
+            transaction = conn.begin()
+            try:
+                conn.execute(
+                    text("""
+                    INSERT INTO telemetry_events
+                        (device_id, timestamp_utc, schema_version, source, raw_payload_jsonb, received_at)
+                    SELECT 'perf-http', '2020-01-01'::timestamptz + n * interval '1 second',
+                           'senior-pomidor.edge.telemetry.v2', 'perf', '{}', now()
+                    FROM generate_series(1, 10000) AS n
+                """)
+                )
+                conn.execute(text("ANALYZE telemetry_events"))
+                plans = []
+
+                def capture(_conn, _cursor, statement, parameters, _context, _many):
+                    if statement.startswith("SELECT") and "FROM telemetry_events" in statement:
+                        plans.append((statement, parameters))
+
+                event.listen(conn, "before_cursor_execute", capture)
+                with Session(bind=conn, join_transaction_mode="create_savepoint") as db:
+                    latest_telemetry_by_device(db)
+                    latest_telemetry("perf-http", db)
+                    telemetry_history("perf-http", from_=None, to=None, since_hours=None, pod=None, limit=20, db=db)
+                event.remove(conn, "before_cursor_execute", capture)
+                assert len(plans) == 3
+                for statement, parameters in plans:
+                    plan: list = conn.exec_driver_sql("EXPLAIN (FORMAT JSON) " + statement, parameters).scalar_one()
+                    encoded = json.dumps(plan)
+                    assert "Index" in encoded, encoded
+                    if "FROM devices" not in statement and "JOIN devices" not in statement:
+                        assert "Seq Scan" not in encoded, encoded
+                report["selective_query_plans"] = "PASS"
+            finally:
+                transaction.rollback()
+        report["status"] = "PASS"
+    finally:
+        engine.dispose()
+        destination = ROOT / "verification-artifacts"
+        destination.mkdir(exist_ok=True)
+        (destination / "performance-smoke.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+
+
 def test_docker_compose_stack_ingests_and_serves_data():
     assert_disposable_data_root()
     assert_local_docker_context()
@@ -1059,6 +1206,7 @@ def test_docker_compose_stack_ingests_and_serves_data():
             assert download.content == b"\xff\xd8docker-jpeg\xff\xd9"
 
             assert_grafana_alert_transitions(client, alert_queries, no_data_snapshot)
+            assert_performance_guardrails(client)
 
         assert_grafana_reader_permissions()
     except BaseException:
