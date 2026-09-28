@@ -1066,7 +1066,13 @@ def test_docker_compose_stack_ingests_and_serves_data():
             assert duplicate.json() == {"record_id": first_payload["record_id"], "status": "duplicate"}
 
             wait_for_record_count(first_payload["record_id"], 1)
-            assert_postgresql_raw_reader(first_payload)
+            # The read-only assertion compares all canonical tables; concurrent
+            # estimator writes would be unrelated changes, not reader mutation.
+            compose("stop", "state-estimator-worker")
+            try:
+                assert_postgresql_raw_reader(first_payload)
+            finally:
+                compose("start", "state-estimator-worker")
             assert_postgresql_raw_reader_row_cap()
 
             latest = client.get("/api/v1/devices/pi-001/latest")
