@@ -20,3 +20,9 @@ hold, empty data follows configured OK policy, revoked reader permission produce
 observable execution error and restoration recovers; no source provisioning mutation.
 Abort on missing/unexpected rules, evaluator errors outside injected phase, timeout,
 non-isolated stack or unexpected exporter. Revert tests/tooling; no runtime migration.
+
+
+## Evidence-driven correction
+Actual runtime exposed four table-projection errors in production alert SQL. Corrected
+observed numeric/timestamp columns to text labels, preserving threshold predicates and
+source hold durations. This fixes existing alerts under the accepted issue scope.

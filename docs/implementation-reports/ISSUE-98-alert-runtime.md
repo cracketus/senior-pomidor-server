@@ -18,3 +18,10 @@ no further implementation defect; final Docker CI remains required for handoff.
 No production deployment. Source hold durations unchanged; accelerated tests prove
 scheduler mechanics, not full production timing or notification delivery.
 Rollback is revert; no schema migration. See docs/ALERT_VERIFICATION.md.
+
+## Final source review and evidence
+
+Independent source/merge review APPROVE; see ISSUE-98-review.md. Complete real Docker
+and Grafana run36440017169 PASS, cross-repository36440016592 PASS. Final integration
+includes #91 with both complete verification phases; PR#368 is stacked on PR#367.
+Merge #367 first, then retarget #368 to main. Final PR checks are authoritative.

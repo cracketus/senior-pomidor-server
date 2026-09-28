@@ -342,19 +342,22 @@ def list_devices(db: Session = Depends(get_db)) -> list[dict[str, Any]]:
 
 @router.get("/devices/latest")
 def latest_telemetry_by_device(db: Session = Depends(get_db)) -> list[dict[str, Any]]:
-    devices = db.scalars(select(Device).where(Device.lifecycle_state == "ACTIVE").order_by(Device.device_id)).all()
-    latest_events: list[dict[str, Any]] = []
-    for device in devices:
-        event = db.scalar(
-            select(TelemetryEvent)
-            .options(selectinload(TelemetryEvent.readings), selectinload(TelemetryEvent.errors))
-            .where(TelemetryEvent.device_id == device.device_id)
-            .order_by(desc(TelemetryEvent.timestamp_utc))
-            .limit(1)
-        )
-        if event is not None:
-            latest_events.append(event_to_dict(event))
-    return latest_events
+    latest_id = (
+        select(TelemetryEvent.id)
+        .where(TelemetryEvent.device_id == Device.device_id)
+        .order_by(TelemetryEvent.timestamp_utc.desc(), TelemetryEvent.id.desc())
+        .limit(1)
+        .correlate(Device)
+        .scalar_subquery()
+    )
+    events = db.scalars(
+        select(TelemetryEvent)
+        .join(Device, Device.device_id == TelemetryEvent.device_id)
+        .where(Device.lifecycle_state == "ACTIVE", TelemetryEvent.id == latest_id)
+        .options(selectinload(TelemetryEvent.readings), selectinload(TelemetryEvent.errors))
+        .order_by(TelemetryEvent.device_id)
+    ).all()
+    return [event_to_dict(event) for event in events]
 
 
 @router.get("/devices/{device_id}/latest")

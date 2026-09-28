@@ -121,6 +121,15 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
 
+      - name: Retain bounded performance evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: performance-smoke-${{ github.sha }}
+          path: verification-artifacts/performance-smoke.json
+          if-no-files-found: warn
+          retention-days: 30
+
   core-release-candidate:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: [test, quality, security, docker-e2e]
