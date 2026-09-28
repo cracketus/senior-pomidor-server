@@ -1,0 +1,223 @@
+{
+  "schema_version": "senior-pomidor.cross-repo-e2e.v1",
+  "status": "PASS",
+  "evidence_scope": "CI",
+  "started_at_utc": "2026-09-28T04:44:36.820901Z",
+  "scenarios": [
+    {
+      "scenario_id": "normal-delivery",
+      "status": "PASS",
+      "counts": {
+        "generated": 2,
+        "persisted": 2,
+        "read_back": 2,
+        "duplicates": 0,
+        "missing": 0,
+        "unexpected": 0
+      },
+      "finished_at_utc": "2026-09-28T04:45:44.553092Z",
+      "pending_expected": false,
+      "invariant_ids": [
+        "sp-inv-001",
+        "sp-inv-002",
+        "sp-inv-003"
+      ]
+    },
+    {
+      "scenario_id": "duplicate-http-mqtt",
+      "status": "PASS",
+      "counts": {
+        "generated": 3,
+        "persisted": 3,
+        "read_back": 3,
+        "duplicates": 0,
+        "missing": 0,
+        "unexpected": 0
+      },
+      "finished_at_utc": "2026-09-28T04:45:55.417653Z",
+      "pending_expected": false,
+      "invariant_ids": [
+        "sp-inv-001",
+        "sp-inv-002",
+        "sp-inv-003"
+      ]
+    },
+    {
+      "scenario_id": "core-outage-spool-growth",
+      "status": "PASS",
+      "counts": {
+        "generated": 11,
+        "persisted": 3,
+        "read_back": 3,
+        "duplicates": 0,
+        "missing": 8,
+        "unexpected": 0
+      },
+      "finished_at_utc": "2026-09-28T04:46:03.281125Z",
+      "pending_expected": true,
+      "invariant_ids": [
+        "sp-inv-001",
+        "sp-inv-002",
+        "sp-inv-003"
+      ]
+    },
+    {
+      "scenario_id": "edge-restart-pending",
+      "status": "PASS",
+      "counts": {
+        "generated": 11,
+        "persisted": 3,
+        "read_back": 3,
+        "duplicates": 0,
+        "missing": 8,
+        "unexpected": 0
+      },
+      "finished_at_utc": "2026-09-28T04:46:14.317219Z",
+      "pending_expected": true,
+      "invariant_ids": [
+        "sp-inv-001",
+        "sp-inv-002",
+        "sp-inv-003"
+      ]
+    },
+    {
+      "scenario_id": "fresh-during-backlog-replay",
+      "status": "PASS",
+      "counts": {
+        "generated": 12,
+        "persisted": 6,
+        "read_back": 6,
+        "duplicates": 0,
+        "missing": 6,
+        "unexpected": 0
+      },
+      "finished_at_utc": "2026-09-28T04:46:34.489601Z",
+      "pending_expected": true,
+      "invariant_ids": [
+        "sp-inv-001",
+        "sp-inv-002",
+        "sp-inv-003"
+      ]
+    },
+    {
+      "scenario_id": "core-recovery-full-drain",
+      "status": "PASS",
+      "counts": {
+        "generated": 12,
+        "persisted": 12,
+        "read_back": 12,
+        "duplicates": 0,
+        "missing": 0,
+        "unexpected": 0
+      },
+      "finished_at_utc": "2026-09-28T04:47:44.337828Z",
+      "pending_expected": false,
+      "invariant_ids": [
+        "sp-inv-001",
+        "sp-inv-002",
+        "sp-inv-003"
+      ]
+    },
+    {
+      "scenario_id": "lost-ack-after-persistence",
+      "status": "PASS",
+      "counts": {
+        "generated": 13,
+        "persisted": 13,
+        "read_back": 13,
+        "duplicates": 0,
+        "missing": 0,
+        "unexpected": 0
+      },
+      "finished_at_utc": "2026-09-28T04:48:06.239799Z",
+      "pending_expected": false,
+      "invariant_ids": [
+        "sp-inv-001",
+        "sp-inv-002",
+        "sp-inv-003"
+      ]
+    },
+    {
+      "scenario_id": "high-vpd",
+      "status": "PASS",
+      "counts": {
+        "generated": 18,
+        "persisted": 18,
+        "read_back": 18,
+        "duplicates": 0,
+        "missing": 0,
+        "unexpected": 0
+      },
+      "finished_at_utc": "2026-09-28T04:49:01.450302Z",
+      "pending_expected": false,
+      "invariant_ids": [
+        "sp-inv-001",
+        "sp-inv-002",
+        "sp-inv-003"
+      ]
+    },
+    {
+      "scenario_id": "delayed-stale-future-out-of-order",
+      "status": "PASS",
+      "counts": {
+        "generated": 20,
+        "persisted": 20,
+        "read_back": 20,
+        "duplicates": 0,
+        "missing": 0,
+        "unexpected": 0
+      },
+      "finished_at_utc": "2026-09-28T04:49:22.911337Z",
+      "pending_expected": false,
+      "invariant_ids": [
+        "sp-inv-003",
+        "sp-inv-004"
+      ]
+    },
+    {
+      "scenario_id": "malformed-rejected",
+      "status": "PASS",
+      "counts": {
+        "generated": 20,
+        "persisted": 20,
+        "read_back": 20,
+        "duplicates": 0,
+        "missing": 0,
+        "unexpected": 0
+      },
+      "finished_at_utc": "2026-09-28T04:49:23.339365Z",
+      "pending_expected": false,
+      "invariant_ids": [
+        "sp-inv-005"
+      ]
+    },
+    {
+      "scenario_id": "legacy-fixtures",
+      "status": "PASS",
+      "counts": {
+        "generated": 20,
+        "persisted": 20,
+        "read_back": 20,
+        "duplicates": 0,
+        "missing": 0,
+        "unexpected": 0
+      },
+      "finished_at_utc": "2026-09-28T04:49:24.369205Z",
+      "pending_expected": false,
+      "invariant_ids": [
+        "sp-inv-005"
+      ]
+    }
+  ],
+  "future_action_invariants": "NOT_IMPLEMENTED",
+  "core": {
+    "git_sha": "e94b9289eae5b48c3a7f9a526bc0d87d3a69f0d9",
+    "image_id": "sha256:6b7595b807baae49c638071053d240a0a2df87e2e0d11729087809615d948ffd"
+  },
+  "edge": {
+    "git_sha": "14d297ef1b18567d101876c143240d9354ddc860",
+    "image_id": "sha256:0578293f4034094650b0be336a22c359b932ea63487468d675b03e7955608a43"
+  },
+  "config_sha256": "a8ef0bdb1a176b87a2b4e24556b2b5016be9654ba3a8cf39dd740b505f1cb02a",
+  "finished_at_utc": "2026-09-28T04:49:24.369331Z"
+}

@@ -1,0 +1,224 @@
+{
+  "schema_version": "senior-pomidor.cross-repo-e2e.v1",
+  "status": "PASS",
+  "evidence_scope": "CI",
+  "started_at_utc": "2026-09-28T04:44:46.139285Z",
+  "scenarios": [
+    {
+      "scenario_id": "normal-delivery",
+      "status": "PASS",
+      "counts": {
+        "generated": 2,
+        "persisted": 2,
+        "read_back": 2,
+        "duplicates": 0,
+        "missing": 0,
+        "unexpected": 0
+      },
+      "finished_at_utc": "2026-09-28T04:45:41.832917Z",
+      "pending_expected": false,
+      "invariant_ids": [
+        "sp-inv-001",
+        "sp-inv-002",
+        "sp-inv-003"
+      ]
+    },
+    {
+      "scenario_id": "duplicate-http-mqtt",
+      "status": "PASS",
+      "counts": {
+        "generated": 3,
+        "persisted": 3,
+        "read_back": 3,
+        "duplicates": 0,
+        "missing": 0,
+        "unexpected": 0
+      },
+      "finished_at_utc": "2026-09-28T04:45:52.947393Z",
+      "pending_expected": false,
+      "invariant_ids": [
+        "sp-inv-001",
+        "sp-inv-002",
+        "sp-inv-003"
+      ]
+    },
+    {
+      "scenario_id": "core-outage-spool-growth",
+      "status": "PASS",
+      "counts": {
+        "generated": 11,
+        "persisted": 3,
+        "read_back": 3,
+        "duplicates": 0,
+        "missing": 8,
+        "unexpected": 0
+      },
+      "finished_at_utc": "2026-09-28T04:46:01.174770Z",
+      "pending_expected": true,
+      "invariant_ids": [
+        "sp-inv-001",
+        "sp-inv-002",
+        "sp-inv-003"
+      ]
+    },
+    {
+      "scenario_id": "edge-restart-pending",
+      "status": "PASS",
+      "counts": {
+        "generated": 11,
+        "persisted": 3,
+        "read_back": 3,
+        "duplicates": 0,
+        "missing": 8,
+        "unexpected": 0
+      },
+      "finished_at_utc": "2026-09-28T04:46:12.618355Z",
+      "pending_expected": true,
+      "invariant_ids": [
+        "sp-inv-001",
+        "sp-inv-002",
+        "sp-inv-003"
+      ]
+    },
+    {
+      "scenario_id": "fresh-during-backlog-replay",
+      "status": "PASS",
+      "counts": {
+        "generated": 12,
+        "persisted": 6,
+        "read_back": 6,
+        "duplicates": 0,
+        "missing": 6,
+        "unexpected": 0
+      },
+      "finished_at_utc": "2026-09-28T04:46:32.645387Z",
+      "pending_expected": true,
+      "invariant_ids": [
+        "sp-inv-001",
+        "sp-inv-002",
+        "sp-inv-003"
+      ]
+    },
+    {
+      "scenario_id": "core-recovery-full-drain",
+      "status": "PASS",
+      "counts": {
+        "generated": 12,
+        "persisted": 12,
+        "read_back": 12,
+        "duplicates": 0,
+        "missing": 0,
+        "unexpected": 0
+      },
+      "finished_at_utc": "2026-09-28T04:47:42.823600Z",
+      "pending_expected": false,
+      "invariant_ids": [
+        "sp-inv-001",
+        "sp-inv-002",
+        "sp-inv-003"
+      ]
+    },
+    {
+      "scenario_id": "lost-ack-after-persistence",
+      "status": "PASS",
+      "counts": {
+        "generated": 13,
+        "persisted": 13,
+        "read_back": 13,
+        "duplicates": 0,
+        "missing": 0,
+        "unexpected": 0
+      },
+      "finished_at_utc": "2026-09-28T04:48:05.167428Z",
+      "pending_expected": false,
+      "invariant_ids": [
+        "sp-inv-001",
+        "sp-inv-002",
+        "sp-inv-003"
+      ]
+    },
+    {
+      "scenario_id": "high-vpd",
+      "status": "PASS",
+      "counts": {
+        "generated": 18,
+        "persisted": 18,
+        "read_back": 18,
+        "duplicates": 0,
+        "missing": 0,
+        "unexpected": 0
+      },
+      "finished_at_utc": "2026-09-28T04:49:02.357628Z",
+      "pending_expected": false,
+      "invariant_ids": [
+        "sp-inv-001",
+        "sp-inv-002",
+        "sp-inv-003"
+      ]
+    },
+    {
+      "scenario_id": "delayed-stale-future-out-of-order",
+      "status": "PASS",
+      "counts": {
+        "generated": 20,
+        "persisted": 20,
+        "read_back": 20,
+        "duplicates": 0,
+        "missing": 0,
+        "unexpected": 0
+      },
+      "finished_at_utc": "2026-09-28T04:49:24.153754Z",
+      "pending_expected": false,
+      "invariant_ids": [
+        "sp-inv-003",
+        "sp-inv-004"
+      ]
+    },
+    {
+      "scenario_id": "malformed-rejected",
+      "status": "PASS",
+      "counts": {
+        "generated": 20,
+        "persisted": 20,
+        "read_back": 20,
+        "duplicates": 0,
+        "missing": 0,
+        "unexpected": 0
+      },
+      "finished_at_utc": "2026-09-28T04:49:24.788720Z",
+      "pending_expected": false,
+      "invariant_ids": [
+        "sp-inv-005"
+      ]
+    },
+    {
+      "scenario_id": "legacy-fixtures",
+      "status": "PASS",
+      "counts": {
+        "generated": 20,
+        "persisted": 20,
+        "read_back": 20,
+        "duplicates": 0,
+        "missing": 0,
+        "unexpected": 0
+      },
+      "finished_at_utc": "2026-09-28T04:49:26.269157Z",
+      "pending_expected": false,
+      "invariant_ids": [
+        "sp-inv-005"
+      ]
+    }
+  ],
+  "future_action_invariants": "NOT_IMPLEMENTED",
+  "core": {
+    "git_sha": "549dc4d21897203c167749611416355f820d6372",
+    "registry_ref": "ghcr.io/cracketus/senior-pomidor-server@sha256:5c9f82606bfd499e894fbd8e5a99dfaccb23843f6d9ca1477d5151e0ac194e3e",
+    "image_id": "sha256:aec97b91860612c741227b461d0dc39bdfbe35cd97a335206e584ac91c9b2f26"
+  },
+  "edge": {
+    "git_sha": "d14b9367b359ab260bdb62c6364ccd542fbbbd26",
+    "image_id": "sha256:83c8b8654f70fca6ed0507122c26f2f7e997f233d73fe9e855a0cb744af8b4e1"
+  },
+  "config_sha256": "1db62160d67e77a0848d7428ea7e1289c9039381259a139fd36eeafbb86949ba",
+  "finished_at_utc": "2026-09-28T04:49:26.269272Z"
+}

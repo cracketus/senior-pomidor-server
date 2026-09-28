@@ -61,9 +61,9 @@ Commands below used existing development environments with the project dependenc
 | PASS | `ruff check app tools tests`; `ruff format --check app tools tests` | clean |
 | PASS | `python -m bandit -q -r app tools -c pyproject.toml` | no findings |
 | FAIL | Initial PR CI | wrong Edge repository name, missing Bandit annotations, SQLAlchemy typing; corrected in follow-up |
-| PASS | Initial PR test and docker-e2e jobs | run 36342171167 |
-| NOT RUN | Current full cross-repository matrix | run 36377718853 in progress; report to be updated after completion |
-| PASS | Linux/Windows property, evidence and CLI smoke | run 36378275152, harness-contracts jobs |
+| PASS | Final implementation CI: test, Docker E2E, quality, security | run 36378964066; 710 passed, 2 skipped |
+| PASS | Full real cross-repository matrix | run 36378964088: 3 pairs × 11 scenarios |
+| PASS | Linux/Windows property, evidence and CLI smoke | run 36378964088, harness-contracts jobs |
 | NOT RUN | Exact published-image qualification | maintainer campaign must supply image digests |
 | NOT RUN | Staging/24h soak/restore/rollback/canary/hardware | maintainer-owned operational campaign |
 
@@ -89,8 +89,10 @@ Full #247 also contains performance, mutation/fuzzing, dataset protection and al
 Runbook, contract/operations/staging links, current state and invariant mappings describe
 reproduction, artifact identity and remaining gates. Historical release evidence is untouched.
 Independent review is required by AGENTS.md; prior findings about high-VPD assertions,
-freshness assertions, digest matching and cleanup were addressed and await re-review.
-Final diff and evidence review remain in progress; draft status is intentional.
+freshness assertions, digest matching and cleanup were addressed and were re-reviewed.
+The implementation is verified at head `c1b0f73b8be98df9e8db87c6f2ae1dbb8f2fd589`;
+subsequent changes only archive evidence and finish documentation/review.
+Final independent review is recorded separately in `ISSUE-247-cross-repo-review.md`.
 
 Run 36378275152 confirmed the first seven real scenarios across the current pair,
 including zero missing/duplicate records after recovery. High-VPD assertions reached
@@ -99,3 +101,21 @@ microseconds while the real Edge formatter preserves seconds. Fixed to match the
 contract. The real MQTT sender waits up to 10 seconds per publish; recovery retains
 a bounded 150-second drain deadline. This existing throughput limitation is not hidden
 by replacing the sender. Fresh data is queued before recovery to avoid host scheduling races.
+
+
+## Final actual evidence
+
+[Archived reports](../verification-evidence/issue-247/run-36378964088/README.md)
+contain all three unmodified PASS reports. Every pair completed 11 scenarios; final primary-device
+counts are 20 generated, 20 persisted and 20 read back, with zero duplicates, missing or unexpected
+rows. Two legacy devices per pair were also independently checked through MQTT/HTTP/readback.
+The reports passed the strict validator again after download, against the independently inspected
+PR merge SHA and pinned previous-release/Edge revisions.
+
+CI: https://github.com/cracketus/senior-pomidor-server/actions/runs/36378964066
+
+Matrix: https://github.com/cracketus/senior-pomidor-server/actions/runs/36378964088
+
+No issue closure or production qualification is implied. The declared matrix is verified for these
+exact commits and test configurations; new artifacts require new evidence. The frozen release
+candidate and v0.3.1 tag were not changed. All unrelated worktrees were preserved.

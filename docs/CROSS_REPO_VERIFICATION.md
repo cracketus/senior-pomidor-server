@@ -32,6 +32,8 @@ the internal network (Docker may omit port publication on internal networks).
 No production env file, host data mount, GPIO or Docker socket enters a container.
 The test stops its project but deliberately preserves its volumes and evidence.
 It never executes `down -v`; inspect/remove obsolete test resources separately.
+On ephemeral Actions runners, host teardown eventually removes test volumes; uploaded
+reports and bounded logs have 30-day retention. Archived JSON reports remain in Git.
 
 ## Scenarios and assertions
 
@@ -74,8 +76,9 @@ synthetic test diagnostics and should still be reviewed before wider publication
 | previous Edge/current Core | checked-out candidate commit | 14d297ef1b18567d101876c143240d9354ddc860 | full behavioral scenarios |
 | current Edge/rollback Core | v0.3.0, 549dc4d21897203c167749611416355f820d6372 | d14b9367b359ab260bdb62c6364ccd542fbbbd26 | existing released Core image, full scenarios |
 
-This is an explicit **verification target window**, not a claim of PASS until the
-matrix runs successfully. Unsupported older pairs are not silently included. Update
+The [archived run 36378964088](verification-evidence/issue-247/run-36378964088/README.md)
+passed all three pairs and 11 scenarios per pair. This is an explicit verification window
+for those exact commits/configurations, not an unconditional claim for later revisions. Unsupported older pairs are not silently included. Update
 pins through review; a pin change starts new evidence. Legacy v1/v2 contract fixtures
 also travel through real MQTT/HTTP/storage in each matrix pair.
 Historical qualification v1's v0.2.4 rollback assertion is a different campaign;

@@ -5,18 +5,20 @@
   "pr_ref": "#365",
   "role": "coder",
   "agent_id": "codex",
-  "prompt_version": "coding-agent-1.0",
+  "prompt_version": "coding-agent-1.1",
   "started_at_utc": "2026-09-27T12:00:00Z",
-  "finished_at_utc": "2026-09-28T04:30:00Z",
+  "finished_at_utc": "2026-09-28T09:27:27.776574Z",
   "input_refs": [
     ".ai/implementation-briefs/ISSUE-247-cross-repo.md",
     "AGENTS.md"
   ],
   "output_refs": [
     "docs/implementation-reports/ISSUE-247-cross-repo.md",
-    "docs/CROSS_REPO_VERIFICATION.md"
+    "docs/CROSS_REPO_VERIFICATION.md",
+    "docs/verification-evidence/issue-247/run-36378964088/README.md",
+    "docs/implementation-reports/ISSUE-247-cross-repo-review.md"
   ],
-  "status": "planned",
+  "status": "completed",
   "commands": [
     {
       "command": "python -m pytest tests/test_cross_repo_harness.py tests/test_system_properties.py -q",
@@ -27,15 +29,48 @@
   "validation_results": [
     {
       "check": "real cross-repository matrix",
+      "status": "PASS",
+      "reference": "https://github.com/cracketus/senior-pomidor-server/actions/runs/36378964088",
+      "detail": "3 pairs, 11 scenarios each; 20 primary records each; zero missing/duplicate/unexpected rows"
+    },
+    {
+      "check": "CI test, Docker E2E, quality, security",
+      "status": "PASS",
+      "reference": "https://github.com/cracketus/senior-pomidor-server/actions/runs/36378964066",
+      "detail": "710 tests passed, 2 skipped; Docker E2E separate PASS"
+    },
+    {
+      "check": "Linux and Windows property/evidence/CLI smoke",
+      "status": "PASS",
+      "reference": "https://github.com/cracketus/senior-pomidor-server/actions/runs/36378964088"
+    },
+    {
+      "check": "local dependency audit",
+      "status": "PASS",
+      "detail": "No known vulnerabilities after development pip upgrade"
+    },
+    {
+      "check": "staging, soak, restore, canary, hardware",
       "status": "NOT_RUN",
-      "detail": "current CI execution pending; no qualification claimed"
+      "detail": "Separate maintainer-owned release campaign, outside software implementation acceptance"
+    },
+    {
+      "check": "usage instrumentation",
+      "status": "NOT_RUN",
+      "detail": "Unmeasured usage fields remain zero placeholders, not measured zero consumption"
+    },
+    {
+      "check": "independent review",
+      "status": "PASS",
+      "reference": "docs/implementation-reports/ISSUE-247-cross-repo-review.md",
+      "detail": "APPROVE; all six findings resolved"
     }
   ],
   "human_edits": [],
   "findings": [],
   "errors": [],
   "usage": {
-    "file_count": 0,
+    "file_count": 29,
     "input_characters": 0,
     "tool_output_bytes": 0,
     "elapsed_seconds": 0
