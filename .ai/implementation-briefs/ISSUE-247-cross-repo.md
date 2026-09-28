@@ -95,7 +95,7 @@ git push origin refs/tags/v0.3.1
 ## Safety/risk classification
 
 Task classes: pure_software, schema_data_contract, infrastructure_deployment, edge_hardware_integration (fake backend only).
-Risk flags: edge_server_compatibility, security_secrets; production_availability — для последующей qualification интеграции. data_loss_migration не выбран: миграций данных в scope нет; при появлении пересчитать routing.
+Risk flags: edge_server_compatibility, security_secrets, public_contract; production_availability — для последующей qualification интеграции. data_loss_migration не выбран: миграций данных в scope нет; при появлении пересчитать routing.
 
 Applicable failures:
 - SP-FAIL-001: проверять exact Compose config и обязательные параметры.

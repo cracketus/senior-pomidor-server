@@ -46,7 +46,9 @@ It never executes `down -v`; inspect/remove obsolete test resources separately.
   replace latest, stale freshness is STALE; future freshness and reliability are UNKNOWN.
 - High-VPD: real Edge derived metric, Core persistence and actual estimator invocation;
   persisted observation-time replay invokes the production estimator and persistence;
-  canonical high VPD and HIGH_VPD anomaly are required, plus sensor-health/health reads. Physical or agronomic outcomes
+  canonical high VPD and HIGH_VPD anomaly are required, plus sensor-health/health reads.
+  A subsequent real observation must produce a new persisted snapshot through the
+  production worker `run_once`, including its normal device and window selection. Physical or agronomic outcomes
   are not asserted.
 
 - Invalid timestamps must be rejected without creating a canonical observation.
@@ -80,7 +82,8 @@ this harness does not silently rewrite that older evidence contract.
 
 `tests/test_system_properties.py` uses bounded deterministic Hypothesis examples for
 identity/dedup/order, serialization/unit preservation, missing/stale/future health and
-Europe/Vienna DST gap/fold UTC round trips. Failing examples are minimized by Hypothesis;
+Europe/Vienna DST gap/fold UTC round trips. Hypothesis is pinned for reproducibility; failures print a replay blob.
+Failing examples are minimized by Hypothesis;
 retain the minimized counterexample as a named regression fixture when fixing a defect.
 Run with `python -m pytest -q tests/test_system_properties.py`.
 

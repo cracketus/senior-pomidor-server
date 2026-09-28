@@ -339,6 +339,7 @@ class Harness:
                 "invariant_ids": list(INVARIANTS[name]),
             }
         )
+        print(f"Cross-repository scenario {name}: PASS", flush=True)
 
     def scenarios(self) -> None:
         self.sample(timestamp=(self.epoch - timedelta(days=3)).isoformat().replace("+00:00", "Z"))
@@ -363,7 +364,7 @@ class Harness:
         # Stop both Core ingestion paths: MQTT PUBACK cannot complete the spool.
         self.control("outage")
         self.compose("stop", "worker")
-        backlog = [self.sample() for _ in range(8)]
+        backlog = [self.sample() for _ in range(16)]
         wait_for(lambda: self.pending(backlog))
         self.checkpoint("core-outage-spool-growth", pending=True)
         before = {r["record_id"] for r in self.records()}
@@ -433,7 +434,9 @@ class Harness:
             raise HarnessError("canonical HIGH_VPD anomaly missing")
         self.get("api", f"/health/summary?node_id={DEVICE}")
         # Also exercise production latest/window/device selection and worker wiring.
-        worker_sample = self.sample(timestamp=utc(), high_vpd=True)
+        worker_sample = self.sample(
+            timestamp=datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z"), high_vpd=True
+        )
         self.drain()
         self.compose(
             "exec",
@@ -441,7 +444,14 @@ class Harness:
             "api",
             "python",
             "-c",
-            "from app.state_estimator_worker import run_once; assert run_once() == 1",
+            "import sys; from datetime import datetime; from sqlalchemy import select; "
+            "from app.state_estimator_worker import run_once; from app.db import SessionLocal; "
+            "from app.models import StateSnapshot; assert run_once() == 1; "
+            "db=SessionLocal(); snapshot=db.scalar(select(StateSnapshot)"
+            ".where(StateSnapshot.node_id=='edge-staging-cross-repo')"
+            ".order_by(StateSnapshot.ts.desc()).limit(1)); "
+            "assert snapshot is not None and snapshot.ts==datetime.fromisoformat(sys.argv[1]); db.close()",
+            self.samples[worker_sample],
         )
         worker_state = self.get("api", f"/api/v1/state/latest?node_id={DEVICE}")
         if (

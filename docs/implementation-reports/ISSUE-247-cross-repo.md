@@ -11,7 +11,7 @@ PR: https://github.com/cracketus/senior-pomidor-server/pull/365.
 
 Task classes: pure_software, schema_data_contract, infrastructure_deployment,
 edge_hardware_integration (synthetic sensors only).
-Risk flags: edge_server_compatibility, security_secrets, production_availability.
+Risk flags: edge_server_compatibility, security_secrets, production_availability, public_contract.
 Applicable failures: SP-FAIL-001/002/003/004/005/006/009/010/011/014/017.
 
 ## Implemented behavior and files
@@ -45,7 +45,7 @@ The estimator is deterministically replayed against persisted rows, not replaced
 Read API/SQL snapshots reconcile within a deadline because live ingestion can advance between
 reads. Legacy fixtures must first appear through MQTT, then survive HTTP replay without duplication.
 
-A fresh random project, internal network, loopback ports, owned volumes, bounded resources,
+A fresh random project, internal network, no published ports, owned volumes, bounded resources,
 no devices/host mounts/exporter and local-only Docker endpoint address SP-FAIL-001/003.
 Failures preserve bounded synthetic diagnostics; cleanup always attempts stop/down without
 volume deletion. Revert this PR to roll back tooling; existing telemetry and databases need
@@ -63,12 +63,14 @@ Commands below used existing development environments with the project dependenc
 | FAIL | Initial PR CI | wrong Edge repository name, missing Bandit annotations, SQLAlchemy typing; corrected in follow-up |
 | PASS | Initial PR test and docker-e2e jobs | run 36342171167 |
 | NOT RUN | Current full cross-repository matrix | run 36377718853 in progress; report to be updated after completion |
-| NOT RUN | Exact published-image qualification, Windows smoke | requires final evidence |
+| PASS | Linux/Windows property, evidence and CLI smoke | run 36378275152, harness-contracts jobs |
+| NOT RUN | Exact published-image qualification | maintainer campaign must supply image digests |
 | NOT RUN | Staging/24h soak/restore/rollback/canary/hardware | maintainer-owned operational campaign |
 
-Full local suite previously returned 706 passed, 2 skipped, 1 failed: the existing Compose
+Full local suite previously returned 709 passed, 2 skipped, 1 failed: the existing Compose
 render test requires Docker, which is absent in this environment. Docker checks run in GitHub.
-Local mypy encountered a corrupted cache; a fresh cache is being used for verification.
+Mypy passed with a fresh cache after detecting a corrupted local cache; dependency audit
+passed after updating the development environment pip, as the canonical nox session does.
 
 ## Compatibility, safety and limitations
 

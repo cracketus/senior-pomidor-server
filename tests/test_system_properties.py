@@ -12,7 +12,11 @@ from app.operator_edge_reliability import build_operator_edge_reliability
 from app.validation import validate_telemetry_payload
 
 PROPERTY = settings(
-    max_examples=35, derandomize=True, deadline=None, suppress_health_check=[HealthCheck.function_scoped_fixture]
+    max_examples=35,
+    derandomize=True,
+    print_blob=True,
+    deadline=None,
+    suppress_health_check=[HealthCheck.function_scoped_fixture],
 )
 
 
