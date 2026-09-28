@@ -2,21 +2,44 @@
   "schema": "agent_run_v1",
   "run_id": "20260928-issue-91",
   "issue_ref": "#91",
-  "pr_ref": null,
+  "pr_ref": "#367",
   "role": "coder",
   "agent_id": "codex",
   "prompt_version": "coding-agent-1.1",
   "started_at_utc": "2026-09-28T14:20:00Z",
-  "finished_at_utc": null,
+  "finished_at_utc": "2026-09-28T19:48:30.162441+00:00",
   "input_refs": [
     ".ai/implementation-briefs/ISSUE-91-performance.md"
   ],
   "output_refs": [
-    "docs/PERFORMANCE_VERIFICATION.md"
+    "docs/PERFORMANCE_VERIFICATION.md",
+    "docs/implementation-reports/ISSUE-91-review.md"
   ],
-  "status": "running",
+  "status": "completed",
   "commands": [],
-  "validation_results": [],
+  "validation_results": [
+    {
+      "check": "independent review",
+      "status": "PASS",
+      "reference": "docs/implementation-reports/ISSUE-91-review.md"
+    },
+    {
+      "check": "CI evidence",
+      "status": "PASS",
+      "reference": "https://github.com/cracketus/senior-pomidor-server/actions/runs/36438466336",
+      "detail": "All required jobs passed"
+    },
+    {
+      "check": "cross-repository verification",
+      "status": "PASS",
+      "reference": "https://github.com/cracketus/senior-pomidor-server/actions/runs/36438466373"
+    },
+    {
+      "check": "production/physical/real seasonal data",
+      "status": "NOT_RUN",
+      "detail": "Outside authorized software scope"
+    }
+  ],
   "human_edits": [],
   "findings": [],
   "errors": [],

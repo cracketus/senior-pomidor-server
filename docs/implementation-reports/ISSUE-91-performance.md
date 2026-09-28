@@ -22,3 +22,12 @@ Validation at initial handoff:
 No schema migration, production operations, physical action or public field additions.
 Rollback is code revert. Existing frozen v0.3.1 is untouched. Edge sender throughput
 is outside this Core smoke workload and is not claimed by its measurements.
+
+## Final source review and CI evidence
+
+Independent review APPROVE. Indexed latest lookup, fixed workload epoch and recursive telemetry plan check resolve all findings.
+
+- https://github.com/cracketus/senior-pomidor-server/actions/runs/36438466336
+- https://github.com/cracketus/senior-pomidor-server/actions/runs/36438466373
+
+Final PR checks remain authoritative for the latest commit; no operational PASS is inferred.
