@@ -41,10 +41,14 @@ It never executes `down -v`; inspect/remove obsolete test resources separately.
 - Lost ACK: PostgreSQL/API contain the row while Edge still considers it pending;
   retry completes without a second scientific row.
 - Delayed/out-of-order/future/stale time: timestamps preserved, delayed records do not
-  replace latest, future/stale reliability stays UNKNOWN.
+  replace latest, stale freshness is STALE; future freshness and reliability are UNKNOWN.
 - High-VPD: real Edge derived metric, Core persistence and actual estimator invocation;
-  state/sensor-health/anomaly/health reads must work. Physical or agronomic outcomes
+  persisted observation-time replay invokes the production estimator and persistence;
+  canonical high VPD and HIGH_VPD anomaly are required, plus sensor-health/health reads. Physical or agronomic outcomes
   are not asserted.
+
+- Invalid timestamps must be rejected without creating a canonical observation.
+- Legacy v1/v2 fixtures travel through MQTT first, followed by HTTP replay and readback.
 
 Every checkpoint compares expected record identities with PostgreSQL and API identities,
 counts duplicates/missing/unexpected rows and verifies observation timestamps. Pending
@@ -66,7 +70,7 @@ synthetic test diagnostics and should still be reviewed before wider publication
 This is an explicit **verification target window**, not a claim of PASS until the
 matrix runs successfully. Unsupported older pairs are not silently included. Update
 pins through review; a pin change starts new evidence. Legacy v1/v2 contract fixtures
-remain covered by Core fixture/API tests and the existing Docker E2E suite.
+also travel through real MQTT/HTTP/storage in each matrix pair.
 Historical qualification v1's v0.2.4 rollback assertion is a different campaign;
 this harness does not silently rewrite that older evidence contract.
 
@@ -81,8 +85,14 @@ Run with `python -m pytest -q tests/test_system_properties.py`.
 ## Release integration and remaining gates
 
 `senior-pomidor.cross-repo-e2e.v1` explicitly has `evidence_scope=CI` and exact Core/Edge
-Git/image identities. Its fail-closed gate requires all scenarios and consistent counts.
-The release qualification workflow checks this additional report for the **same pair**.
+Git/image identities. Its strict schema (`docs/schemas/cross-repo-e2e-v1.schema.json`) and fail-closed gate
+require all scenarios, invariant IDs, bounded counts, UTC intervals and matching identities.
+The release qualification workflow reads
+`docs/release-evidence/<report-id>/cross-repo-e2e.json` from the evidence ref and checks
+the **same Git pair and registry image digests** as the qualification inputs. Build-only
+CI reports cannot qualify published images: rerun with both digest-pinned image options
+and validate with `--core-image` and `--edge-image`. A preflight failure may produce a
+partial diagnostic report; it is never accepted by the qualification validator.
 It still independently requires its existing staging/rehearsal/soak/canary evidence.
 Never relabel this short CI run STAGING or turn absent 24h/canary evidence into PASS.
 Future actuator invariants remain NOT_IMPLEMENTED.

@@ -8,7 +8,9 @@ Approver/date: user, 2026-09-27; explicit request to implement the six-step plan
 
 Issue/decision: продолжить существующий эпик #247, первым реализовать #248; затем остаток #249, #252, #250, #251. Не создавать дублирующий эпик.
 
-Agent run ID / audit artifact: 20260924-rc031-next-epic / предполагаемый путь при утверждённом переносе в Git: `.ai/agent-runs/20260924-rc031-next-epic.json`. Audit artifact в репозитории пока не создан.
+Implementation audit: `20260927-issue-247-coder`, `.ai/agent-runs/20260927-issue-247-coder.json`.
+
+Historical planning snapshot follows. User subsequently created v0.3.1 and authorized all six implementation steps; release/tag instructions below are historical, not pending work. Current delivery evidence is in `docs/implementation-reports/ISSUE-247-cross-repo.md`.
 
 ## Problem
 

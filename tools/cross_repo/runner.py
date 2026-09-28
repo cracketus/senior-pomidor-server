@@ -34,7 +34,7 @@ SCENARIOS = (
     "malformed-rejected",
     "legacy-fixtures",
 )
-INVARIANTS = dict.fromkeys(SCENARIOS, ("sp-inv-001", "sp-inv-002", "sp-inv-003"))
+INVARIANTS: dict[str, tuple[str, ...]] = dict.fromkeys(SCENARIOS, ("sp-inv-001", "sp-inv-002", "sp-inv-003"))
 INVARIANTS["delayed-stale-future-out-of-order"] = ("sp-inv-003", "sp-inv-004")
 INVARIANTS["malformed-rejected"] = ("sp-inv-005",)
 INVARIANTS["legacy-fixtures"] = ("sp-inv-005",)
@@ -50,11 +50,13 @@ class HarnessError(RuntimeError):
     """Bounded error safe for the public report."""
 
 
-def command(argv: list[str], *, cwd: Path | None = None, timeout: int = 120) -> str:
+def command(argv: list[str], *, cwd: Path | None = None, timeout: int = 120, diagnostics: Path | None = None) -> str:
     result = subprocess.run(  # nosec B603
         argv, cwd=cwd, env=ENV, capture_output=True, text=True, timeout=timeout, check=False
     )
     if result.returncode:
+        if diagnostics is not None:
+            diagnostics.write_text(result.stderr[-16000:])
         # Child output is not safe to publish (Docker/git can expose environment details).
         raise HarnessError(f"{argv[0]} operation failed (exit {result.returncode})")
     return result.stdout
@@ -231,6 +233,7 @@ class Harness:
                 *args,
             ],
             timeout=240,
+            diagnostics=self.output / "compose-error.log",
         )
 
     def url(self, name: str, port: int) -> str:
@@ -275,25 +278,28 @@ class Harness:
         wait_for(lambda: len(self.history()) == len(self.samples))
 
     def counts(self) -> dict[str, int]:
-        rows = self.history()
-        ids = [r["record_id"] for r in rows]
-        expected = set(self.samples)
-        stored = json.loads(
-            self.compose(
-                "exec",
-                "-T",
-                "postgres",
-                "psql",
-                "-U",
-                "verification",
-                "-tA",
-                "-c",
-                "SELECT COALESCE(json_agg(record_id),'[]') FROM telemetry_events "
-                "WHERE device_id='edge-staging-cross-repo'",
+        # Read API and SQL independently; ingestion may advance between snapshots.
+        def snapshot() -> Any:
+            rows = self.history()
+            ids = [r["record_id"] for r in rows]
+            stored = json.loads(
+                self.compose(
+                    "exec",
+                    "-T",
+                    "postgres",
+                    "psql",
+                    "-U",
+                    "verification",
+                    "-tA",
+                    "-c",
+                    "SELECT COALESCE(json_agg(record_id),'[]') FROM telemetry_events "
+                    "WHERE device_id='edge-staging-cross-repo'",
+                )
             )
-        )
-        if set(ids) != set(stored) or len(ids) != len(stored):
-            raise HarnessError("PostgreSQL/read API identity mismatch")
+            return (rows, ids, stored) if set(ids) == set(stored) and len(ids) == len(stored) else None
+
+        rows, ids, stored = wait_for(snapshot)
+        expected = set(self.samples)
         if any(r["timestamp_utc"] != self.samples.get(r["record_id"]) for r in rows):
             raise HarnessError("sp-inv-003 observation time changed")
         return {
@@ -441,8 +447,6 @@ class Harness:
             fixture["device_id"] = node
             if "record_id" in fixture:
                 fixture["record_id"] = f"legacy-{version}"
-            response = self.client.post(self.urls["api"] + "/api/v1/edge/telemetry", json=fixture)
-            response.raise_for_status()
             self.compose(
                 "exec",
                 "-T",
@@ -457,6 +461,9 @@ class Harness:
                 "-m",
                 json.dumps(fixture),
             )
+            wait_for(lambda: self.get("api", f"/api/v1/devices/{node}/telemetry"))
+            response = self.client.post(self.urls["api"] + "/api/v1/edge/telemetry", json=fixture)
+            response.raise_for_status()
             rows = self.get("api", f"/api/v1/devices/{node}/telemetry")
             if len(rows) != 1 or rows[0]["schema_version"] != fixture["schema_version"]:
                 raise HarnessError("legacy fixture readback mismatch")

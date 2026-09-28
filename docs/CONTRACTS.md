@@ -577,3 +577,10 @@ Existing rows are backfilled as `ACTIVE`. Lifecycle transitions are written by t
 `device_lifecycle_events`; repeated requests for the current state are idempotent. Incoming telemetry
 for a decommissioned device remains stored and never reactivates it. Active-fleet operator, estimator,
 Grafana and export queries exclude decommissioned devices; device-specific history reads remain available.
+
+## Cross-repository software evidence
+
+See [real Edge/Core verification](CROSS_REPO_VERIFICATION.md) for the isolated runner,
+version matrix and `senior-pomidor.cross-repo-e2e.v1` report contract. Release qualification
+requires matching Git SHAs and registry digests; CI evidence does not replace staging,
+soak, restore, rollback or supervised canary evidence.
