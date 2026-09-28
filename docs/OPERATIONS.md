@@ -784,3 +784,10 @@ The API and MQTT worker use `/run/senior-pomidor/worker-health.json` from the pr
 `worker-health` volume. The API mounts it read-only and the worker read-write. Health writes replace a
 fully flushed temporary file atomically; missing, malformed, or stale files remain fail-safe (`UNKNOWN`
 or `WARN`) and are not interpreted as healthy.
+
+## Cross-repository software evidence
+
+See [real Edge/Core verification](CROSS_REPO_VERIFICATION.md) for the isolated runner,
+version matrix and `senior-pomidor.cross-repo-e2e.v1` report contract. Release qualification
+requires matching Git SHAs and registry digests; CI evidence does not replace staging,
+soak, restore, rollback or supervised canary evidence.

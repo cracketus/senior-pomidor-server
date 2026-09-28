@@ -39,3 +39,10 @@ print command output, or turn unavailable Edge/fault evidence into a PASS.
 Stopping staging uses `docker compose ... down` without `--volumes`. Data reset is intentionally not automated
 here: a human must verify the exact staging project and resolved bind paths, retain required evidence, and use a
 separately approved backup/reset procedure. Never point this overlay at production paths or shared volumes.
+
+## Cross-repository software evidence
+
+See [real Edge/Core verification](CROSS_REPO_VERIFICATION.md) for the isolated runner,
+version matrix and `senior-pomidor.cross-repo-e2e.v1` report contract. Release qualification
+requires matching Git SHAs and registry digests; CI evidence does not replace staging,
+soak, restore, rollback or supervised canary evidence.

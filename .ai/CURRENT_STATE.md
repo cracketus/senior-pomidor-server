@@ -1,6 +1,16 @@
 # Current state
 
-Owner: maintainer performing a release or operational change. Update after every deployed subsystem, contract, topology, season, or rehearsal change and review at least monthly during the active season. Snapshot date: 2026-09-24 (repository capabilities; not deployment evidence). Do not add addresses, credentials, hostnames, or other private infrastructure values.
+Owner: maintainer performing a release or operational change. Update after every deployed subsystem, contract, topology, season, or rehearsal change and review at least monthly during the active season. Snapshot date: 2026-09-28 (repository capabilities; not deployment evidence). Do not add addresses, credentials, hostnames, or other private infrastructure values.
+
+## Cross-repository verification development (2026-09-28)
+
+- #247 adds a real Edge/Core Docker harness, version matrix, deterministic property tests
+  and a strict CI evidence gate for release qualification. See
+  [runbook](../docs/CROSS_REPO_VERIFICATION.md) and
+  [implementation evidence](../docs/implementation-reports/ISSUE-247-cross-repo.md).
+- Matrix run 36378964088 passed all 3 pairs and 11 scenarios per pair; actual reports are
+  archived with the implementation evidence. No staging, soak, canary or physical PASS is claimed.
+  The frozen v0.3.1 candidate is unchanged.
 
 ## Running/deployable services
 

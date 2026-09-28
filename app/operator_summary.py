@@ -503,7 +503,7 @@ class OperatorSummaryService:
                 func.row_number()
                 .over(
                     partition_by=TelemetryEvent.device_id,
-                    order_by=(desc(TelemetryEvent.timestamp_utc), desc(TelemetryEvent.id)),
+                    order_by=(TelemetryEvent.timestamp_utc.desc(), TelemetryEvent.id.desc()),
                 )
                 .label("row_number"),
             )
@@ -526,7 +526,7 @@ class OperatorSummaryService:
                 func.row_number()
                 .over(
                     partition_by=StateSnapshot.node_id,
-                    order_by=(desc(StateSnapshot.ts), desc(StateSnapshot.state_id)),
+                    order_by=(StateSnapshot.ts.desc(), StateSnapshot.state_id.desc()),
                 )
                 .label("row_number"),
             )
