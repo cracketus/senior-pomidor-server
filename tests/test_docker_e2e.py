@@ -983,10 +983,15 @@ def assert_performance_guardrails(client: httpx.Client) -> None:
             assert persist_telemetry_result(db, failed, "http").outcome == "accepted"
         report["transaction_rollback"] = "PASS"
 
+        epoch = datetime.now(UTC).replace(microsecond=0) - timedelta(minutes=5)
         samples = []
         for index in range(40):
             value = telemetry_payload(200 + index)
-            value.update(device_id="perf-http", record_id=f"perf:http:{index}")
+            value.update(
+                device_id="perf-http",
+                record_id=f"perf:http:{index}",
+                timestamp_utc=(epoch + timedelta(seconds=index + 1)).isoformat().replace("+00:00", "Z"),
+            )
             samples.append(value)
 
         def send(value):
@@ -996,7 +1001,9 @@ def assert_performance_guardrails(client: httpx.Client) -> None:
 
         # Register the device before measuring concurrent steady-state ingestion.
         warmup = telemetry_payload(199)
-        warmup.update(device_id="perf-http", record_id="perf:http:warmup")
+        warmup.update(
+            device_id="perf-http", record_id="perf:http:warmup", timestamp_utc=epoch.isoformat().replace("+00:00", "Z")
+        )
         post_telemetry(client, warmup)
         start = time.monotonic()
         with ThreadPoolExecutor(max_workers=4) as pool:
@@ -1076,8 +1083,13 @@ def assert_performance_guardrails(client: httpx.Client) -> None:
                     plan: list = conn.exec_driver_sql("EXPLAIN (FORMAT JSON) " + statement, parameters).scalar_one()
                     encoded = json.dumps(plan)
                     assert "Index" in encoded, encoded
-                    if "FROM devices" not in statement and "JOIN devices" not in statement:
-                        assert "Seq Scan" not in encoded, encoded
+                    pending = [plan[0]["Plan"]]
+                    while pending:
+                        node = pending.pop()
+                        assert not (
+                            node.get("Node Type") == "Seq Scan" and node.get("Relation Name") == "telemetry_events"
+                        ), encoded
+                        pending.extend(node.get("Plans", []))
                 report["selective_query_plans"] = "PASS"
             finally:
                 transaction.rollback()
