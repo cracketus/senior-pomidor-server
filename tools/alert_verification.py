@@ -45,10 +45,19 @@ def snapshot(client: httpx.Client) -> dict[str, dict[str, Any]]:
     }
 
 
-def wait_states(client: httpx.Client, names: set[str], state: str, *, healthy: bool = True) -> dict:
+def wait_states(
+    client: httpx.Client, names: set[str], state: str, *, healthy: bool = True, refresh_engine: Engine | None = None
+) -> dict:
     deadline = time.monotonic() + 120
     latest = {}
     while time.monotonic() < deadline:
+        if refresh_engine is not None:
+            with refresh_engine.begin() as connection:
+                connection.execute(
+                    update(TelemetryEvent)
+                    .where(TelemetryEvent.device_id.startswith(PREFIX), TelemetryEvent.device_id != f"{PREFIX}0")
+                    .values(timestamp_utc=datetime.now(UTC))
+                )
         latest = snapshot(client)
         if set(latest) == PLANT_RULES and all(
             latest[name].get("state", "").lower() == state

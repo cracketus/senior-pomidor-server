@@ -26,8 +26,10 @@ No production database, dashboard or role is used. Existing Edge transport and
 reliability scenarios then continue on the same isolated stack.
 
 Only the copied test provisioning is accelerated: interval 10s, positive plant holds
-30s, existing Edge holds 0s. Expressions, thresholds and production source files are
-unchanged. This proves hold-state mechanics, not wall-clock execution of production
+30s, existing Edge holds 0s. Thresholds and production hold durations are unchanged. Four canonical-state SQL
+projections are corrected: observed values/timestamps become text labels, leaving
+exactly one numeric value column for Grafana table evaluation. The new runtime
+tests exposed their previous wide/long-series errors. This proves hold-state mechanics, not wall-clock execution of production
 1–30 minute durations. Source duration/threshold/provisioning tests remain in place.
 A CI run cannot establish operator notification delivery or production readiness.
 
