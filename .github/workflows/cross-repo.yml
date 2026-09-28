@@ -76,3 +76,21 @@ jobs:
             evidence/compose-error.log
           if-no-files-found: warn
           retention-days: 30
+
+  harness-contracts:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -e '.[dev]'
+      - name: Portable property and evidence contracts
+        run: python -m pytest -q tests/test_cross_repo_harness.py tests/test_system_properties.py
+      - name: CLI import smoke
+        run: python -m tools.cross_repo --help

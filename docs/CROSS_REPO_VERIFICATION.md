@@ -25,8 +25,10 @@ files, credentials or local modifications) and records the actual local image ID
 A local image ID is **not** a registry manifest digest or a release-bundle checksum.
 
 The runner is a bounded test command, not a general Compose CLI: only a fresh random
-project, internal network, owned named volumes, ephemeral loopback ports, fixed
+project, internal network, owned named volumes, no published ports, fixed
 commands, fake sensors and no external exporter. Remote Docker contexts are rejected.
+The controller reaches HTTP endpoints through a bounded `docker exec` bridge inside
+the internal network (Docker may omit port publication on internal networks).
 No production env file, host data mount, GPIO or Docker socket enters a container.
 The test stops its project but deliberately preserves its volumes and evidence.
 It never executes `down -v`; inspect/remove obsolete test resources separately.

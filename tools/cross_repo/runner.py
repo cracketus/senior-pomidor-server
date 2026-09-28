@@ -115,7 +115,6 @@ def compose_config(core_image: str, edge_image: str, harness_image: str) -> dict
         "api": {
             **app,
             "command": ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"],
-            "ports": ["127.0.0.1::8000"],
             "depends_on": {"migrate": {"condition": "service_completed_successfully"}},
         },
         "worker": {
@@ -123,12 +122,11 @@ def compose_config(core_image: str, edge_image: str, harness_image: str) -> dict
             "command": ["python", "-m", "app.mqtt_worker"],
             "depends_on": {"migrate": {"condition": "service_completed_successfully"}},
         },
-        "proxy": {"image": harness_image, "command": ["python", "/harness/proxy.py"], "ports": ["127.0.0.1::8090"]},
+        "proxy": {"image": harness_image, "command": ["python", "/harness/proxy.py"]},
         "edge": {
             "image": edge_image,
             "command": ["python", "/harness/edge_driver.py"],
             "volumes": ["spool:/data", "driver:/harness:ro"],
-            "ports": ["127.0.0.1::8091"],
             "environment": {
                 "PYTHONPATH": "/app",
                 "DEVICE_ID": DEVICE,
@@ -207,12 +205,29 @@ def wait_for(probe: Any, *, timeout: int = 90) -> Any:
     raise HarnessError("bounded observation deadline exceeded")
 
 
+class ComposeTransport(httpx.BaseTransport):
+    """Reach test services without publishing internal-network ports or adding egress."""
+
+    def __init__(self, harness: Any):
+        self.harness = harness
+
+    def handle_request(self, request: httpx.Request) -> httpx.Response:
+        message = json.dumps({"method": request.method, "url": str(request.url), "body": request.content.decode()})
+        try:
+            result = json.loads(
+                self.harness.compose("exec", "-T", "proxy", "python", "/harness/http_request.py", message)
+            )
+        except (HarnessError, ValueError, subprocess.SubprocessError) as exc:
+            raise httpx.ConnectError("internal test request unavailable", request=request) from exc
+        return httpx.Response(result["status"], content=result["body"], request=request)
+
+
 class Harness:
     def __init__(self, output: Path):
         self.output = output.resolve()
         self.project = f"sp-cross-{uuid.uuid4().hex[:16]}"
         self.compose_file = self.output / "compose.json"
-        self.client = httpx.Client(timeout=6, trust_env=False)
+        self.client = httpx.Client(timeout=6, trust_env=False, transport=ComposeTransport(self))
         self.urls: dict[str, str] = {}
         self.results: list[dict[str, Any]] = []
         self.samples: dict[str, str] = {}
@@ -237,10 +252,9 @@ class Harness:
         )
 
     def url(self, name: str, port: int) -> str:
-        address = self.compose("port", name, str(port)).strip()
-        if not re.fullmatch(r"127\.0\.0\.1:\d+", address):
-            raise HarnessError("unexpected published address")
-        return f"http://{address}"
+        if (name, port) not in {("api", 8000), ("edge", 8091), ("proxy", 8090)}:
+            raise HarnessError("unexpected internal endpoint")
+        return f"http://{name}:{port}"
 
     def get(self, owner: str, path: str) -> Any:
         response = self.client.get(self.urls[owner] + path)
@@ -418,6 +432,25 @@ class Harness:
         if "HIGH_VPD" not in {item["type"] for item in anomalies}:
             raise HarnessError("canonical HIGH_VPD anomaly missing")
         self.get("api", f"/health/summary?node_id={DEVICE}")
+        # Also exercise production latest/window/device selection and worker wiring.
+        worker_sample = self.sample(timestamp=utc(), high_vpd=True)
+        self.drain()
+        self.compose(
+            "exec",
+            "-T",
+            "api",
+            "python",
+            "-c",
+            "from app.state_estimator_worker import run_once; assert run_once() == 1",
+        )
+        worker_state = self.get("api", f"/api/v1/state/latest?node_id={DEVICE}")
+        if (
+            worker_state["state_id"] == state["state_id"]
+            or datetime.fromisoformat(worker_state["ts"].replace("Z", "+00:00"))
+            != datetime.fromisoformat(self.samples[worker_sample].replace("Z", "+00:00"))
+            or (worker_state["env"].get("vpd_kpa") or 0) <= 1.6
+        ):
+            raise HarnessError("production estimator worker did not advance canonical state")
         self.checkpoint("high-vpd")
         self.sample(timestamp=(self.epoch - timedelta(days=2)).isoformat().replace("+00:00", "Z"))
         self.drain()
@@ -461,7 +494,7 @@ class Harness:
                 "-m",
                 json.dumps(fixture),
             )
-            wait_for(lambda: self.get("api", f"/api/v1/devices/{node}/telemetry"))
+            wait_for(lambda node=node: self.get("api", f"/api/v1/devices/{node}/telemetry"))
             response = self.client.post(self.urls["api"] + "/api/v1/edge/telemetry", json=fixture)
             response.raise_for_status()
             rows = self.get("api", f"/api/v1/devices/{node}/telemetry")
@@ -530,7 +563,7 @@ def run(
             report[owner]["image_id"] = image_id
         driver_dir = output / "driver"
         driver_dir.mkdir()
-        for name in ("edge_driver.py", "proxy.py"):
+        for name in ("edge_driver.py", "proxy.py", "http_request.py"):
             (driver_dir / name).write_bytes((ROOT / "tests/cross_repo" / name).read_bytes())
         (driver_dir / "Dockerfile").write_text("FROM python:3.12-slim\nCOPY *.py /harness/\n")
         command(["docker", "build", "-t", driver_image, str(driver_dir)], timeout=600)
