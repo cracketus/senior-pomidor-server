@@ -83,3 +83,15 @@ def test_dst_gap_fold_round_trip_preserves_observation_identity(seconds):
     for transition in (datetime(2026, 3, 29, 1, tzinfo=UTC), datetime(2026, 10, 25, 1, tzinfo=UTC)):
         observed = transition + timedelta(seconds=seconds)
         assert observed.astimezone(ZoneInfo("Europe/Vienna")).astimezone(UTC) == observed
+
+
+@PROPERTY
+@given(suffix=st.text(alphabet="abcdefghijklmnopqrstuvwxyz0123456789:-", max_size=40))
+def test_malformed_timestamp_cannot_partially_persist(client_factory, suffix):
+    client = client_factory()
+    value = observation(1)
+    value["timestamp_utc"] = "invalid:" + suffix
+    response = client.post("/api/v1/edge/telemetry", json=value)
+    assert response.status_code == 200
+    assert response.json()["status"] == "rejected"
+    assert client.get("/api/v1/devices/property-edge/telemetry").json() == []

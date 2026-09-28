@@ -7,7 +7,7 @@ import hashlib
 import json
 import os
 import re
-import subprocess
+import subprocess  # nosec B404
 import sys
 import tarfile
 import tempfile
@@ -31,7 +31,14 @@ SCENARIOS = (
     "lost-ack-after-persistence",
     "delayed-stale-future-out-of-order",
     "high-vpd",
+    "malformed-rejected",
+    "legacy-fixtures",
 )
+INVARIANTS = dict.fromkeys(SCENARIOS, ("sp-inv-001", "sp-inv-002", "sp-inv-003"))
+INVARIANTS["delayed-stale-future-out-of-order"] = ("sp-inv-003", "sp-inv-004")
+INVARIANTS["malformed-rejected"] = ("sp-inv-005",)
+INVARIANTS["legacy-fixtures"] = ("sp-inv-005",)
+
 ENV = {
     key: value
     for key, value in os.environ.items()
@@ -44,7 +51,9 @@ class HarnessError(RuntimeError):
 
 
 def command(argv: list[str], *, cwd: Path | None = None, timeout: int = 120) -> str:
-    result = subprocess.run(argv, cwd=cwd, env=ENV, capture_output=True, text=True, timeout=timeout, check=False)
+    result = subprocess.run(  # nosec B603
+        argv, cwd=cwd, env=ENV, capture_output=True, text=True, timeout=timeout, check=False
+    )
     if result.returncode:
         # Child output is not safe to publish (Docker/git can expose environment details).
         raise HarnessError(f"{argv[0]} operation failed (exit {result.returncode})")
@@ -81,7 +90,7 @@ def compose_config(core_image: str, edge_image: str, harness_image: str) -> dict
             "image": "postgres:16-alpine",
             "environment": {
                 "POSTGRES_USER": "verification",
-                "POSTGRES_PASSWORD": "verification",
+                "POSTGRES_PASSWORD": "verification",  # nosec B105 - isolated synthetic test database
                 "POSTGRES_DB": "verification",
             },
             "volumes": ["database:/var/lib/postgresql/data"],
@@ -279,7 +288,8 @@ class Harness:
                 "verification",
                 "-tA",
                 "-c",
-                "SELECT COALESCE(json_agg(record_id),'[]') FROM telemetry_events",
+                "SELECT COALESCE(json_agg(record_id),'[]') FROM telemetry_events "
+                "WHERE device_id='edge-staging-cross-repo'",
             )
         )
         if set(ids) != set(stored) or len(ids) != len(stored):
@@ -306,6 +316,7 @@ class Harness:
                 "counts": counts,
                 "finished_at_utc": utc(),
                 "pending_expected": pending,
+                "invariant_ids": list(INVARIANTS[name]),
             }
         )
 
@@ -417,6 +428,39 @@ class Harness:
         if self.get("api", f"/api/v1/devices/{DEVICE}/latest")["record_id"] != future:
             raise HarnessError("future observation identity lost")
         self.checkpoint("delayed-stale-future-out-of-order")
+        invalid = dict(self.records()[0]["payload"])
+        invalid.update(record_id="malformed-check", timestamp_utc="invalid-time")
+        response = self.client.post(self.urls["api"] + "/api/v1/edge/telemetry", json=invalid)
+        response.raise_for_status()
+        if response.json().get("status") != "rejected":
+            raise HarnessError("sp-inv-005 malformed observation not rejected")
+        self.checkpoint("malformed-rejected")
+        for version in ("v1", "v2"):
+            fixture = json.loads((ROOT / "tests/fixtures/contracts" / f"telemetry_{version}.json").read_text())
+            node = f"edge-staging-legacy-{version}"
+            fixture["device_id"] = node
+            if "record_id" in fixture:
+                fixture["record_id"] = f"legacy-{version}"
+            response = self.client.post(self.urls["api"] + "/api/v1/edge/telemetry", json=fixture)
+            response.raise_for_status()
+            self.compose(
+                "exec",
+                "-T",
+                "mqtt",
+                "mosquitto_pub",
+                "-h",
+                "mqtt",
+                "-q",
+                "1",
+                "-t",
+                f"verification/{node}/telemetry",
+                "-m",
+                json.dumps(fixture),
+            )
+            rows = self.get("api", f"/api/v1/devices/{node}/telemetry")
+            if len(rows) != 1 or rows[0]["schema_version"] != fixture["schema_version"]:
+                raise HarnessError("legacy fixture readback mismatch")
+        self.checkpoint("legacy-fixtures")
 
 
 def run(

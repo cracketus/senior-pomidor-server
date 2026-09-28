@@ -3,7 +3,7 @@ from copy import deepcopy
 import pytest
 
 from tools.cross_repo.evidence import EvidenceError, validate_evidence
-from tools.cross_repo.runner import SCENARIOS, HarnessError, compose_config, validate_isolation
+from tools.cross_repo.runner import INVARIANTS, SCENARIOS, HarnessError, compose_config, validate_isolation
 
 
 def report():
@@ -20,6 +20,8 @@ def report():
         "scenarios": [
             {
                 "scenario_id": name,
+                "invariant_ids": list(INVARIANTS[name]),
+                "finished_at_utc": "2026-09-27T12:00:30Z",
                 "status": "PASS",
                 "pending_expected": name
                 in {"core-outage-spool-growth", "edge-restart-pending", "fresh-during-backlog-replay"},
@@ -102,3 +104,21 @@ def test_isolation_rejects_unsafe_config(fault):
         config["volumes"]["spool"] = {"external": True}
     with pytest.raises(HarnessError):
         validate_isolation(config)
+
+
+def test_release_candidate_requires_exact_registry_digests():
+    data = report()
+    ref = "ghcr.io/cracketus/senior-pomidor-server@sha256:" + "3" * 64
+    with pytest.raises(EvidenceError):
+        validate_evidence(data, core_sha="a" * 40, edge_sha="b" * 40, core_image=ref)
+    data["core"]["registry_ref"] = ref
+    validate_evidence(data, core_sha="a" * 40, edge_sha="b" * 40, core_image=ref)
+    with pytest.raises(EvidenceError):
+        validate_evidence(data, core_sha="a" * 40, edge_sha="b" * 40, core_image=ref[:-1] + "4")
+
+
+def test_report_rejects_unbounded_or_private_fields():
+    data = report()
+    data["raw_payload"] = {"private": "not-for-publication"}
+    with pytest.raises(EvidenceError):
+        validate_evidence(data, core_sha="a" * 40, edge_sha="b" * 40)

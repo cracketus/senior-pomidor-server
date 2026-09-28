@@ -1,0 +1,200 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "senior-pomidor.cross-repo-e2e.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "status",
+    "evidence_scope",
+    "core",
+    "edge",
+    "started_at_utc",
+    "finished_at_utc",
+    "config_sha256",
+    "scenarios",
+    "future_action_invariants"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "senior-pomidor.cross-repo-e2e.v1"
+    },
+    "status": {
+      "enum": [
+        "PASS",
+        "FAIL",
+        "NOT_RUN"
+      ]
+    },
+    "evidence_scope": {
+      "const": "CI"
+    },
+    "core": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "git_sha",
+        "image_id"
+      ],
+      "properties": {
+        "git_sha": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "image_id": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "registry_ref": {
+          "type": "string",
+          "pattern": "^ghcr\\.io/cracketus/[a-z0-9-]+@sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "edge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "git_sha",
+        "image_id"
+      ],
+      "properties": {
+        "git_sha": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "image_id": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "registry_ref": {
+          "type": "string",
+          "pattern": "^ghcr\\.io/cracketus/[a-z0-9-]+@sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "started_at_utc": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$"
+    },
+    "finished_at_utc": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$"
+    },
+    "config_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "scenarios": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 20,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "scenario_id",
+          "status",
+          "counts",
+          "finished_at_utc",
+          "pending_expected",
+          "invariant_ids"
+        ],
+        "properties": {
+          "scenario_id": {
+            "type": "string",
+            "pattern": "^[a-z-]{1,64}$"
+          },
+          "status": {
+            "enum": [
+              "PASS",
+              "FAIL",
+              "NOT_RUN"
+            ]
+          },
+          "counts": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "generated",
+              "persisted",
+              "read_back",
+              "duplicates",
+              "missing",
+              "unexpected"
+            ],
+            "properties": {
+              "generated": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 256
+              },
+              "persisted": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 256
+              },
+              "read_back": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 256
+              },
+              "duplicates": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 256
+              },
+              "missing": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 256
+              },
+              "unexpected": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 256
+              }
+            }
+          },
+          "finished_at_utc": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "Z$"
+          },
+          "pending_expected": {
+            "type": "boolean"
+          },
+          "invariant_ids": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 5,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^sp-inv-00[1-5]$"
+            }
+          }
+        }
+      }
+    },
+    "future_action_invariants": {
+      "const": "NOT_IMPLEMENTED"
+    },
+    "error_code": {
+      "type": "string",
+      "maxLength": 256
+    },
+    "cleanup_status": {
+      "enum": [
+        "FAIL"
+      ]
+    },
+    "diagnostics_status": {
+      "enum": [
+        "FAIL"
+      ]
+    }
+  }
+}

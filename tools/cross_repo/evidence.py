@@ -9,7 +9,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from tools.cross_repo.runner import SCENARIOS
+from jsonschema import Draft202012Validator, FormatChecker
+from jsonschema.exceptions import ValidationError
+
+from tools.cross_repo.runner import INVARIANTS, ROOT, SCENARIOS
 
 
 class EvidenceError(ValueError):
@@ -24,6 +27,11 @@ def validate_evidence(
     core_image: str | None = None,
     edge_image: str | None = None,
 ) -> None:
+    try:
+        schema = json.loads((ROOT / "docs/schemas/cross-repo-e2e-v1.schema.json").read_text())
+        Draft202012Validator(schema, format_checker=FormatChecker()).validate(report)
+    except ValidationError as exc:
+        raise EvidenceError("invalid bounded evidence schema") from exc
     if (
         report.get("schema_version") != "senior-pomidor.cross-repo-e2e.v1"
         or report.get("status") != "PASS"
@@ -55,7 +63,12 @@ def validate_evidence(
         raise EvidenceError("missing, extra or duplicate scenarios")
     pending_cases = {"core-outage-spool-growth", "edge-restart-pending", "fresh-during-backlog-replay"}
     for scenario in scenarios:
+        if scenario.get("invariant_ids") != list(INVARIANTS[scenario["scenario_id"]]):
+            raise EvidenceError("invariant mapping mismatch")
         counts = scenario["counts"]
+        scenario_end = datetime.fromisoformat(scenario["finished_at_utc"].replace("Z", "+00:00"))
+        if not started <= scenario_end <= finished:
+            raise EvidenceError("scenario outside run interval")
         if set(counts) != {"generated", "persisted", "read_back", "duplicates", "missing", "unexpected"}:
             raise EvidenceError("counts missing")
         if any(type(v) is not int or not 0 <= v <= 256 for v in counts.values()):

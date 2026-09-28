@@ -41,7 +41,7 @@ jobs:
           path: core
       - uses: actions/checkout@v7
         with:
-          repository: cracketus/senior-pomidor-edge
+          repository: cracketus/senior-pomidor-plant-v2
           ref: ${{ matrix.edge_ref }}
           path: edge
       - uses: actions/setup-python@v7
