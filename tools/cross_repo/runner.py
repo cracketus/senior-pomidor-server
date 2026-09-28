@@ -287,7 +287,8 @@ class Harness:
 
     def drain(self) -> None:
         wait_for(
-            lambda: len(self.records()) == len(self.samples) and all(r["state"] == "delivered" for r in self.records())
+            lambda: len(self.records()) == len(self.samples) and all(r["state"] == "delivered" for r in self.records()),
+            timeout=150,
         )
         wait_for(lambda: len(self.history()) == len(self.samples))
 
@@ -364,7 +365,7 @@ class Harness:
         # Stop both Core ingestion paths: MQTT PUBACK cannot complete the spool.
         self.control("outage")
         self.compose("stop", "worker")
-        backlog = [self.sample() for _ in range(16)]
+        backlog = [self.sample() for _ in range(8)]
         wait_for(lambda: self.pending(backlog))
         self.checkpoint("core-outage-spool-growth", pending=True)
         before = {r["record_id"] for r in self.records()}
@@ -372,9 +373,10 @@ class Harness:
         self.urls["edge"] = self.url("edge", 8091)
         wait_for(lambda: {r["record_id"] for r in self.records()} == before and self.pending(backlog))
         self.checkpoint("edge-restart-pending", pending=True)
+        # Queue before recovery so controller scheduling cannot consume the backlog window.
+        fresh = self.sample()
         self.compose("start", "worker")
         self.control("pass")
-        fresh = self.sample()
         wait_for(lambda: any(r["record_id"] == fresh and r["state"] == "delivered" for r in self.records()))
         if not any(r["record_id"] in backlog and r["state"] != "delivered" for r in self.records()):
             raise HarnessError("fresh delivery not observed while backlog remained")

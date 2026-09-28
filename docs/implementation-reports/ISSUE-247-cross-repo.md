@@ -91,3 +91,11 @@ reproduction, artifact identity and remaining gates. Historical release evidence
 Independent review is required by AGENTS.md; prior findings about high-VPD assertions,
 freshness assertions, digest matching and cleanup were addressed and await re-review.
 Final diff and evidence review remain in progress; draft status is intentional.
+
+Run 36378275152 confirmed the first seven real scenarios across the current pair,
+including zero missing/duplicate records after recovery. High-VPD assertions reached
+canonical/anomaly reads, then the worker sample timed out because the driver expected
+microseconds while the real Edge formatter preserves seconds. Fixed to match the active
+contract. The real MQTT sender waits up to 10 seconds per publish; recovery retains
+a bounded 150-second drain deadline. This existing throughput limitation is not hidden
+by replacing the sender. Fresh data is queued before recovery to avoid host scheduling races.

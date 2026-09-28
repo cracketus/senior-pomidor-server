@@ -57,6 +57,9 @@ It never executes `down -v`; inspect/remove obsolete test resources separately.
 Every checkpoint compares expected record identities with PostgreSQL and API identities,
 counts duplicates/missing/unexpected rows and verifies observation timestamps. Pending
 checkpoints allow accounted-for backlog; completed checkpoints require full reconciliation.
+Draining has a 150-second bound: the pinned Edge MQTT sender currently waits up to
+10 seconds per publish, so throughput is lower than its configured rate ceiling. This
+is observed implementation behavior, not a harness mock or a guaranteed performance target.
 Any deadline, assertion, image/config mismatch or cleanup failure exits nonzero.
 `report.json` is bounded public-safe software evidence; `services.log` contains bounded
 synthetic test diagnostics and should still be reviewed before wider publication.
