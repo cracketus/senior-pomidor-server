@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import subprocess  # nosec B404
 import sys
 import urllib.error
@@ -11,6 +12,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
+
+from app.grafana_cloud_exporter import sanitize_label_value
 
 SCHEMA_VERSION = "senior-pomidor.status.v1"
 DEFAULT_API_BASE_URL = "http://127.0.0.1:8000"
@@ -70,9 +73,22 @@ def load_compose_ps(text: str) -> list[dict[str, Any]]:
 
 
 def normalize_compose_service(raw: dict[str, Any]) -> dict[str, Any]:
-    service = str(raw.get("Service") or raw.get("Name") or "unknown")
+    known_services = CRITICAL_CORE_SERVICES | {
+        "migrate",
+        "state-estimator-worker",
+        "grafana",
+        "ollama",
+        "daily-story-worker",
+        "grafana-cloud-exporter",
+    }
+    candidate = raw.get("Service")
+    service = candidate if isinstance(candidate, str) and candidate in known_services else "unknown"
     state = str(raw.get("State") or raw.get("Status") or "unknown").lower()
     health = str(raw.get("Health") or "").lower() or None
+    state = (
+        state if state in {"running", "exited", "completed", "created", "restarting", "paused", "dead"} else "unknown"
+    )
+    health = health if health in {"healthy", "unhealthy", "starting"} else None
     exit_code = raw.get("ExitCode")
     normalized_exit_code = int(exit_code) if isinstance(exit_code, int | str) and str(exit_code).isdigit() else None
     category = "core" if service in CRITICAL_CORE_SERVICES else "support"
@@ -131,8 +147,10 @@ def collect_readiness(api_base_url: str) -> dict[str, Any]:
     return {
         "ready": bool(payload.get("ready")),
         "status": "ok" if payload.get("ready") is True else "degraded",
-        "database": payload.get("database"),
-        "migration": payload.get("migration"),
+        "database": payload.get("database") if payload.get("database") in ("ok", "error", "unavailable") else "unknown",
+        "migration": payload.get("migration")
+        if payload.get("migration") in ("ok", "mismatch", "error", "unavailable")
+        else "unknown",
     }
 
 
@@ -160,7 +178,7 @@ def normalize_edge_device(event: dict[str, Any], now: datetime) -> dict[str, Any
         network = system_health["network"]
     status = edge_status(minutes_since, len(health_alerts))
     return {
-        "device_id": str(event.get("device_id") or "unknown"),
+        "device_id": sanitize_label_value(event.get("device_id") or "unknown"),
         "status": status,
         "last_telemetry_received_at": format_utc(received_at) if received_at else None,
         "minutes_since_telemetry": minutes_since,
@@ -173,24 +191,27 @@ def normalize_edge_device(event: dict[str, Any], now: datetime) -> dict[str, Any
 
 
 def normalize_public_network_health(network: dict[str, Any]) -> dict[str, bool | int | str | None]:
-    return {field: public_network_value(network.get(field)) for field in PUBLIC_NETWORK_HEALTH_FIELDS}
-
-
-def public_network_value(value: Any) -> bool | int | str | None:
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, int):
-        return value
-    if isinstance(value, str):
-        return value
-    return None
+    result: dict[str, bool | int | str | None] = {}
+    for field in PUBLIC_NETWORK_HEALTH_FIELDS:
+        value = network.get(field)
+        if field in {"wifi_connected", "internet_reachable", "dns_resolution_ok"}:
+            result[field] = value if isinstance(value, bool) else None
+        elif field == "last_recovery_result":
+            allowed = {"success", "failed", "skipped", "not_needed", "unknown", "never", "recovered"}
+            result[field] = value if isinstance(value, str) and value in allowed else None
+        else:
+            result[field] = value if type(value) is int and 0 <= value <= 2147483647 else None
+    return result
 
 
 def numeric_or_none(value: Any) -> int | float | None:
     if isinstance(value, bool):
         return None
     if isinstance(value, int | float):
-        return value
+        try:
+            return value if math.isfinite(value) else None
+        except OverflowError:
+            return None
     return None
 
 
