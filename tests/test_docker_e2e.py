@@ -942,6 +942,54 @@ def upload_photo(client: httpx.Client) -> httpx.Response:
     )
 
 
+def assert_all_plant_alerts() -> None:
+    from tools.alert_verification import PLANT_RULES, cleanup, recover, seed, wait_states
+
+    engine = create_engine(
+        f"postgresql+psycopg://{COMPOSE_ENV['POSTGRES_USER']}:{COMPOSE_ENV['POSTGRES_PASSWORD']}"
+        f"@127.0.0.1:{COMPOSE_ENV['POSTGRES_PUBLISHED_PORT']}/{COMPOSE_ENV['POSTGRES_DB']}"
+    )
+    report: dict = {"schema_version": "senior-pomidor.alert-verification.v1", "status": "FAIL", "phases": []}
+    # Freeze derived-state writes during controlled scheduler fixtures only.
+    compose("stop", "state-estimator-worker")
+    try:
+        with httpx.Client(
+            base_url=GRAFANA_BASE_URL,
+            timeout=10,
+            auth=(COMPOSE_ENV["GRAFANA_ADMIN_USER"], COMPOSE_ENV["GRAFANA_ADMIN_PASSWORD"]),
+        ) as grafana:
+            wait_states(grafana, PLANT_RULES, "inactive")
+            report["phases"].append("empty-data-normal")
+            seed(engine)
+            wait_states(grafana, {"Critical dry soil"}, "pending", refresh_engine=engine)
+            report["phases"].append("positive-hold-pending")
+            wait_states(grafana, PLANT_RULES, "firing", refresh_engine=engine)
+            report["phases"].append("all-18-firing")
+            recover(engine)
+            wait_states(grafana, PLANT_RULES, "inactive")
+            report["phases"].append("all-18-recovered")
+            # Task-owned role only. Force an actual SQL permission error, rather
+            # than replacing an expression or simulating scheduler output.
+            application_psql("REVOKE SELECT ON telemetry_events FROM grafana_e2e_reader;")
+            try:
+                wait_states(grafana, {"System health probe errors"}, "firing", healthy=False)
+                report["phases"].append("datasource-error-alerting")
+            finally:
+                application_psql("GRANT SELECT ON telemetry_events TO grafana_e2e_reader;")
+            wait_states(grafana, PLANT_RULES, "inactive")
+            report["phases"].append("datasource-recovered")
+            report["status"] = "PASS"
+    finally:
+        try:
+            cleanup(engine)
+        finally:
+            engine.dispose()
+            compose("start", "state-estimator-worker")
+            destination = ROOT / "verification-artifacts"
+            destination.mkdir(exist_ok=True)
+            (destination / "alert-runtime.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+
+
 def assert_performance_guardrails(client: httpx.Client) -> None:
     """Small fixed workload: correctness gates plus broad shared-runner smoke budgets."""
     import math
@@ -1129,6 +1177,11 @@ def test_docker_compose_stack_ingests_and_serves_data():
     fast_alerts = fast_alerts.replace("        for: 5m", "        for: 0s")
     fast_alerts = fast_alerts.replace("        for: 1m", "        for: 0s")
     edge_alerts_file.write_text(fast_alerts, encoding="utf-8")
+    plant_alerts_file = provisioning_dir / "alerting/senior-pomidor-alerts.yml"
+    plant_alerts = plant_alerts_file.read_text(encoding="utf-8")
+    plant_alerts = plant_alerts.replace("    interval: 60s", "    interval: 10s")
+    plant_alerts = re.sub(r"        for: [1-9][0-9]*m", "        for: 30s", plant_alerts)
+    plant_alerts_file.write_text(plant_alerts, encoding="utf-8")
     try:
         compose("up", "-d", "--build")
         assert_migration_completed()
@@ -1151,6 +1204,7 @@ def test_docker_compose_stack_ingests_and_serves_data():
         for query in alert_queries.values():
             assert alert_query_count(query) == 0
         no_data_snapshot = wait_for_edge_alert_states(set())
+        assert_all_plant_alerts()
 
         with httpx.Client(base_url=BASE_URL, timeout=10) as client:
             health = client.get("/health")
@@ -1171,7 +1225,13 @@ def test_docker_compose_stack_ingests_and_serves_data():
             assert duplicate.json() == {"record_id": first_payload["record_id"], "status": "duplicate"}
 
             wait_for_record_count(first_payload["record_id"], 1)
-            assert_postgresql_raw_reader(first_payload)
+            # The read-only assertion compares all canonical tables; concurrent
+            # estimator writes would be unrelated changes, not reader mutation.
+            compose("stop", "state-estimator-worker")
+            try:
+                assert_postgresql_raw_reader(first_payload)
+            finally:
+                compose("start", "state-estimator-worker")
             assert_postgresql_raw_reader_row_cap()
 
             latest = client.get("/api/v1/devices/pi-001/latest")
