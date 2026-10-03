@@ -360,3 +360,10 @@ def test_edge_reliability_documentation_example_is_synthetic_and_sanitized():
     assert "now - 24h" in image
     for sensitive in ("ssid", "ip_address", "boot_id", "service_name", "reason", "2026-"):
         assert sensitive not in image.lower()
+
+
+def test_every_plant_alert_has_a_runtime_case():
+    from tools.alert_verification import PLANT_RULES
+
+    rules = yaml.safe_load(ALERTS_PATH.read_text(encoding="utf-8"))
+    assert {rule["title"] for group in rules["groups"] for rule in group["rules"]} == PLANT_RULES

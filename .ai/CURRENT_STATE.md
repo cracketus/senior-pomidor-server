@@ -126,8 +126,9 @@ only the application and preserve shared services/data.
   staging, 24-hour soak, application-only rollback, and separately approved canary evidence before production
   promotion. Rollback changes only the application image and preserves PostgreSQL, Grafana, Ollama, volumes,
   and release evidence.
-- Complete the cross-repository Edge-to-Core harness and currently applicable system-invariant coverage under
-  server epic `#247`, coordinated with the Edge deterministic-simulation and test-hardening backlog.
+- Complete the remaining performance (#91), mutation/fuzzing (#96), dataset protection (#97),
+  and alert coverage (#98) under server epic `#247`. The cross-repository harness and software
+  acceptance of #248–#252 are complete; published-image and operational qualification remain separate.
 - Freeze the Season 1 evidence manifest and representative replay corpus before later control/model work
   changes the comparison baseline.
 - Expand restore rehearsal evidence on a regular cadence.
