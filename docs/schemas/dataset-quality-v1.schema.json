@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "status",
+    "row_count",
+    "counts",
+    "findings",
+    "findings_truncated",
+    "expected_interval_seconds",
+    "estimated_missing_observations",
+    "evidence_scope"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "senior-pomidor.dataset-quality.v1"
+    },
+    "status": {
+      "enum": [
+        "PASS",
+        "FAIL"
+      ]
+    },
+    "row_count": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 10000
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
+    "findings": {
+      "type": "array",
+      "maxItems": 500,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "row",
+          "code"
+        ],
+        "properties": {
+          "row": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10000
+          },
+          "code": {
+            "type": "string",
+            "pattern": "^[a-z_]+$"
+          }
+        }
+      }
+    },
+    "findings_truncated": {
+      "type": "boolean"
+    },
+    "expected_interval_seconds": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 1,
+      "maximum": 86400
+    },
+    "estimated_missing_observations": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "evidence_scope": {
+      "const": "OFFLINE_INPUT_ONLY"
+    },
+    "input_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  }
+}

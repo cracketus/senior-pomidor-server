@@ -1009,7 +1009,7 @@ groups:
               rawSql: |
                 SELECT
                   node_id,
-                  nullif(payload_jsonb #>> '{env,vpd_kpa}', '')::double precision AS observed,
+                  nullif(payload_jsonb #>> '{env,vpd_kpa}', '') AS observed,
                   'canonical state env.vpd_kpa outside 0.5-1.6 kPa' AS threshold,
                   1::double precision AS value
                 FROM (
@@ -1083,7 +1083,7 @@ groups:
               rawSql: |
                 SELECT
                   node_id,
-                  nullif(payload_jsonb #>> '{env,vpd_kpa}', '')::double precision AS observed,
+                  nullif(payload_jsonb #>> '{env,vpd_kpa}', '') AS observed,
                   'canonical state env.vpd_kpa > 2.5 kPa' AS threshold,
                   1::double precision AS value
                 FROM (
@@ -1156,7 +1156,7 @@ groups:
               rawSql: |
                 SELECT
                   node_id,
-                  nullif(payload_jsonb #>> '{quality,state_confidence}', '')::double precision AS observed,
+                  nullif(payload_jsonb #>> '{quality,state_confidence}', '') AS observed,
                   'state confidence < 0.65' AS threshold,
                   1::double precision AS value
                 FROM (
@@ -1294,7 +1294,7 @@ groups:
               rawSql: |
                 SELECT
                   devices.device_id AS node_id,
-                  state_latest.latest_state_ts,
+                  state_latest.latest_state_ts::text AS latest_state_ts,
                   1::double precision AS value
                 FROM devices
                 LEFT JOIN (
