@@ -1,0 +1,52 @@
+{
+  "schema": "agent_run_v1",
+  "run_id": "20260928-issue-96",
+  "issue_ref": "#96",
+  "pr_ref": "#369",
+  "role": "coder",
+  "agent_id": "codex",
+  "prompt_version": "coding-agent-1.1",
+  "started_at_utc": "2026-09-28T14:43:00Z",
+  "finished_at_utc": "2026-09-28T19:48:30.162863+00:00",
+  "input_refs": [
+    ".ai/implementation-briefs/ISSUE-96-adversarial.md"
+  ],
+  "output_refs": [
+    "docs/ADVERSARIAL_VERIFICATION.md",
+    "docs/implementation-reports/ISSUE-96-review.md"
+  ],
+  "status": "completed",
+  "commands": [],
+  "validation_results": [
+    {
+      "check": "independent review",
+      "status": "PASS",
+      "reference": "docs/implementation-reports/ISSUE-96-review.md"
+    },
+    {
+      "check": "CI evidence",
+      "status": "PASS",
+      "reference": "https://github.com/cracketus/senior-pomidor-server/actions/runs/36439747335",
+      "detail": "All required jobs passed"
+    },
+    {
+      "check": "cross-repository verification",
+      "status": "PASS",
+      "reference": "https://github.com/cracketus/senior-pomidor-server/actions/runs/36439747389"
+    },
+    {
+      "check": "production/physical/real seasonal data",
+      "status": "NOT_RUN",
+      "detail": "Outside authorized software scope"
+    }
+  ],
+  "human_edits": [],
+  "findings": [],
+  "errors": [],
+  "usage": {
+    "file_count": 29,
+    "input_characters": 0,
+    "tool_output_bytes": 0,
+    "elapsed_seconds": 0
+  }
+}
