@@ -11,6 +11,7 @@ import subprocess  # nosec B404
 import sys
 import tempfile
 from pathlib import Path
+from typing import NamedTuple
 
 TARGETS = {
     "app/validation.py": ("validate_safe_identifier", "validate_record_id", "parse_utc_z"),
@@ -44,22 +45,37 @@ def negate(source: str, line: int) -> str:
     return ast.unparse(ast.fix_missing_locations(tree)) + "\n"
 
 
-def run_tests(root: Path, timeout: int) -> str:
+class TestResult(NamedTuple):
+    status: str
+    returncode: int | None
+    stdout: bytes
+    stderr: bytes
+
+
+def diagnostic_tail(output: bytes) -> str:
+    # Redact before truncation so the tail cannot expose a partial value.
+    for value in sorted(set(os.environ.values()), key=len, reverse=True):
+        if len(value) >= 4:
+            output = output.replace(os.fsencode(value), b"[redacted]")
+    return output[-8192:].decode("utf-8", errors="replace")
+
+
+def run_tests(root: Path, timeout: int) -> TestResult:
     env = {k: v for k, v in os.environ.items() if k in {"PATH", "SYSTEMROOT", "WINDIR", "TEMP", "TMP"}}
     env.update(PYTHONDONTWRITEBYTECODE="1", PYTHONPATH=str(root), DATABASE_URL="sqlite:///:memory:")
     try:
         result = subprocess.run(  # nosec B603
-            [sys.executable, "-m", "pytest", "-q", "-x", "-p", "no:cacheprovider", *TESTS],
+            [sys.executable, "-m", "pytest", "-q", "-x", "--tb=short", "-p", "no:cacheprovider", *TESTS],
             cwd=root,
             env=env,
             capture_output=True,
-            text=True,
             timeout=timeout,
             check=False,
         )
-    except subprocess.TimeoutExpired:
-        return "TIMEOUT"
-    return {0: "SURVIVED", 1: "KILLED"}.get(result.returncode, "ERROR")
+    except subprocess.TimeoutExpired as exc:
+        return TestResult("TIMEOUT", None, exc.stdout or b"", exc.stderr or b"")
+    status = {0: "SURVIVED", 1: "KILLED"}.get(result.returncode, "ERROR")
+    return TestResult(status, result.returncode, result.stdout, result.stderr)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -89,8 +105,21 @@ def main(argv: list[str] | None = None) -> int:
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(source, target)
             baseline = run_tests(checkout, args.timeout)
-            report["baseline"] = "PASS" if baseline == "SURVIVED" else baseline
-            if baseline != "SURVIVED":
+            report["baseline"] = "PASS" if baseline.returncode == 0 else baseline.status
+            report["baseline_diagnostics"] = {
+                "returncode": baseline.returncode,
+                "timed_out": baseline.status == "TIMEOUT",
+                "timeout_seconds": args.timeout,
+            }
+            if baseline.returncode != 0:
+                report["failure_reasons"] = ["baseline_failed"]
+                for stream in ("stdout", "stderr"):
+                    report["baseline_diagnostics"][stream] = diagnostic_tail(getattr(baseline, stream))
+                print(
+                    f"Mutation baseline failed ({baseline.status}, exit={baseline.returncode}, "
+                    f"timeout={args.timeout}s). See mutation report for pytest output.",
+                    file=sys.stderr,
+                )
                 return 1
             for path, functions in TARGETS.items():
                 target = checkout / path
@@ -98,7 +127,7 @@ def main(argv: list[str] | None = None) -> int:
                 for candidate in mutants(original_source, functions):
                     target.write_text(negate(original_source, candidate["line"]), encoding="utf-8")
                     try:
-                        outcome = run_tests(checkout, args.timeout)
+                        outcome = run_tests(checkout, args.timeout).status
                         report["mutants"].append(
                             {"path": path, **candidate, "operator": "negate-condition", "status": outcome}
                         )
@@ -107,6 +136,13 @@ def main(argv: list[str] | None = None) -> int:
             expected = sum(len(functions) for functions in TARGETS.values())
             if len(report["mutants"]) == expected and all(m["status"] == "KILLED" for m in report["mutants"]):
                 report["status"] = "PASS"
+            report["failure_reasons"] = sorted({
+                f"mutant_{mutant['status'].lower()}"
+                for mutant in report["mutants"]
+                if mutant["status"] != "KILLED"
+            })
+            if len(report["mutants"]) != expected:
+                report["failure_reasons"].append("catalogue_mismatch")
             return 0 if report["status"] == "PASS" else 1
     finally:
         args.output.parent.mkdir(parents=True, exist_ok=True)
