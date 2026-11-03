@@ -36,7 +36,8 @@ dev = [
     "nox>=2024.10.9",
     "pip-audit>=2.7",
     "pre-commit>=4.0",
-    "pytest>=8.3",
+    # AnyIO still imports CallSpec2, which pytest 9.2 deprecates. See #379.
+    "pytest>=8.3,<9.2",
     "ruff>=0.8",
     "textual>=8.2,<9",
     "types-PyYAML>=6.0.12.20250516",
