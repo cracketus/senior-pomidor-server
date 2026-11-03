@@ -136,11 +136,9 @@ def main(argv: list[str] | None = None) -> int:
             expected = sum(len(functions) for functions in TARGETS.values())
             if len(report["mutants"]) == expected and all(m["status"] == "KILLED" for m in report["mutants"]):
                 report["status"] = "PASS"
-            report["failure_reasons"] = sorted({
-                f"mutant_{mutant['status'].lower()}"
-                for mutant in report["mutants"]
-                if mutant["status"] != "KILLED"
-            })
+            report["failure_reasons"] = sorted(
+                {f"mutant_{mutant['status'].lower()}" for mutant in report["mutants"] if mutant["status"] != "KILLED"}
+            )
             if len(report["mutants"]) != expected:
                 report["failure_reasons"].append("catalogue_mismatch")
             return 0 if report["status"] == "PASS" else 1
